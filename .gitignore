@@ -1,0 +1,12 @@
+env/*
+tmp/*
+
+
+.terraform*
+generated/*
+finisterra/*
+
+*.pyc
+.env
+
+.vscode/*
