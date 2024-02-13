@@ -13,8 +13,9 @@ def cors_config_transform(value):
 
 class CloudFront:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
         self.progress = progress
+        
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -25,18 +26,15 @@ class CloudFront:
         self.modules = modules
         self.hcl = HCL(self.schema_data, self.provider_name)
         self.hcl.region = region
+        self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
-
-        
-        
-        self.aws_account_id = aws_account_id
         self.origin = {}
 
 
-        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.aws_lambda_instance = AwsLambda(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.wafv2_instance = Wafv2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.aws_lambda_instance = AwsLambda(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.wafv2_instance = Wafv2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_managed_cache_policies(self):
         managed_cache_policies = self.aws_clients.cloudfront_client.list_cache_policies(

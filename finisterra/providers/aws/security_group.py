@@ -5,8 +5,9 @@ import sys
 
 class SECURITY_GROUP:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
         self.progress = progress
+        
         self.aws_clients = aws_clients
         self.aws_account_id = aws_account_id
         self.workspace_id = workspace_id
@@ -25,6 +26,7 @@ class SECURITY_GROUP:
             self.hcl = hcl
 
         self.hcl.region = region
+        self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
 

@@ -6,8 +6,9 @@ from ...providers.aws.logs import Logs
 
 class VPC:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
         self.progress = progress
+        
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -28,6 +29,7 @@ class VPC:
             self.hcl = hcl
         
         self.hcl.region = region
+        self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
         self.public_subnets = {}
@@ -41,9 +43,9 @@ class VPC:
         self.dhcp_options_domain_name = {}
         self.default_routes={}
 
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
 
     def is_subnet_public(self, subnet_id):

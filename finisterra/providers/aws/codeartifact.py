@@ -5,8 +5,9 @@ from ...providers.aws.kms import KMS
 
 class CodeArtifact:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
         self.progress = progress
+        
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -23,10 +24,11 @@ class CodeArtifact:
             self.hcl = HCL(self.schema_data, self.provider_name)
 
         self.hcl.region = region
+        self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
 
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def code_artifact_get_kms_alias(self, kms_key_id):
         if kms_key_id:

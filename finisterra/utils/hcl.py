@@ -274,11 +274,9 @@ class HCL:
             with open(zip_file_path, 'wb') as zip_file:
                 zip_file.write(response_data)
 
-            # root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            root_path = os.getcwd()
             #clean up folder
             try:
-                os.chdir(os.path.join(root_path, "tf_code"))
+                os.chdir(os.path.join(self.output_dir, "tf_code"))
                 for stack in self.unique_ftstacks:
                     shutil.rmtree(stack)
             except:
@@ -286,8 +284,8 @@ class HCL:
                 
             # Unzip the file to the current directory
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                zip_ref.extractall(root_path)
-                print('Terraform code created at:', root_path)
+                zip_ref.extractall(self.output_dir)
+                print('Terraform code created at:', self.output_dir)
 
             # Save additional files
             for ftstack, zip_files in self.ftstacks_files.items():
@@ -295,7 +293,7 @@ class HCL:
                     print("zip_file", zip_file)
                     base_dir = zip_file["base_dir"]
                     filename = zip_file["filename"]
-                    target_dir = os.path.join(root_path, "tf_code", ftstack, filename)
+                    target_dir = os.path.join(self.output_dir, "tf_code", ftstack, filename)
                     print('source', os.path.join(base_dir,filename))
                     print('target_dir', target_dir)
                     os.makedirs(os.path.dirname(target_dir), exist_ok=True)
@@ -305,7 +303,7 @@ class HCL:
             if False: #TO-DO Change to a flag
                 # plan the terragrunt
                 print("Planning Terraform...")
-                os.chdir(os.path.join(root_path,"tf_code"))
+                os.chdir(os.path.join(self.output_dir,"tf_code"))
                 shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.remote-state")
                 shutil.copyfile("./terragrunt.hcl.local-state", "./terragrunt.hcl")
                 for stack in self.unique_ftstacks:

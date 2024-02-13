@@ -35,7 +35,7 @@ def execute_provider_method(provider, method_name):
 @click.command()
 @click.option('--provider', '-p', default="aws", help='Provider name')
 @click.option('--module', '-m', required=True, help='Module name(s), separated by commas or "all" for all modules')
-@click.option('--output_dir', 'o', default="tf_code", help='Output directory')
+@click.option('--output_dir', '-o', default=os.getcwd(), help='Output directory')
 def main(provider, module, output_dir):
     if provider == "aws":
         aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')

@@ -61,6 +61,7 @@ class Aws:
     def __init__(self, progress, script_dir, s3Bucket,
                  dynamoDBTable, state_key, aws_account_id, aws_region, output_dir):
         self.progress = progress
+        self.output_dir = output_dir
         self.provider_name = "registry.terraform.io/hashicorp/aws"
         self.script_dir = script_dir
         self.schema_data = self.load_provider_schema()
@@ -74,7 +75,7 @@ class Aws:
         self.aws_account_id = aws_account_id
         self.session = boto3.Session()
         self.aws_clients_instance = AwsClients(self.session, self.aws_region)
-        self.output_dir = output_dir
+        
 
     def set_boto3_session(self, id_token=None, role_arn=None, session_duration=None, aws_region="us-east-1"):
         if id_token and role_arn and session_duration:

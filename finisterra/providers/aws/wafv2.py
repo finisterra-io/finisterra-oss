@@ -5,8 +5,9 @@ from ...providers.aws.logs import Logs
 
 class Wafv2:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
         self.progress = progress
+        
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -23,10 +24,11 @@ class Wafv2:
             self.hcl = hcl
 
         self.hcl.region = region
+        self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
         
 
