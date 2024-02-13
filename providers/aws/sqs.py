@@ -49,7 +49,8 @@ class SQS:
         for page in paginator.paginate():
             total += len(page.get("QueueUrls", []))
         
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for queue_url in page.get("QueueUrls", []):
                 queue_name = queue_url.split("/")[-1]

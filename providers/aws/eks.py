@@ -93,7 +93,8 @@ class EKS:
         print("Processing EKS Clusters...")
 
         clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
+        if len(clusters):
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
 
 
         for cluster_name in clusters:

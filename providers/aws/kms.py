@@ -72,7 +72,8 @@ class KMS:
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     total += 1
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            if total > 0:
+                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     try:

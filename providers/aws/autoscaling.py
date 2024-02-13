@@ -99,7 +99,8 @@ class AutoScaling:
         as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
         
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(as_groups))
+        if len(as_groups) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(as_groups))
 
         for as_group in as_groups:
             as_group_name = as_group["AutoScalingGroupName"]

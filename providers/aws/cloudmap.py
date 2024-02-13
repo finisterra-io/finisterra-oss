@@ -115,7 +115,8 @@ class Cloudmap:
         for page in paginator.paginate():
             total += len(page["Namespaces"])
         
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for namespace in page["Namespaces"]:
                 namespace_id = namespace["Id"]

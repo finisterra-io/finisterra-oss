@@ -114,7 +114,8 @@ class Elasticsearch:
         print("Processing OpenSearch Domain...")
 
         domains = self.aws_clients.elasticsearch_client.list_domain_names()["DomainNames"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(domains))
+        if len(domains) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(domains))
 
         for domain in domains:
             domain_name = domain["DomainName"]

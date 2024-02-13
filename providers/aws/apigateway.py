@@ -77,8 +77,8 @@ class Apigateway:
         # Get the region from the client
         region = self.aws_clients.apigateway_client.meta.region_name
 
-
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(rest_apis))
+        if len(rest_apis)> 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(rest_apis))
 
         for rest_api in rest_apis:
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rest_api['name']}[/]")

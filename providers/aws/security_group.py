@@ -77,7 +77,8 @@ class SECURITY_GROUP:
 
         print("Processing Security Groups...")
         response = self.aws_clients.ec2_client.describe_security_groups()
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(response["SecurityGroups"]))
+        if len(response["SecurityGroups"]) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(response["SecurityGroups"]))
         for security_group in response["SecurityGroups"]:
             self.process_security_group(security_group, ftstack)
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{security_group['GroupName']}[/]")

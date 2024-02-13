@@ -58,7 +58,8 @@ class S3:
 
         response = self.aws_clients.s3_client.list_buckets()
         all_buckets = response["Buckets"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets))
+        if len(all_buckets) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets))
         for bucket in all_buckets:
             bucket_name = bucket["Name"]
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{bucket_name}[/]")

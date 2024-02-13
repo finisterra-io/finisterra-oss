@@ -100,7 +100,8 @@ class VPCEndPoint:
             else:
                 endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints(VpcEndpointIds=[vpce_id])["VpcEndpoints"]
 
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
+            if len(endpoints) > 0:
+                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
             for endpoint in endpoints:
                 endpoint_id = endpoint["VpcEndpointId"]
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")

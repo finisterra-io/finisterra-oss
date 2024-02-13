@@ -70,7 +70,8 @@ class ECR:
         print("Processing ECR Repositories...")
 
         repositories = self.aws_clients.ecr_client.describe_repositories()["repositories"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(repositories))
+        if len(repositories) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(repositories))
         for repo in repositories:
             repository_name = repo["repositoryName"]
             repository_arn = repo["repositoryArn"]

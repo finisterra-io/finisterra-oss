@@ -79,7 +79,8 @@ class DocDb:
         for page in paginator.paginate():
             total += len(page["DBClusters"])
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in paginator.paginate():
             for db_cluster in page["DBClusters"]:

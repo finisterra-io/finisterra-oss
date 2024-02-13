@@ -306,7 +306,8 @@ class EC2:
         total = 0
         for reservation in instances["Reservations"]:
             total += len(reservation["Instances"])
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for reservation in instances["Reservations"]:
             for instance in reservation["Instances"]:
                 instance_id = instance["InstanceId"]

@@ -51,7 +51,8 @@ class StepFunction:
         for page in paginator.paginate():
             total += len(page.get("stateMachines", []))
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for state_machine_summary in page["stateMachines"]:
                 print(f"Processing State Machine: {state_machine_summary['name']}")

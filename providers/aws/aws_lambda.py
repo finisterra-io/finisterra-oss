@@ -7,20 +7,6 @@ from urllib.parse import urlparse
 from providers.aws.iam_role import IAM_ROLE
 from providers.aws.logs import Logs
 from providers.aws.security_group import SECURITY_GROUP
-import shutil
-
-def convert_to_terraform_format(env_variables_dict):
-    # Format the dictionary to Terraform format
-    # terraform_format = "variables = {\n"
-    terraform_format = "{\n"
-    for key, value in env_variables_dict.items():
-        # Escape the double quotes
-        value = str(value).replace('"', '\\"')
-        terraform_format += f"  {key} = \"{value}\"\n"
-    terraform_format += "}"
-
-    return terraform_format
-
 
 class AwsLambda:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -119,7 +105,8 @@ class AwsLambda:
             for function in page['Functions']:
                 total += 1
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for function in page['Functions']:
                 function_name = function['FunctionName']
@@ -165,7 +152,7 @@ class AwsLambda:
         conn.request("GET", url_parts.path)
         response = conn.getresponse()
 
-        folder = os.path.join(ftstack)
+        folder = os.path.join("finisterra", ftstack)
         os.makedirs(folder, exist_ok=True)
         filename = os.path.join(folder, f"{function_name}.zip")
         with open(filename, "wb") as f:

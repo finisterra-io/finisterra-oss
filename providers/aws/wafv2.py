@@ -107,7 +107,8 @@ class Wafv2:
         # iterate through both scopes
         for scope in ['REGIONAL', 'CLOUDFRONT']:
             web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)["WebACLs"]
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(web_acls))
+            if len(web_acls) > 0:
+                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(web_acls))
 
             for web_acl in web_acls:
                 web_acl_name = web_acl["Name"]

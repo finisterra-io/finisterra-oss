@@ -153,7 +153,8 @@ class ElasticBeanstalk:
         print("Processing Elastic Beanstalk Environments...")
 
         environments = self.aws_clients.elasticbeanstalk_client.describe_environments()["Environments"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(environments))
+        if len(environments) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(environments))
 
         for env in environments:
             env_id = env["EnvironmentId"]

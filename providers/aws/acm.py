@@ -55,7 +55,8 @@ class ACM:
             for cert_summary in page["CertificateSummaryList"]:
                 total += 1
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for cert_summary in page["CertificateSummaryList"]:
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cert_summary['CertificateArn'].split('/')[-1]}[/]")

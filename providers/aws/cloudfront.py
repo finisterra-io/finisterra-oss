@@ -86,7 +86,8 @@ class CloudFront:
             total += len( distribution_list.get("Items"))
 
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             distribution_list = page.get("DistributionList")
             if not distribution_list:

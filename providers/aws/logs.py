@@ -121,7 +121,8 @@ class Logs:
         for page in paginator.paginate():
             total += len(page["logGroups"])
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for log_group in page["logGroups"]:
                 log_group_name = log_group["logGroupName"]

@@ -109,7 +109,8 @@ class ELBV2:
             return
 
         load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()["LoadBalancers"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers))
+        if len(load_balancers) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers))
         
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]

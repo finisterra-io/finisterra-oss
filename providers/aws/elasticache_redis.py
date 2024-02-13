@@ -107,7 +107,8 @@ class ElasticacheRedis:
         total = 0
         for page in paginator.paginate():
             total += len(page["ReplicationGroups"])
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for replication_group in page["ReplicationGroups"]:                
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")

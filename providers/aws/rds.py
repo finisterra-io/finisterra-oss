@@ -138,7 +138,8 @@ class RDS:
         for page in paginator.paginate():
             total += len(page.get("DBInstances", []))
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for instance in page.get("DBInstances", []):
                 instance_id = instance["DBInstanceIdentifier"]

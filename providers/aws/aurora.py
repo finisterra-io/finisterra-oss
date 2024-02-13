@@ -531,8 +531,8 @@ class Aurora:
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
                 total += 1
-        
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
                 engine = rds_cluster.get("Engine", "")

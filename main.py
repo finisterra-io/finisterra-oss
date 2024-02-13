@@ -98,7 +98,7 @@ def main(provider, module):
         else:
             modules_to_execute = [mod.strip() for mod in modules_to_execute]
 
-        max_parallel = int(os.getenv('MAX_PARALLEL', 10))
+        max_parallel = int(os.getenv('MAX_PARALLEL', 2))
         with ThreadPoolExecutor(max_workers=max_parallel) as executor:
             futures = [executor.submit(execute_provider_method, provider_instance, method) for method in modules_to_execute]
             for future in as_completed(futures):

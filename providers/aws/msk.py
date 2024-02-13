@@ -112,7 +112,8 @@ class MSK:
         for page in page_iterator:
             total += len(page["ClusterInfoList"])
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in page_iterator:
             for cluster_info in page["ClusterInfoList"]:

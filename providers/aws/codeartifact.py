@@ -70,7 +70,8 @@ class CodeArtifact:
         total = 0
         for response in paginator.paginate():
             total += len(response["domains"])
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        if total > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for response in paginator.paginate():
             for domain in response["domains"]:
                 domain_name = domain["name"]

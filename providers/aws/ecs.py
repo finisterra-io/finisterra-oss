@@ -265,7 +265,8 @@ class ECS:
                 for page in paginator.paginate(cluster=cluster_arn):
                     total += len(page["serviceArns"])
 
-                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
+                if total > 0:
+                    self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
 
                 for page in paginator.paginate(cluster=cluster_arn):
                     services_arns = page["serviceArns"]

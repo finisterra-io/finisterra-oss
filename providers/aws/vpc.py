@@ -79,7 +79,8 @@ class VPC:
         resource_type = "aws_vpc"
         print("Processing VPCs...")
         vpcs = self.aws_clients.ec2_client.describe_vpcs()["Vpcs"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(vpcs))
+        if len(vpcs) > 0:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(vpcs))
         for vpc in vpcs:
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{vpc['VpcId']}[/]")
             is_default = vpc.get("IsDefault", False)

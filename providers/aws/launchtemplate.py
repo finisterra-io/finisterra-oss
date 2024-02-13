@@ -48,7 +48,8 @@ class LaunchTemplate:
                 print("No launch templates found!")
                 return
             
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_templates_response['LaunchTemplates']))
+            if len(all_templates_response['LaunchTemplates']) > 0:
+                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_templates_response['LaunchTemplates']))
 
             for template in all_templates_response['LaunchTemplates']:
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{template['LaunchTemplateId']}[/]")
