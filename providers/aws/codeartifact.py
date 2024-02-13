@@ -26,7 +26,7 @@ class CodeArtifact:
         self.hcl.account_id = aws_account_id
 
 
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def code_artifact_get_kms_alias(self, kms_key_id):
         if kms_key_id:
@@ -52,9 +52,13 @@ class CodeArtifact:
     def codeartifact(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_codeartifact_domain()
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_codeartifact_domain(self, domain_name=None, ftstack=None):
         print("Processing CodeArtifact Domains")
 
@@ -63,10 +67,15 @@ class CodeArtifact:
             return
 
         paginator = self.aws_clients.codeartifact_client.get_paginator('list_domains')
+        total = 0
+        for response in paginator.paginate():
+            total += len(response["domains"])
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for response in paginator.paginate():
             for domain in response["domains"]:
                 domain_name = domain["name"]
                 domain_arn = domain["arn"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{domain_name}[/]")
                 self.process_single_codeartifact_domain(domain_name, ftstack)
 
                 try:

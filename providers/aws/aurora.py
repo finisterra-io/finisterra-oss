@@ -35,10 +35,10 @@ class Aurora:
         self.hcl.account_id = aws_account_id
 
 
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
         self.aws_rds_cluster_attrs = {}
 
@@ -124,10 +124,13 @@ class Aurora:
 
     def aurora(self):
         self.hcl.prepare_folder(os.path.join("generated"))
-
         self.aws_rds_cluster()
+
         self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
+        
 
     def aws_db_cluster_snapshot(self):
         print("Processing DB Cluster Snapshots...")
@@ -524,12 +527,19 @@ class Aurora:
         print("Processing RDS Clusters...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_clusters")
+        total = 0
+        for page in paginator.paginate():
+            for rds_cluster in page.get("DBClusters", []):
+                total += 1
+        
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
                 engine = rds_cluster.get("Engine", "")
+                rds_cluster_id = rds_cluster["DBClusterIdentifier"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rds_cluster_id}[/]")
                 if not engine.startswith("aurora"):
                     continue
-                rds_cluster_id = rds_cluster["DBClusterIdentifier"]
                 print(f"Processing RDS Cluster: {rds_cluster_id}")
                 cluster_arn = rds_cluster["DBClusterArn"]
 

@@ -30,18 +30,14 @@ class S3:
         self.hcl.account_id = aws_account_id
         self.progress = progress
 
-        # self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        # self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def s3(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_s3_bucket()
-        self.progress.update(self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]")
         self.hcl.refresh_state()
-        self.progress.update(self.task, advance=1)
-        self.progress.update(self.task, description=f"[cyan]{self.__class__.__name__} [bold]Generating tf code[/]")
         self.hcl.request_tf_code()
-        self.progress.update(self.task, advance=1)
         
     def aws_s3_bucket(self, selected_s3_bucket=None, ftstack=None):
         resource_name = "aws_s3_bucket"
@@ -62,7 +58,7 @@ class S3:
 
         response = self.aws_clients.s3_client.list_buckets()
         all_buckets = response["Buckets"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets)+2)
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets))
         for bucket in all_buckets:
             bucket_name = bucket["Name"]
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{bucket_name}[/]")

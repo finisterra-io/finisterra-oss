@@ -28,11 +28,11 @@ class EKS:
 
         self.aws_account_id = aws_account_id
 
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.launchtemplate_instance = LaunchTemplate(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def get_subnet_names(self, subnet_ids):
@@ -81,18 +81,25 @@ class EKS:
 
         self.aws_eks_cluster()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_eks_cluster(self):
         resource_type = 'aws_eks_cluster'
         print("Processing EKS Clusters...")
 
         clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
+
 
         for cluster_name in clusters:
             cluster = self.aws_clients.eks_client.describe_cluster(name=cluster_name)[
                 "cluster"]
+            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
             tags = cluster.get("tags", {})
             ftstack = "eks"
             if tags.get("ftstack", "eks") != "eks":

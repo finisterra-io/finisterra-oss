@@ -28,11 +28,11 @@ class ECS:
         self.hcl.region = region
         self.hcl.account_id = aws_account_id
 
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.target_group_instance = TargetGroup(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
 
@@ -95,8 +95,9 @@ class ECS:
 
         self.aws_ecs_cluster()
         self.hcl.refresh_state()
+        
         self.hcl.request_tf_code()
-
+        
     def aws_ecs_cluster(self):
         resource_type = "aws_ecs_cluster"
         print("Processing ECS Clusters...")
@@ -259,8 +260,13 @@ class ECS:
         for cluster in clusters:
             if cluster['clusterName'] == cluster_name:
                 cluster_arn = cluster['clusterArn']
-
                 paginator = self.aws_clients.ecs_client.get_paginator('list_services')
+                total = 0
+                for page in paginator.paginate(cluster=cluster_arn):
+                    total += len(page["serviceArns"])
+
+                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
+
                 for page in paginator.paginate(cluster=cluster_arn):
                     services_arns = page["serviceArns"]
                     if not services_arns:
@@ -271,6 +277,7 @@ class ECS:
 
                     for service in services:
                         service_name = service["serviceName"]
+                        self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} - {cluster_name} [bold]{service_name}[/]")
 
                         # if service_name != "eureka-discovery-service":
                         # if service_name != "eureka-discovery-service" and service_name != "spring-config-server":

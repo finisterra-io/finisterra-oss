@@ -28,9 +28,12 @@ class Opensearch:
 
         self.aws_opensearch_domain()
 
-        self.hcl.refresh_state()
 
+        self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
+        
         exit()
 
 

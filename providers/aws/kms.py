@@ -43,10 +43,12 @@ class KMS:
         self.aws_kms_external_key()
         self.aws_kms_replica_external_key()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_kms_key(self, key_arn=None, ftstack=None):
         print("Processing KMS Keys...")
@@ -66,10 +68,16 @@ class KMS:
         else:
             # Process all customer-managed keys
             paginator = self.aws_clients.kms_client.get_paginator("list_keys")
+            total = 0
+            for page in paginator.paginate():
+                for key in page["Keys"]:
+                    total += 1
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     try:
                         key_id = key["KeyId"]
+                        self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{key_id}[/]")
                         # if key_id != "e6a851cf-ad7f-4be1-8474-d9fb5c0c2af0":
                         #     continue
                         key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)["KeyMetadata"]

@@ -27,7 +27,6 @@ class Apigatewayv2:
         self.aws_apigatewayv2_api_mapping()
         self.aws_apigatewayv2_authorizer()
         self.aws_apigatewayv2_deployment()
-        # self.aws_apigatewayv2_domain_name() #Need permissions
         self.aws_apigatewayv2_integration()
         self.aws_apigatewayv2_integration_response()
         self.aws_apigatewayv2_model()
@@ -36,9 +35,12 @@ class Apigatewayv2:
         self.aws_apigatewayv2_stage()
         self.aws_apigatewayv2_vpc_link()
 
+
         self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
+        
 
     def aws_apigatewayv2_api(self):
         print("Processing API Gateway v2 APIs...")

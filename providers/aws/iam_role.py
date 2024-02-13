@@ -32,10 +32,13 @@ class IAM_ROLE:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_iam_role()
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
+        
     def aws_iam_role(self, role_name=None, ftstack=None):
         resource_type = "aws_iam_role"
         print("Processing IAM Roles...")
@@ -56,8 +59,13 @@ class IAM_ROLE:
 
         # Code to process all roles if no specific role_name is provided
         paginator = self.aws_clients.iam_client.get_paginator("list_roles")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page["Roles"])
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for role in page["Roles"]:
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{role['RoleName']}[/]")
                 self.process_iam_role(role, ftstack)
 
     def process_iam_role(self, role, ftstack=None):

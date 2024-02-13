@@ -23,8 +23,8 @@ class StepFunction:
         self.hcl.account_id = aws_account_id
 
 
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def to_list(self, attributes, arg):
@@ -35,19 +35,27 @@ class StepFunction:
 
         self.aws_sfn_state_machine()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_sfn_state_machine(self):
         resource_type = "aws_sfn_state_machine"
         print("Processing State Machines...")
 
         paginator = self.aws_clients.sfn_client.get_paginator("list_state_machines")
+        total =0
+        for page in paginator.paginate():
+            total += len(page.get("stateMachines", []))
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for state_machine_summary in page["stateMachines"]:
                 print(f"Processing State Machine: {state_machine_summary['name']}")
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{state_machine_summary['name']}[/]")
 
                 # if state_machine_summary['name'] != 'dev-fpm-3431_backfill-email-verified':
                 #     continue

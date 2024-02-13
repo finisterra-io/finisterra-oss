@@ -33,10 +33,10 @@ class CloudFront:
         self.origin = {}
 
 
-        self.acm_instance = ACM(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.s3_instance = S3(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.aws_lambda_instance = AwsLambda(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.wafv2_instance = Wafv2(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.aws_lambda_instance = AwsLambda(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.wafv2_instance = Wafv2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def get_managed_cache_policies(self):
         managed_cache_policies = self.aws_clients.cloudfront_client.list_cache_policies(
@@ -56,8 +56,6 @@ class CloudFront:
         if "gov" not in self.region:
             self.aws_cloudfront_distribution()
 
-        self.hcl.refresh_state()
-
         managed_policies = self.get_managed_cache_policies()
         if managed_policies:
             if "aws_cloudfront_distribution" not in self.hcl.additional_data:
@@ -67,7 +65,12 @@ class CloudFront:
         self.hcl.id_key_list.append("cloudfront_access_identity_path")
         self.hcl.id_key_list.append("bucket_domain_name")
         self.hcl.id_key_list.append("qualified_arn")
+
+        self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
+        
 
 
     def aws_cloudfront_distribution(self):
@@ -75,6 +78,15 @@ class CloudFront:
         print("Processing CloudFront Distributions...")
 
         paginator = self.aws_clients.cloudfront_client.get_paginator("list_distributions")
+        total = 0 
+        for page in paginator.paginate():
+            distribution_list = page.get("DistributionList")
+            if not distribution_list:
+                continue
+            total += len( distribution_list.get("Items"))
+
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             distribution_list = page.get("DistributionList")
             if not distribution_list:
@@ -88,6 +100,7 @@ class CloudFront:
 
             for distribution_summary in items:
                 distribution_id = distribution_summary["Id"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{distribution_id}[/]")
 
                 # if distribution_id != "E31WQ2W96RYYTV":
                 #     continue

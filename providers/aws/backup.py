@@ -26,10 +26,13 @@ class Backup:
         self.aws_backup_plan()
         self.aws_backup_vault()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_backup_plan(self):
         print("Processing AWS Backup Plans...")
 

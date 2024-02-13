@@ -36,10 +36,10 @@ class ELBV2:
         self.listeners = {}
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.acm_instance = ACM(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.s3_instance = S3(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        # self.target_group_instance = TargetGroup(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        # self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
         
     def get_subnet_names(self, subnet_ids):
         subnets_info = []
@@ -90,10 +90,12 @@ class ELBV2:
 
         self.aws_lb()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_lb(self, selected_lb_arn=None, ftstack=None):
         resource_type = "aws_lb"
@@ -107,7 +109,7 @@ class ELBV2:
             return
 
         load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()["LoadBalancers"]
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers)+2)
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers))
         
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]

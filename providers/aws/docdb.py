@@ -23,8 +23,8 @@ class DocDb:
         self.hcl.account_id = aws_account_id
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)      
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)      
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def get_vpc_name(self, vpc_id):
         response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
@@ -63,22 +63,31 @@ class DocDb:
 
         self.aws_docdb_cluster()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_docdb_cluster(self):
         resource_type = "aws_docdb_cluster"
         print("Processing DocumentDB Clusters...")
 
         paginator = self.aws_clients.docdb_client.get_paginator("describe_db_clusters")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page["DBClusters"])
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+
         for page in paginator.paginate():
             for db_cluster in page["DBClusters"]:
                 if db_cluster["Engine"] == "docdb":
                     print(f"Processing DocumentDB Cluster: {db_cluster['DBClusterIdentifier']}")
 
                     id = db_cluster["DBClusterIdentifier"]
+                    self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
 
                     ftstack = "docdb"
                     try:

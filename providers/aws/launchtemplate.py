@@ -26,27 +26,32 @@ class LaunchTemplate:
         self.hcl.account_id = aws_account_id
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def launchtemplate(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_launch_template()
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_launch_template(self, launch_template_id=None, ftstack=None):
         print("Processing AWS Launch Templates...")
-
-
         # If launch_template_id is not provided, process all launch templates
         if launch_template_id is None:
             all_templates_response = self.aws_clients.ec2_client.describe_launch_templates()
             if 'LaunchTemplates' not in all_templates_response or not all_templates_response['LaunchTemplates']:
                 print("No launch templates found!")
                 return
+            
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(all_templates_response['LaunchTemplates']))
 
             for template in all_templates_response['LaunchTemplates']:
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{template['LaunchTemplateId']}[/]")
                 self.process_individual_launch_template(template['LaunchTemplateId'], ftstack)
         else:
             # Process the specified launch template

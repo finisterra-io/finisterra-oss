@@ -50,10 +50,12 @@ class Cloudmap:
         self.aws_service_discovery_private_dns_namespace()
         # self.aws_service_discovery_public_dns_namespace()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_service_discovery_http_namespace(self):
         print("Processing AWS Service Discovery HTTP Namespaces...")
@@ -109,10 +111,16 @@ class Cloudmap:
         print("Processing AWS Service Discovery Private DNS Namespaces...")
 
         paginator = self.aws_clients.cloudmap_client.get_paginator("list_namespaces")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page["Namespaces"])
+        
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for namespace in page["Namespaces"]:
+                namespace_id = namespace["Id"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{namespace_id}[/]")
                 if namespace["Type"] == "DNS_PRIVATE":
-                    namespace_id = namespace["Id"]
                     private_dns_namespace = self.aws_clients.cloudmap_client.get_namespace(Id=namespace_id)["Namespace"]
                     print(f"Processing AWS Service Discovery Private DNS Namespace: {namespace_id}")
 

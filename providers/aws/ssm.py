@@ -36,10 +36,14 @@ class SSM:
         self.aws_ssm_resource_data_sync()
         self.aws_ssm_service_setting()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+
+        
     def aws_ssm_activation(self):
         print("Processing SSM Activations...")
 

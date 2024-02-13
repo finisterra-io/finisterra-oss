@@ -33,10 +33,13 @@ class EBS:
         self.aws_snapshot_create_volume_permission()
         self.aws_volume_attachment()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_ebs_default_kms_key(self):
         print("Processing EBS Default KMS Key...")
 

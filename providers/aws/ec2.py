@@ -29,9 +29,9 @@ class EC2:
 
         self.aws_account_id = aws_account_id
         self.additional_ips_count = 0
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
         
     def decode_base64(self, encoded_str):
         if encoded_str is not None:
@@ -102,10 +102,12 @@ class EC2:
 
         self.aws_instance()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_ami(self):
         print("Processing AMIs...")
@@ -301,9 +303,14 @@ class EC2:
         print("Processing EC2 Instances...")
 
         instances = self.aws_clients.ec2_client.describe_instances()
+        total = 0
+        for reservation in instances["Reservations"]:
+            total += len(reservation["Instances"])
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for reservation in instances["Reservations"]:
             for instance in reservation["Instances"]:
                 instance_id = instance["InstanceId"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
 
                 if self.is_managed_by_auto_scaling_group(instance_id):
                     print(

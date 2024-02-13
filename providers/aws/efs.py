@@ -30,10 +30,13 @@ class EFS:
         self.aws_efs_mount_target()
         self.aws_efs_replication_configuration()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_efs_access_point(self):
         print("Processing EFS Access Points...")
 

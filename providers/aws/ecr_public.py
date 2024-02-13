@@ -28,10 +28,13 @@ class ECR_PUBLIC:
             self.aws_ecrpublic_repository()  # -
             self.aws_ecrpublic_repository_policy()  # -
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_ecrpublic_repository(self):
         print("Processing ECR Public Repositories...")
 

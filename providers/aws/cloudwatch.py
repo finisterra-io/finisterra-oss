@@ -29,10 +29,13 @@ class Cloudwatch:
         if "gov" not in self.region:
             self.aws_cloudwatch_metric_stream()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_cloudwatch_composite_alarm(self):
         print("Processing CloudWatch Composite Alarms...")
 

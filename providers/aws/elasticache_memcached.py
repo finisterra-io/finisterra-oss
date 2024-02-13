@@ -39,10 +39,12 @@ class Elasticache:
 
         
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
         exit()
 
 

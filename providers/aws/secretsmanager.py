@@ -27,10 +27,13 @@ class Secretsmanager:
         self.aws_secretsmanager_secret_rotation()
         self.aws_secretsmanager_secret_version()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_secretsmanager_secret(self):
         print("Processing Secrets Manager Secrets...")
 

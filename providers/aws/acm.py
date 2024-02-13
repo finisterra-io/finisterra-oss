@@ -30,12 +30,12 @@ class ACM:
     def acm(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_acm_certificate()
-        self.progress.update(self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]")
+
         self.hcl.refresh_state()
-        self.progress.update(self.task, advance=1)
-        self.progress.update(self.task, description=f"[cyan]{self.__class__.__name__} [bold]Generating tf code[/]")
+        
+        
         self.hcl.request_tf_code()
-        self.progress.update(self.task, advance=1)
+        
 
 
     def aws_acm_certificate(self, acm_arn=None, ftstack=None):
@@ -55,7 +55,7 @@ class ACM:
             for cert_summary in page["CertificateSummaryList"]:
                 total += 1
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total+2)
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for cert_summary in page["CertificateSummaryList"]:
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cert_summary['CertificateArn'].split('/')[-1]}[/]")

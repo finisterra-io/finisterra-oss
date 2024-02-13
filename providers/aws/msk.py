@@ -28,7 +28,7 @@ class MSK:
         self.hcl.account_id = aws_account_id
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
         
     def get_subnet_names(self, subnet_ids):
@@ -94,10 +94,12 @@ class MSK:
 
         self.aws_msk_cluster()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_msk_cluster(self):
         resource_type = "aws_msk_cluster"
@@ -106,11 +108,17 @@ class MSK:
         # Pagination for list_clusters, if applicable
         paginator = self.aws_clients.msk_client.get_paginator("list_clusters")
         page_iterator = paginator.paginate()
+        total = 0
+        for page in page_iterator:
+            total += len(page["ClusterInfoList"])
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in page_iterator:
             for cluster_info in page["ClusterInfoList"]:
                 cluster_arn = cluster_info["ClusterArn"]
                 cluster_name = cluster_info["ClusterName"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
                 print(f"Processing MSK Cluster: {cluster_name}")
                 id = cluster_arn
 

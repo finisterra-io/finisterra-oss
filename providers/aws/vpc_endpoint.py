@@ -1,8 +1,6 @@
 import os
 from utils.hcl import HCL
 from providers.aws.security_group import SECURITY_GROUP
-from tqdm import tqdm
-import sys
 
 class VPCEndPoint:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -31,7 +29,7 @@ class VPCEndPoint:
         self.hcl.account_id = aws_account_id
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def get_subnet_names(self, subnet_ids):
@@ -41,7 +39,7 @@ class VPCEndPoint:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                tqdm.write(
+                print(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -55,7 +53,7 @@ class VPCEndPoint:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                tqdm.write(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
 
@@ -65,7 +63,7 @@ class VPCEndPoint:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            tqdm.write(f"No VPC information found for VPC ID: {vpc_id}")
+            print(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -73,7 +71,7 @@ class VPCEndPoint:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            tqdm.write(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
 
@@ -82,32 +80,34 @@ class VPCEndPoint:
 
         self.aws_vpc_endpoint()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_vpc_endpoint(self, vpce_id=None, ftstack=None):
         resource_type = "aws_vpc_endpoint"
-        tqdm.write(f"Processing VPC Endpoint: {vpce_id}...")
+        print(f"Processing VPC Endpoint: {vpce_id}...")
         try:
             if vpce_id:
                 if ftstack and self.hcl.id_resource_processed(resource_type, vpce_id, ftstack):
-                    tqdm.write(f"  Skipping VPC Endpoint: {vpce_id} - already processed")
+                    print(f"  Skipping VPC Endpoint: {vpce_id} - already processed")
                     return
             if vpce_id is None:
                 endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()["VpcEndpoints"]
             else:
                 endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints(VpcEndpointIds=[vpce_id])["VpcEndpoints"]
 
-            progress_bar = tqdm(endpoints, desc="Processing VPC Endpoints")
-            
-            for endpoint in progress_bar:
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
+            for endpoint in endpoints:
                 endpoint_id = endpoint["VpcEndpointId"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")
 
-                progress_bar.set_postfix(vpc_endpoint=endpoint_id, refresh=True)
-                sys.stdout.flush()
                 vpc_id = endpoint["VpcId"]
                 service_name = endpoint["ServiceName"]
-                tqdm.write(
+                print(
                     f"Processing VPC Endpoint: {endpoint_id} for VPC: {vpc_id}")
                 attributes = {
                     "id": endpoint_id,
@@ -146,13 +146,13 @@ class VPCEndPoint:
                         self.hcl.add_additional_data(resource_type, endpoint_id, "subnet_names", subnet_names)
 
             if not endpoints:
-                tqdm.write("No VPC Endpoints found.")
+                print("No VPC Endpoints found.")
         except Exception as e:
-            tqdm.write(f"An error occurred: {str(e)}")
+            print(f"An error occurred: {str(e)}")
             pass
 
     def aws_vpc_endpoint_connection_accepter(self):
-        tqdm.write("Processing VPC Endpoint Connection Accepters...")
+        print("Processing VPC Endpoint Connection Accepters...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -161,7 +161,7 @@ class VPCEndPoint:
                 endpoint_id = endpoint["VpcEndpointId"]
                 vpc_id = endpoint["VpcId"]
                 service_name = endpoint["ServiceName"]
-                tqdm.write(
+                print(
                     f"Processing VPC Endpoint Connection Accepter: {endpoint_id} for VPC: {vpc_id}")
 
                 accepter_id = f"{vpc_id}-{endpoint_id}"
@@ -175,7 +175,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_connection_accepter", accepter_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_connection_notification(self):
-        tqdm.write("Processing VPC Endpoint Connection Notifications...")
+        print("Processing VPC Endpoint Connection Notifications...")
         connection_notifications = self.aws_clients.ec2_client.describe_vpc_endpoint_connection_notifications()[
             "ConnectionNotificationSet"]
 
@@ -184,7 +184,7 @@ class VPCEndPoint:
             vpc_endpoint_id = notification["VpcEndpointId"]
             service_id = notification["ServiceId"]
             sns_topic_arn = notification["ConnectionNotificationArn"]
-            tqdm.write(
+            print(
                 f"Processing VPC Endpoint Connection Notification: {notification_id}")
 
             attributes = {
@@ -199,7 +199,7 @@ class VPCEndPoint:
                 "aws_vpc_endpoint_connection_notification", notification_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_policy(self):
-        tqdm.write("Processing VPC Endpoint Policies...")
+        print("Processing VPC Endpoint Policies...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -208,7 +208,7 @@ class VPCEndPoint:
             vpc_id = endpoint["VpcId"]
             service_name = endpoint["ServiceName"]
             policy_document = endpoint["PolicyDocument"]
-            tqdm.write(
+            print(
                 f"Processing VPC Endpoint Policy: {endpoint_id} for VPC: {vpc_id}")
 
             attributes = {
@@ -220,7 +220,7 @@ class VPCEndPoint:
                 "aws_vpc_endpoint_policy", endpoint_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_route_table_association(self):
-        tqdm.write("Processing VPC Endpoint Route Table Associations...")
+        print("Processing VPC Endpoint Route Table Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -229,7 +229,7 @@ class VPCEndPoint:
             route_table_ids = endpoint.get("RouteTableIds", [])
 
             for route_table_id in route_table_ids:
-                tqdm.write(
+                print(
                     f"Processing VPC Endpoint Route Table Association: {endpoint_id} - {route_table_id}")
 
                 assoc_id = f"{endpoint_id}-{route_table_id}"
@@ -242,7 +242,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_route_table_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_security_group_association(self):
-        tqdm.write("Processing VPC Endpoint Security Group Associations...")
+        print("Processing VPC Endpoint Security Group Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -252,7 +252,7 @@ class VPCEndPoint:
                                   for group in endpoint.get("Groups", [])]
 
             for security_group_id in security_group_ids:
-                tqdm.write(
+                print(
                     f"Processing VPC Endpoint Security Group Association: {endpoint_id} - {security_group_id}")
 
                 assoc_id = f"{endpoint_id}-{security_group_id}"
@@ -265,7 +265,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_security_group_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_service(self):
-        tqdm.write("Processing VPC Endpoint Services...")
+        print("Processing VPC Endpoint Services...")
         vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_services()[
             "ServiceDetails"]
 
@@ -277,7 +277,7 @@ class VPCEndPoint:
             if service_name.startswith('com.amazonaws') or service_name.startswith('aws.'):
                 continue
 
-            tqdm.write(
+            print(
                 f"Processing VPC Endpoint Service: {service_id} {service_name}")
 
             attributes = {
@@ -292,7 +292,7 @@ class VPCEndPoint:
                 "aws_vpc_endpoint_service", service_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_service_allowed_principal(self):
-        tqdm.write("Processing VPC Endpoint Service Allowed Principals...")
+        print("Processing VPC Endpoint Service Allowed Principals...")
         vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_service_configurations()[
             "ServiceConfigurations"]
 
@@ -301,7 +301,7 @@ class VPCEndPoint:
             allowed_principals = service.get("AllowedPrincipals", [])
 
             for principal in allowed_principals:
-                tqdm.write(
+                print(
                     f"Processing VPC Endpoint Service Allowed Principal: {principal} for Service: {service_id}")
 
                 assoc_id = f"{service_id}-{principal}"
@@ -314,7 +314,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_service_allowed_principal", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_subnet_association(self):
-        tqdm.write("Processing VPC Endpoint Subnet Associations...")
+        print("Processing VPC Endpoint Subnet Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -323,7 +323,7 @@ class VPCEndPoint:
             subnet_ids = endpoint["SubnetIds"]
 
             for subnet_id in subnet_ids:
-                tqdm.write(
+                print(
                     f"Processing VPC Endpoint Subnet Association: {endpoint_id} - {subnet_id}")
 
                 assoc_id = f"{endpoint_id}-{subnet_id}"

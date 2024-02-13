@@ -325,7 +325,7 @@ class Aws:
         # If the schema file doesn't exist, run terraform commands
         self.create_folder(temp_dir)
         os.chdir(temp_dir)
-        create_version_file()
+        create_version_file(".")
 
         print("Initializing Terraform...")
         subprocess.run(["terraform", "init"], check=True)
@@ -381,7 +381,7 @@ class Aws:
                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id)
         instance.iam()
 
-    def iam_role(self):
+    def iam(self):
         instance = IAM_ROLE(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name,
                             self.schema_data, self.aws_region, self.s3Bucket,
                             self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id)
@@ -527,7 +527,7 @@ class Aws:
         instance.guardduty()
 
     def apigateway(self):
-        instance = Apigateway( self.aws_clients_instance, self.script_dir, self.provider_name,
+        instance = Apigateway(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name,
                               self.schema_data, self.aws_region, self.s3Bucket,
                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id)
         instance.apigateway()

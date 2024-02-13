@@ -44,9 +44,9 @@ class AwsLambda:
         self.hcl.region = region
         self.hcl.account_id = aws_account_id
 
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
@@ -97,8 +97,10 @@ class AwsLambda:
         self.aws_lambda_function()
 
         self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
-
+        
         
     def aws_lambda_function(self, selected_function_name=None, ftstack=None):
         resource_type = "aws_lambda_function"
@@ -111,10 +113,17 @@ class AwsLambda:
             self.process_single_lambda_function(selected_function_name, ftstack)
             return
 
+        total = 0
         paginator = self.aws_clients.lambda_client.get_paginator('list_functions')
         for page in paginator.paginate():
             for function in page['Functions']:
+                total += 1
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        for page in paginator.paginate():
+            for function in page['Functions']:
                 function_name = function['FunctionName']
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{function_name}[/]")
                 self.process_single_lambda_function(function_name, ftstack)
 
     def process_single_lambda_function(self, function_name, ftstack=None):

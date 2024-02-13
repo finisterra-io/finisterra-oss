@@ -27,7 +27,7 @@ class Logs:
         self.hcl.region = region
         self.hcl.account_id = aws_account_id
 
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def logs(self):
@@ -35,9 +35,13 @@ class Logs:
 
         self.aws_cloudwatch_log_group()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_cloudwatch_log_data_protection_policy(self):
         print("Processing CloudWatch Log Data Protection Policies...")
 
@@ -113,9 +117,15 @@ class Logs:
             return
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page["logGroups"])
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for log_group in page["logGroups"]:
                 log_group_name = log_group["logGroupName"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{log_group_name}[/]")
                 if log_group_name.startswith("/aws"):
                     continue
                 self.process_single_log_group(log_group_name, ftstack)

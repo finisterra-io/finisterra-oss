@@ -26,7 +26,7 @@ class ElasticacheRedis:
         # self.processed_subnet_groups = set()
         # self.processed_parameter_groups = set()
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def get_subnet_names(self, subnet_ids):
@@ -92,16 +92,26 @@ class ElasticacheRedis:
     def elasticache_redis(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_elasticache_replication_group()
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_elasticache_replication_group(self):
         resource_type = "aws_elasticache_replication_group"
         print("Processing ElastiCache Replication Groups...")
 
         paginator = self.aws_clients.elasticache_client.get_paginator("describe_replication_groups")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page["ReplicationGroups"])
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for replication_group in page["ReplicationGroups"]:                
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
+                id = replication_group["ReplicationGroupId"]
                 # Skip the groups that are not Redis
                 if "Engine" in replication_group and replication_group["Engine"] != "redis":
                     continue
@@ -110,7 +120,6 @@ class ElasticacheRedis:
                 #     continue
 
                 print(f"Processing ElastiCache Replication Group: {replication_group['ReplicationGroupId']}")
-                id = replication_group["ReplicationGroupId"]
 
                 ftstack = "elasticache_redis"
                 try:

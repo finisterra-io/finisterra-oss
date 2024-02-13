@@ -32,10 +32,13 @@ class SNS:
 
 
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
+        
 
     def aws_sns_platform_application(self):
         print("Processing SNS Platform Applications...")
@@ -71,10 +74,15 @@ class SNS:
         print("Processing SNS Topics...")
 
         paginator = self.aws_clients.sns_client.get_paginator("list_topics")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page.get("Topics", []))
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for topic in page.get("Topics", []):
                 arn = topic["TopicArn"]
                 name = arn.split(":")[-1]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{name}[/]")
 
                 # if name != 'learning-mediaAssetModified':
                 #     continue

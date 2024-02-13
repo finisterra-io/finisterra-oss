@@ -26,8 +26,8 @@ class TargetGroup:
         self.hcl.account_id = aws_account_id
 
 
-        self.acm_instance = ACM(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.elbv2_instance = ELBV2(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.elbv2_instance = ELBV2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
         self.load_balancers = None
         self.listeners = {}
@@ -54,11 +54,12 @@ class TargetGroup:
 
         self.aws_lb_target_group()
 
+
         self.hcl.refresh_state()
-
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
 
     def aws_lb_target_group(self, target_group_arn=None, ftstack=None):
@@ -67,11 +68,17 @@ class TargetGroup:
 
         paginator = self.aws_clients.elbv2_client.get_paginator('describe_target_groups')
         response_iterator = paginator.paginate()
+        total = 0
+        for response in response_iterator:
+            total += len(response.get("TargetGroups", []))
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for response in response_iterator:
             for target_group in response["TargetGroups"]:
                 tg_arn = target_group["TargetGroupArn"]
                 tg_name = target_group["TargetGroupName"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{tg_name}[/]")
                 
                 if target_group_arn and tg_arn != target_group_arn:
                     continue

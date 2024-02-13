@@ -5,14 +5,6 @@ from providers.aws.elbv2 import ELBV2
 from providers.aws.logs import Logs
 from providers.aws.acm import ACM
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from rich.progress import Progress
-from rich.progress import TimeElapsedColumn
-from rich.progress import SpinnerColumn
-from rich.progress import MofNCompleteColumn
-from rich.progress import BarColumn
-from rich.progress import TextColumn
-from rich.progress import TaskProgressColumn
-
 
 class Apigateway:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -39,20 +31,21 @@ class Apigateway:
         
         self.api_gateway_resource_list = {}
 
-        self.vpc_endpoint_instance = VPCEndPoint(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.elbv2_instance = ELBV2(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.acm_instance = ACM(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.vpc_endpoint_instance = VPCEndPoint(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.elbv2_instance = ELBV2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def apigateway(self):
         self.hcl.prepare_folder(os.path.join("generated"))
-
         self.aws_api_gateway_rest_api()
 
         self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_api_gateway_account(self):
         print("Processing API Gateway Account...")
@@ -84,63 +77,56 @@ class Apigateway:
         # Get the region from the client
         region = self.aws_clients.apigateway_client.meta.region_name
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            MofNCompleteColumn(),
-            TimeElapsedColumn()
-        ) as progress:
-            task = progress.add_task("[cyan]Processing API Gateway REST APIs...", total=len(rest_apis))
 
-            for rest_api in rest_apis:
-                progress.update(task, advance=1, description=f"[cyan]apigateway [bold]{rest_api['name']}[/]")
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(rest_apis))
 
-                # if rest_api["name"] != "staging-aws-service":
-                #     continue
+        for rest_api in rest_apis:
+            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rest_api['name']}[/]")
 
-                api_id = rest_api["id"]
+            # if rest_api["name"] != "staging-aws-service":
+            #     continue
 
-                # Construct the ARN for the API Gateway REST API
-                arn = f"arn:aws:apigateway:{region}::/restapis/{api_id}"
+            api_id = rest_api["id"]
 
-                ftstack = "apigateway"
-                try:
-                    response = self.aws_clients.apigateway_client.get_tags(resourceArn=arn)
-                    tags = response.get('tags', {})
-                    for tag_key, tag_value in tags.items():
-                        if tag_key == 'ftstack':
-                            if tag_value != 'apigateway':
-                                ftstack = "stack_"+tag_value
-                            break
-                except Exception as e:
-                    print("Error occurred: ", e)
+            # Construct the ARN for the API Gateway REST API
+            arn = f"arn:aws:apigateway:{region}::/restapis/{api_id}"
 
-                attributes = {
-                    "id": api_id,
-                }
+            ftstack = "apigateway"
+            try:
+                response = self.aws_clients.apigateway_client.get_tags(resourceArn=arn)
+                tags = response.get('tags', {})
+                for tag_key, tag_value in tags.items():
+                    if tag_key == 'ftstack':
+                        if tag_value != 'apigateway':
+                            ftstack = "stack_"+tag_value
+                        break
+            except Exception as e:
+                print("Error occurred: ", e)
 
-                resource_name = f"{api_id}"
-                self.hcl.process_resource(
-                    resource_type, resource_name, attributes)
+            attributes = {
+                "id": api_id,
+            }
 
-                endpoint_configuration = rest_api.get("endpointConfiguration", {})
-                if "vpcEndpointIds" in endpoint_configuration:
-                    for vpc_link_id in endpoint_configuration["vpcEndpointIds"]:
-                        self.vpc_endpoint_instance.aws_vpc_endpoint(vpc_link_id, ftstack)
+            resource_name = f"{api_id}"
+            self.hcl.process_resource(
+                resource_type, resource_name, attributes)
 
-                self.hcl.add_stack(resource_type, api_id, ftstack)
+            endpoint_configuration = rest_api.get("endpointConfiguration", {})
+            if "vpcEndpointIds" in endpoint_configuration:
+                for vpc_link_id in endpoint_configuration["vpcEndpointIds"]:
+                    self.vpc_endpoint_instance.aws_vpc_endpoint(vpc_link_id, ftstack)
 
-                stages = self.aws_clients.apigateway_client.get_stages(restApiId=api_id)["item"]
+            self.hcl.add_stack(resource_type, api_id, ftstack)
 
-                self.aws_api_gateway_method_settings(rest_api["id"], stages)
-                self.aws_api_gateway_rest_api_policy(rest_api["id"])
-                self.aws_api_gateway_resource(rest_api["id"], ftstack)
-                self.aws_api_gateway_stage(rest_api["id"], stages, ftstack)
-                self.aws_api_gateway_gateway_response(rest_api["id"])
-                self.aws_api_gateway_model(rest_api["id"])
-                self.aws_api_gateway_base_path_mapping(rest_api["id"], ftstack)
+            stages = self.aws_clients.apigateway_client.get_stages(restApiId=api_id)["item"]
+
+            self.aws_api_gateway_method_settings(rest_api["id"], stages)
+            self.aws_api_gateway_rest_api_policy(rest_api["id"])
+            self.aws_api_gateway_resource(rest_api["id"], ftstack)
+            self.aws_api_gateway_stage(rest_api["id"], stages, ftstack)
+            self.aws_api_gateway_gateway_response(rest_api["id"])
+            self.aws_api_gateway_model(rest_api["id"])
+            self.aws_api_gateway_base_path_mapping(rest_api["id"], ftstack)
 
     def aws_api_gateway_deployment(self, rest_api_id, deployment_id, ftstack):
         print(f"Processing API Gateway Deployment: {deployment_id}")

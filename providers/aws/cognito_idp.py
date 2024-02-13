@@ -38,10 +38,13 @@ class CognitoIDP:
         self.aws_cognito_user_pool_client()
         self.aws_cognito_user_pool_domain()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_cognito_identity_provider(self):
         print("Processing Cognito Identity Providers...")
 

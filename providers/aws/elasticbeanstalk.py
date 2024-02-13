@@ -34,19 +34,17 @@ class ElasticBeanstalk:
         self.security_groups = {}
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def elasticbeanstalk(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         # self.aws_elastic_beanstalk_application()
         self.aws_elastic_beanstalk_environment()
-
         self.hcl.refresh_state()
-
         self.hcl.request_tf_code()
-
+        
     def aws_elastic_beanstalk_application(self):
         print("Processing Elastic Beanstalk Applications...")
 
@@ -155,9 +153,12 @@ class ElasticBeanstalk:
         print("Processing Elastic Beanstalk Environments...")
 
         environments = self.aws_clients.elasticbeanstalk_client.describe_environments()["Environments"]
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(environments))
 
         for env in environments:
             env_id = env["EnvironmentId"]
+            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{env_id}[/]")
+
 
             # if env_id != "e-asi52zmcu8":
             #     continue

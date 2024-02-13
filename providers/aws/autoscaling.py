@@ -25,9 +25,9 @@ class AutoScaling:
 
 
 
-        self.security_group_instance = SECURITY_GROUP(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
-        self.launchtemplate_instance = LaunchTemplate(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)        
+        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
@@ -63,9 +63,12 @@ class AutoScaling:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_autoscaling_group()
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
 
 
     def aws_autoscaling_attachment(self):
@@ -95,9 +98,12 @@ class AutoScaling:
 
         as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
+        
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(as_groups))
 
         for as_group in as_groups:
             as_group_name = as_group["AutoScalingGroupName"]
+            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{as_group_name}[/]")
 
             # if as_group_name != "production-noovie-web-AutoScalingGroup-1MZ5FBASQRUJL":
             #     continue

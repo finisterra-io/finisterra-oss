@@ -219,7 +219,6 @@ class HCL:
         if not os.path.isfile(self.terraform_state_file):
             return
         print("Requesting Terraform code...")
-        print("Sending Terraform state file...", os.path.join(self.script_dir, self.terraform_state_file))
         with open(self.terraform_state_file, 'r') as f:
             tfstate = json.load(f)
 
@@ -274,8 +273,6 @@ class HCL:
             with open(zip_file_path, 'wb') as zip_file:
                 zip_file.write(response_data)
 
-            print('Zip file saved at:', zip_file_path)
-
             root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             #clean up folder
             try:
@@ -288,7 +285,7 @@ class HCL:
             # Unzip the file to the current directory
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 zip_ref.extractall(root_path)
-                print('Zip file extracted to:', root_path)
+                print('Terraform code created at:', root_path)
 
 
             # Save additional files

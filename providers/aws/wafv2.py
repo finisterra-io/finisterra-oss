@@ -25,8 +25,8 @@ class Wafv2:
         self.hcl.region = region
         self.hcl.account_id = aws_account_id
 
-        self.s3_instance = S3(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
         
 
@@ -35,10 +35,13 @@ class Wafv2:
 
         self.aws_wafv2_web_acl()
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
+        
 
     def aws_wafv2_ip_set(self, waf_id, ip_set_name, scope):
         print(f"Processing WAFv2 IP Set:  {ip_set_name}")
@@ -104,13 +107,16 @@ class Wafv2:
         # iterate through both scopes
         for scope in ['REGIONAL', 'CLOUDFRONT']:
             web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)["WebACLs"]
+            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(web_acls))
 
             for web_acl in web_acls:
+                web_acl_name = web_acl["Name"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{web_acl_name}[/]")
                 if web_acl_id and web_acl["Id"] != web_acl_id:
                     continue
 
                 web_acl_id = web_acl["Id"]
-                web_acl_name = web_acl["Name"]
+                
 
                 # if web_acl_name != "aws-managed-waf-sandbox":
                 #     continue

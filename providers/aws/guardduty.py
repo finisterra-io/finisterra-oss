@@ -33,10 +33,13 @@ class Guardduty:
         self.aws_guardduty_publishing_destination()
         self.aws_guardduty_threatintelset()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_guardduty_detector(self):
         print("Processing GuardDuty Detectors...")
 

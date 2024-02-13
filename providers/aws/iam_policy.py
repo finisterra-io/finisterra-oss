@@ -26,10 +26,13 @@ class IAM_POLICY:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_iam_policy()
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
+        
     def aws_iam_access_key(self):
         print("Processing IAM Access Keys...")
         paginator = self.aws_clients.iam_client.get_paginator("list_users")

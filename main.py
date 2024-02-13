@@ -17,9 +17,9 @@ from rich.progress import TaskProgressColumn
 # Function to execute provider methods in parallel, with special handling for the IAM module
 def execute_provider_method(provider, method_name):
     try:
-        if method_name == "iam_role":
+        if method_name == "iam":
             # Special handling for IAM module
-            original_region = provider.region
+            original_region = provider.aws_region
             provider.region = "global"
             method = getattr(provider, method_name)
             method()
@@ -74,22 +74,13 @@ def main(provider, module):
         dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
         stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
 
-        progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            MofNCompleteColumn(),
-            TimeElapsedColumn()
-        )
-
         provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable, stateKey, aws_account_id, aws_region)
 
         # Define all provider methods for execution
         all_provider_methods = [
             'vpc', 'acm', 'apigateway', 'autoscaling', 'cloudmap', 'cloudfront', 'logs',
             'docdb', 'dynamodb', 'ec2', 'ecr', 'ecs', 'eks', 'elbv2', 'elasticache_redis',
-            'elasticbeanstalk', 'iam_role', 'kms', 'aws_lambda', 'rds', 's3', 'sns', 'sqs',
+            'elasticbeanstalk', 'iam', 'kms', 'aws_lambda', 'rds', 's3', 'sns', 'sqs',
             'wafv2', 'stepfunction', 'msk', 'aurora', 'security_group', 'vpc_endpoint',
             'target_group', 'elasticsearch', 'codeartifact', 'launchtemplate'
         ]
@@ -108,13 +99,21 @@ def main(provider, module):
             modules_to_execute = [mod.strip() for mod in modules_to_execute]
 
         max_parallel = int(os.getenv('MAX_PARALLEL', 10))
-        with progress:
-            with ThreadPoolExecutor(max_workers=max_parallel) as executor:
-                futures = [executor.submit(execute_provider_method, provider_instance, method) for method in modules_to_execute]
-                for future in as_completed(futures):
-                    pass
+        with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            futures = [executor.submit(execute_provider_method, provider_instance, method) for method in modules_to_execute]
+            for future in as_completed(futures):
+                pass
 
         print("Finished processing AWS resources.")
 
 if __name__ == "__main__":
-    main()
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn()
+    )
+    with progress:
+        main()

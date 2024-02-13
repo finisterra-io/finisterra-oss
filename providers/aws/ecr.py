@@ -28,7 +28,7 @@ class ECR:
 
 
 
-        self.kms_instance = KMS(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
     
     def get_kms_alias(self, kms_key_id):
         try:
@@ -59,19 +59,22 @@ class ECR:
             self.aws_ecr_pull_through_cache_rule()
             self.aws_ecr_replication_configuration()
 
-
-
         self.hcl.refresh_state()
+        
+        
         self.hcl.request_tf_code()
-
+        
+        
     def aws_ecr_repository(self):
         resource_type = "aws_ecr_repository"
         print("Processing ECR Repositories...")
 
         repositories = self.aws_clients.ecr_client.describe_repositories()["repositories"]
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(repositories))
         for repo in repositories:
             repository_name = repo["repositoryName"]
             repository_arn = repo["repositoryArn"]
+            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{repository_name}[/]")
 
             print(f"Processing ECR Repository: {repository_name}")
             id = repository_name

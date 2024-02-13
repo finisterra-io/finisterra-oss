@@ -47,9 +47,12 @@ class Dynamodb:
 
         self.aws_dynamodb_table()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
 
 
     def aws_dynamodb_table(self):
@@ -57,8 +60,14 @@ class Dynamodb:
         print("Processing DynamoDB Tables...")
 
         paginator = self.aws_clients.dynamodb_client.get_paginator("list_tables")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page["TableNames"])
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for table_name in page["TableNames"]:
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{table_name}[/]")
                 table_description = self.aws_clients.dynamodb_client.describe_table(TableName=table_name)["Table"]
 
                 # if table_name != "staging_WallFeedItem":

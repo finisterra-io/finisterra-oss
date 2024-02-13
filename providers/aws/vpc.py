@@ -41,9 +41,9 @@ class VPC:
         self.dhcp_options_domain_name = {}
         self.default_routes={}
 
-        self.iam_role_instance = IAM_ROLE(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.s3_instance = S3(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
-        self.logs_instance = Logs(self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, self.hcl)
 
 
     def is_subnet_public(self, subnet_id):
@@ -67,14 +67,21 @@ class VPC:
     def vpc(self):        
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_vpc()
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+
+        
     def aws_vpc(self):
         resource_type = "aws_vpc"
         print("Processing VPCs...")
         vpcs = self.aws_clients.ec2_client.describe_vpcs()["Vpcs"]
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(vpcs))
         for vpc in vpcs:
+            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{vpc['VpcId']}[/]")
             is_default = vpc.get("IsDefault", False)
             if not is_default:
                 vpc_id = vpc["VpcId"]

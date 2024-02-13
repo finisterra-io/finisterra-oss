@@ -38,10 +38,13 @@ class Route53:
         self.aws_route53_zone()
         self.aws_route53_zone_association()
 
-        self.hcl.refresh_state()
-        self.hcl.request_tf_code()
-        # self.hcl.generate_hcl_file()
 
+        self.hcl.refresh_state()
+        
+        
+        self.hcl.request_tf_code()
+        
+        
     def aws_route53_delegation_set(self):
         print("Processing Route53 Delegation Sets...")
 

@@ -33,19 +33,27 @@ class SQS:
         self.aws_sqs_queue()
 
 
+
         self.hcl.refresh_state()
-
+        
+        
         self.hcl.request_tf_code()
-
+        
 
     def aws_sqs_queue(self):
         resource_type = "aws_sqs_queue"
         print("Processing SQS Queues...")
 
         paginator = self.aws_clients.sqs_client.get_paginator("list_queues")
+        total = 0
+        for page in paginator.paginate():
+            total += len(page.get("QueueUrls", []))
+        
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for queue_url in page.get("QueueUrls", []):
                 queue_name = queue_url.split("/")[-1]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{queue_name}[/]")
 
                 # if queue_name != 'market-marketSubscriptionTenantIdentityActivationQueue':
                 #     continue
