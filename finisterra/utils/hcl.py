@@ -278,7 +278,7 @@ class HCL:
             root_path = os.getcwd()
             #clean up folder
             try:
-                os.chdir(os.path.join(root_path,"tf_code"))
+                os.chdir(os.path.join(root_path, "tf_code"))
                 for stack in self.unique_ftstacks:
                     shutil.rmtree(stack)
             except:

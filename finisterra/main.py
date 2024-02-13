@@ -35,7 +35,8 @@ def execute_provider_method(provider, method_name):
 @click.command()
 @click.option('--provider', '-p', default="aws", help='Provider name')
 @click.option('--module', '-m', required=True, help='Module name(s), separated by commas or "all" for all modules')
-def main(provider, module):  
+@click.option('--output_dir', 'o', default="tf_code", help='Output directory')
+def main(provider, module, output_dir):
     if provider == "aws":
         aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
         aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -76,6 +77,7 @@ def main(provider, module):
             TimeElapsedColumn()
         )
         with progress:
+            print("current directory: ", os.getcwd())
             print("Fetching AWS resources...")
 
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -83,7 +85,7 @@ def main(provider, module):
             dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
             stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
 
-            provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable, stateKey, aws_account_id, aws_region)
+            provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable, stateKey, aws_account_id, aws_region, output_dir)
 
             # Define all provider methods for execution
             all_provider_methods = [
