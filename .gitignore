@@ -1,10 +1,14 @@
 env/*
 tmp/*
 
-
 .terraform*
 generated/*
-finisterra/*
+tf_code/*
+dist/*
+build/*
+*.egg-info
+*.egg
+*.log
 
 *.pyc
 .env
