@@ -79,12 +79,10 @@ class VPCEndPoint:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_vpc_endpoint()
-
-
+        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         self.hcl.refresh_state()
-        
-        
         self.hcl.request_tf_code()
+        self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]Code Generated[/]")
         
         
     def aws_vpc_endpoint(self, vpce_id=None, ftstack=None):
