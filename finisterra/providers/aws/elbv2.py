@@ -119,117 +119,117 @@ class ELBV2:
                 logger.debug(
                     f"  Skipping Elbv2: {selected_lb_arn} already processed")
                 return
-            self.process_single_lb(selected_lb_arn, ftstack)
-            return
 
-        load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
-            "LoadBalancers"]
-        if len(load_balancers) > 0:
-            self.task = self.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers))
+        if selected_lb_arn:
+            load_balancers = self.aws_clients.elbv2_client.describe_load_balancers(LoadBalancerArns=[selected_lb_arn])[
+                "LoadBalancers"]
+        else:
+            load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
+                "LoadBalancers"]
 
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]
-            self.progress.update(
-                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{lb['LoadBalancerName']}[/]")
-            self.process_single_lb(lb_arn, ftstack)
 
-    def process_single_lb(self, lb_arn, ftstack=None):
-        resource_type = "aws_lb"
-        lb_response = self.aws_clients.elbv2_client.describe_load_balancers(
-            LoadBalancerArns=[lb_arn])
-        if not lb_response["LoadBalancers"]:
-            return
+            resource_type = "aws_lb"
+            lb_response = self.aws_clients.elbv2_client.describe_load_balancers(
+                LoadBalancerArns=[lb_arn])
+            if not lb_response["LoadBalancers"]:
+                return
 
-        lb = lb_response["LoadBalancers"][0]
-        lb_name = lb["LoadBalancerName"]
+            lb = lb_response["LoadBalancers"][0]
+            lb_name = lb["LoadBalancerName"]
 
-        # if lb_name != "a2279fadf4d074581a4f67afec193962":
-        #     return
+            # Check tags of the load balancer
+            tags_response = self.aws_clients.elbv2_client.describe_tags(ResourceArns=[
+                                                                        lb_arn])
+            tags = tags_response["TagDescriptions"][0]["Tags"]
 
-        # Check tags of the load balancer
-        tags_response = self.aws_clients.elbv2_client.describe_tags(ResourceArns=[
-                                                                    lb_arn])
-        tags = tags_response["TagDescriptions"][0]["Tags"]
+            # Filter out load balancers created by Elastic Beanstalk or Kubernetes Ingress
+            is_ebs_created = any(
+                tag["Key"] == "elasticbeanstalk:environment-name" for tag in tags)
+            is_k8s_created = any(tag["Key"] in ["kubernetes.io/ingress-name",
+                                                "kubernetes.io/ingress.class", "elbv2.k8s.aws/cluster"] for tag in tags)
 
-        # Filter out load balancers created by Elastic Beanstalk or Kubernetes Ingress
-        is_ebs_created = any(
-            tag["Key"] == "elasticbeanstalk:environment-name" for tag in tags)
-        is_k8s_created = any(tag["Key"] in ["kubernetes.io/ingress-name",
-                             "kubernetes.io/ingress.class", "elbv2.k8s.aws/cluster"] for tag in tags)
+            if is_ebs_created:
+                logger.debug(
+                    f"  Skipping Elastic Beanstalk Load Balancer: {lb_name}")
+                return
+            elif is_k8s_created:
+                logger.debug(f"  Skipping Kubernetes Load Balancer: {lb_name}")
+                return
 
-        if is_ebs_created:
-            logger.debug(
-                f"  Skipping Elastic Beanstalk Load Balancer: {lb_name}")
-            return
-        elif is_k8s_created:
-            logger.debug(f"  Skipping Kubernetes Load Balancer: {lb_name}")
-            return
+            logger.debug(f"Processing Load Balancer: {lb_name}")
 
-        logger.debug(f"Processing Load Balancer: {lb_name}")
+            if not selected_lb_arn:
+                if not self.task:
+                    self.task = self.progress.add_task(
+                        f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers))
 
-        if not ftstack:
-            ftstack = "elbv2"
-            for tag in tags:
-                if tag['Key'] == 'ftstack':
-                    if tag['Value'] != 'elbv2':
-                        ftstack = "stack_" + tag['Value']
-                    break
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{lb['LoadBalancerName']}[/]")
 
-        id = lb_arn
+            if not ftstack:
+                ftstack = "elbv2"
+                for tag in tags:
+                    if tag['Key'] == 'ftstack':
+                        if tag['Value'] != 'elbv2':
+                            ftstack = "stack_" + tag['Value']
+                        break
 
-        attributes = {
-            "id": id,
-        }
+            id = lb_arn
 
-        self.hcl.process_resource(resource_type, lb_name, attributes)
-        self.hcl.add_stack(resource_type, id, ftstack)
+            attributes = {
+                "id": id,
+            }
 
-        AvailabilityZones = lb.get("AvailabilityZones", [])
-        if AvailabilityZones:
-            subnets = self.get_subnet_names(
-                [az["SubnetId"] for az in AvailabilityZones])
-            if subnets:
-                if resource_type not in self.hcl.additional_data:
-                    self.hcl.additional_data[resource_type] = {}
-                if id not in self.hcl.additional_data[resource_type]:
-                    self.hcl.additional_data[resource_type][id] = {}
-                self.hcl.additional_data[resource_type][id]["subnet_names"] = subnets
+            self.hcl.process_resource(resource_type, lb_name, attributes)
+            self.hcl.add_stack(resource_type, id, ftstack)
 
-        VpcId = lb.get("VpcId", "")
-        if VpcId:
-            vpc_name = self.get_vpc_name(VpcId)
-            if vpc_name:
-                if resource_type not in self.hcl.additional_data:
-                    self.hcl.additional_data[resource_type] = {}
-                if id not in self.hcl.additional_data[resource_type]:
-                    self.hcl.additional_data[resource_type][id] = {}
-                self.hcl.additional_data[resource_type][id]["vpc_name"] = vpc_name
+            AvailabilityZones = lb.get("AvailabilityZones", [])
+            if AvailabilityZones:
+                subnets = self.get_subnet_names(
+                    [az["SubnetId"] for az in AvailabilityZones])
+                if subnets:
+                    if resource_type not in self.hcl.additional_data:
+                        self.hcl.additional_data[resource_type] = {}
+                    if id not in self.hcl.additional_data[resource_type]:
+                        self.hcl.additional_data[resource_type][id] = {}
+                    self.hcl.additional_data[resource_type][id]["subnet_names"] = subnets
 
-        # load_balancer_arns.append(lb_arn)
+            VpcId = lb.get("VpcId", "")
+            if VpcId:
+                vpc_name = self.get_vpc_name(VpcId)
+                if vpc_name:
+                    if resource_type not in self.hcl.additional_data:
+                        self.hcl.additional_data[resource_type] = {}
+                    if id not in self.hcl.additional_data[resource_type]:
+                        self.hcl.additional_data[resource_type][id] = {}
+                    self.hcl.additional_data[resource_type][id]["vpc_name"] = vpc_name
 
-        # Extract the security group IDs associated with this load balancer
-        security_group_ids = lb.get("SecurityGroups", [])
+            # load_balancer_arns.append(lb_arn)
 
-        # Call the aws_security_group function for each security group ID
-        # Block because we want to create the security groups in their own module
-        for sg in security_group_ids:
-            self.security_group_instance.aws_security_group(sg, ftstack)
+            # Extract the security group IDs associated with this load balancer
+            security_group_ids = lb.get("SecurityGroups", [])
 
-        access_logs = self.aws_clients.elbv2_client.describe_load_balancer_attributes(
-            LoadBalancerArn=lb_arn
-        )['Attributes']
+            # Call the aws_security_group function for each security group ID
+            # Block because we want to create the security groups in their own module
+            for sg in security_group_ids:
+                self.security_group_instance.aws_security_group(sg, ftstack)
 
-        s3_access_logs_enabled = False
-        s3_access_lobs_bucket = ""
-        for attribute in access_logs:
-            if attribute['Key'] == 'access_logs.s3.enabled' and attribute['Value'] == 'true':
-                s3_access_logs_enabled = True
-            if attribute['Key'] == 'access_logs.s3.bucket':
-                s3_access_lobs_bucket = attribute['Value']
-        if s3_access_logs_enabled and s3_access_lobs_bucket:
-            self.s3_instance.aws_s3_bucket(s3_access_lobs_bucket, ftstack)
-        self.aws_lb_listener([lb_arn], ftstack)
+            access_logs = self.aws_clients.elbv2_client.describe_load_balancer_attributes(
+                LoadBalancerArn=lb_arn
+            )['Attributes']
+
+            s3_access_logs_enabled = False
+            s3_access_lobs_bucket = ""
+            for attribute in access_logs:
+                if attribute['Key'] == 'access_logs.s3.enabled' and attribute['Value'] == 'true':
+                    s3_access_logs_enabled = True
+                if attribute['Key'] == 'access_logs.s3.bucket':
+                    s3_access_lobs_bucket = attribute['Value']
+            if s3_access_logs_enabled and s3_access_lobs_bucket:
+                self.s3_instance.aws_s3_bucket(s3_access_lobs_bucket, ftstack)
+            self.aws_lb_listener([lb_arn], ftstack)
 
     def aws_lb_listener(self, load_balancer_arns, ftstack=None):
         logger.debug("Processing Load Balancer Listeners...")

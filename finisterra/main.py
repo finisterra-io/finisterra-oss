@@ -29,24 +29,25 @@ ftstacks = set()
 
 
 def execute_provider_method(provider, method_name):
-    global ftstacks
     try:
         if method_name == "iam":
             # Special handling for IAM module
             original_region = provider.aws_region
             provider.region = "global"
             method = getattr(provider, method_name)
-            ftstacks = ftstacks.union(method())
+            result = method()
             provider.region = original_region
         else:
             # Regular execution for other modules
             method = getattr(provider, method_name)
-            ftstacks = ftstacks.union(method())
+            result = method()
+        return result
     except Exception as e:
         # Log fail status
         console.log(
             f"[bold red]Error executing {method_name}[/bold red]: {str(e)}", style="bold red")
         console.print(Traceback())
+        return set()
 
 
 @click.command()
@@ -167,22 +168,28 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
                 modules_to_execute = [mod.strip()
                                       for mod in modules_to_execute]
 
-            max_parallel = int(os.getenv('MAX_PARALLEL', 3))
+            max_parallel = int(os.getenv('MAX_PARALLEL', 5))
+            results = []
             with ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 futures = [executor.submit(
                     execute_provider_method, provider_instance, method) for method in modules_to_execute]
                 for future in as_completed(futures):
-                    pass
+                    results.append(future.result())
+
+            # After collecting all results, update ftstacks once
+            global ftstacks
+            for result in results:
+                ftstacks = ftstacks.union(result)
 
         if run_plan:
-            with console.status("[cyan][bold green]Planning Terraform...", spinner="dots"):
-                # logger.info(("Planning Terraform...")
-                os.chdir(os.path.join(output_dir, "tf_code"))
-                shutil.copyfile("./terragrunt.hcl",
-                                "./terragrunt.hcl.remote-state")
-                shutil.copyfile("./terragrunt.hcl.local-state",
-                                "./terragrunt.hcl")
-                for ftstack in ftstacks:
+            # logger.info(("Planning Terraform...")
+            os.chdir(os.path.join(output_dir, "tf_code"))
+            shutil.copyfile("./terragrunt.hcl",
+                            "./terragrunt.hcl.remote-state")
+            shutil.copyfile("./terragrunt.hcl.local-state",
+                            "./terragrunt.hcl")
+            for ftstack in ftstacks:
+                with console.status(f"[cyan]Running Terraform plan for {ftstack}...", spinner="dots"):
                     os.chdir(os.path.join(output_dir, "tf_code", ftstack))
                     subprocess.run(["terragrunt", "init"],
                                    check=True, stdout=subprocess.DEVNULL)
@@ -197,11 +204,11 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
                         open(json_file_name).read())
                     print_detailed_changes(updates)
                     print_summary(counts, ftstack)
-                os.chdir(os.path.join(output_dir, "tf_code"))
-                shutil.copyfile("./terragrunt.hcl",
-                                "./terragrunt.hcl.local-state")
-                shutil.copyfile("./terragrunt.hcl.remote-state",
-                                "./terragrunt.hcl")
+            os.chdir(os.path.join(output_dir, "tf_code"))
+            shutil.copyfile("./terragrunt.hcl",
+                            "./terragrunt.hcl.local-state")
+            shutil.copyfile("./terragrunt.hcl.remote-state",
+                            "./terragrunt.hcl")
 
         for ftstack in ftstacks:
             generated_path = os.path.join(output_dir, "tf_code", ftstack)

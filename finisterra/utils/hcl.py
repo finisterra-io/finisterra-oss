@@ -316,6 +316,6 @@ class HCL:
                     shutil.copyfile(filename, target_file)
 
         else:
-            logger.error(response.status, response.reason)
+            logger.error(f"{response.status} {response.reason}")
 
         conn.close()

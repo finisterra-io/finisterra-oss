@@ -129,8 +129,9 @@ class ECS:
         clusters = self.aws_clients.ecs_client.describe_clusters(
             clusters=clusters_arns, include=["CONFIGURATIONS"])["clusters"]
 
-        self.task = self.progress.add_task(
-            f"[cyan]Processing {self.__class__.__name__}...", total=0)
+        if clusters:
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=0)
 
         for cluster in clusters:
             cluster_name = cluster["clusterName"]
@@ -306,7 +307,7 @@ class ECS:
                     total += len(page["serviceArns"])
 
                 if total > 0:
-                    self.task = self.progress.update(
+                    self.progress.update(
                         self.task_id, desciption=f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
 
                 for page in paginator.paginate(cluster=cluster_arn):

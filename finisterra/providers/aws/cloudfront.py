@@ -95,7 +95,7 @@ class CloudFront:
             distribution_list = page.get("DistributionList")
             if not distribution_list:
                 continue
-            total += len(distribution_list.get("Items"))
+            total += len(distribution_list.get("Items", []))
 
         if total > 0:
             self.task = self.progress.add_task(
