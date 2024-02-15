@@ -87,7 +87,6 @@ def print_detailed_changes(updates):
 
 def print_summary(counts, module):
     console = Console()
-    console.print("\n")
     console.print(f"[bold]{module} Plan: [/bold]", end="")
     action_colors = {
         "import": "green",
