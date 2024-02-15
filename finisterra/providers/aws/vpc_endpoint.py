@@ -5,11 +5,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class VPCEndPoint:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -28,19 +29,19 @@ class VPCEndPoint:
             self.hcl = HCL(self.schema_data, self.provider_name)
         else:
             self.hcl = hcl
-        
+
         self.hcl.region = region
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
         for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
@@ -62,7 +63,6 @@ class VPCEndPoint:
 
         return subnet_names
 
-        
     def get_vpc_name(self, vpc_id):
         response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
@@ -80,36 +80,43 @@ class VPCEndPoint:
 
         return vpc_name
 
-    def vpc_endpoint(self):        
+    def vpc_endpoint(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_vpc_endpoint()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-        
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
+
     def aws_vpc_endpoint(self, vpce_id=None, ftstack=None):
         resource_type = "aws_vpc_endpoint"
         logger.debug(f"Processing VPC Endpoint: {vpce_id}...")
         try:
             if vpce_id:
                 if ftstack and self.hcl.id_resource_processed(resource_type, vpce_id, ftstack):
-                    logger.debug(f"  Skipping VPC Endpoint: {vpce_id} - already processed")
+                    logger.debug(
+                        f"  Skipping VPC Endpoint: {vpce_id} - already processed")
                     return
             if vpce_id is None:
-                endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()["VpcEndpoints"]
+                endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+                    "VpcEndpoints"]
             else:
-                endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints(VpcEndpointIds=[vpce_id])["VpcEndpoints"]
+                endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints(
+                    VpcEndpointIds=[vpce_id])["VpcEndpoints"]
 
             if len(endpoints) > 0:
-                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
+                self.task = self.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
             for endpoint in endpoints:
                 endpoint_id = endpoint["VpcEndpointId"]
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")
 
                 vpc_id = endpoint["VpcId"]
                 service_name = endpoint["ServiceName"]
@@ -120,7 +127,7 @@ class VPCEndPoint:
                     "vpc_id": vpc_id,
                     "service_name": service_name,
                 }
-                
+
                 if not ftstack:
                     ftstack = "vpc_endpoint"
                     # Check if "ftstack" tag exists and set "ftstack" to its value
@@ -129,7 +136,7 @@ class VPCEndPoint:
                         if tag["Key"] == "ftstack":
                             ftstack = tag["Value"]
                             break
-                
+
                 self.hcl.process_resource(
                     resource_type, endpoint_id, attributes)
                 self.hcl.add_stack(resource_type, endpoint_id, ftstack)
@@ -137,19 +144,25 @@ class VPCEndPoint:
                 security_groups = endpoint.get("Groups", [])
                 for security_group in security_groups:
                     security_group_id = security_group["GroupId"]
-                    self.security_group_instance.aws_security_group(security_group_id, ftstack)
-                
+                    self.security_group_instance.aws_security_group(
+                        security_group_id, ftstack)
+
                 vpc_id = endpoint["VpcId"]
                 if vpc_id:
-                    vpc_name=self.get_vpc_name(vpc_id)
+                    vpc_name = self.get_vpc_name(vpc_id)
                     if vpc_name:
-                        self.hcl.add_additional_data(resource_type, endpoint_id, "vpc_name", vpc_name)
+                        self.hcl.add_additional_data(
+                            resource_type, endpoint_id, "vpc_name", vpc_name)
 
                 subnet_ids = endpoint.get("SubnetIds", [])
                 if subnet_ids:
                     subnet_names = self.get_subnet_names(subnet_ids)
                     if subnet_names:
-                        self.hcl.add_additional_data(resource_type, endpoint_id, "subnet_names", subnet_names)
+                        self.hcl.add_additional_data(
+                            resource_type, endpoint_id, "subnet_names", subnet_names)
+
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")
 
             if not endpoints:
                 logger.debug("No VPC Endpoints found.")
@@ -340,4 +353,3 @@ class VPCEndPoint:
                 }
                 self.hcl.process_resource(
                     "aws_vpc_endpoint_subnet_association", assoc_id.replace("-", "_"), attributes)
-

@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from rich.console import Console
 from ...utils.hcl import HCL
 
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 from ...providers.aws.logs import Logs
 from ...providers.aws.security_group import SECURITY_GROUP
 import logging
@@ -17,17 +17,17 @@ logger = logging.getLogger('finisterra')
 
 class AwsLambda:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
-        self.transform_rules = {        }
+        self.transform_rules = {}
         self.provider_name = provider_name
         self.script_dir = script_dir
         self.schema_data = schema_data
         self.region = region
         self.aws_account_id = aws_account_id
-        
+
         self.workspace_id = workspace_id
         self.modules = modules
         if not hcl:
@@ -39,18 +39,23 @@ class AwsLambda:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
         for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
+                logger.debug(
+                    f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
             # Extract the 'Tags' key safely using get
@@ -84,42 +89,50 @@ class AwsLambda:
 
         return vpc_name
 
-
     def aws_lambda(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_lambda_function()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-        
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
+
     def aws_lambda_function(self, selected_function_name=None, ftstack=None):
         resource_type = "aws_lambda_function"
         # logger.debug(f"Processing Lambda Functions...", selected_function_name)
 
         if selected_function_name and ftstack:
             if self.hcl.id_resource_processed(resource_type, selected_function_name, ftstack):
-                logger.debug(f"  Skipping Lambda Function: {selected_function_name} already processed")
+                logger.debug(
+                    f"  Skipping Lambda Function: {selected_function_name} already processed")
                 return
-            self.process_single_lambda_function(selected_function_name, ftstack)
+            self.process_single_lambda_function(
+                selected_function_name, ftstack)
             return
 
         total = 0
-        paginator = self.aws_clients.lambda_client.get_paginator('list_functions')
+        paginator = self.aws_clients.lambda_client.get_paginator(
+            'list_functions')
         for page in paginator.paginate():
             for function in page['Functions']:
                 total += 1
 
         if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for function in page['Functions']:
                 function_name = function['FunctionName']
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{function_name}[/]")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{function_name}[/]")
                 self.process_single_lambda_function(function_name, ftstack)
 
     def process_single_lambda_function(self, function_name, ftstack=None):
@@ -127,16 +140,18 @@ class AwsLambda:
 
         # if function_name != 'CRM-AWSDistributedLoadTes-DLTLambdaFunctionResults-XeiL2MdUoMav':
         #     return
-        
+
         logger.debug(f"Processing Lambda Function: {function_name}")
 
-        function_details = self.aws_clients.lambda_client.get_function(FunctionName=function_name)
+        function_details = self.aws_clients.lambda_client.get_function(
+            FunctionName=function_name)
         function_arn = function_details["Configuration"]["FunctionArn"]
 
         if not ftstack:
             ftstack = "aws_lambda"
             try:
-                tags = self.aws_clients.lambda_client.list_tags(Resource=function_arn)['Tags']
+                tags = self.aws_clients.lambda_client.list_tags(
+                    Resource=function_arn)['Tags']
                 if tags.get('ftstack', 'aws_lambda') != 'aws_lambda':
                     ftstack = "stack_" + tags.get('ftstack', 'aws_lambda')
             except Exception as e:
@@ -152,7 +167,8 @@ class AwsLambda:
                 s3_key = function_details['Code']['S3Key']
 
         if 'Location' not in function_details['Code']:
-            logger.debug(f"  Warning: No function code found for Lambda Function: {function_name}")
+            logger.debug(
+                f"  Warning: No function code found for Lambda Function: {function_name}")
             return
         code_url = function_details['Code']['Location']
         url_parts = urlparse(code_url)
@@ -185,7 +201,7 @@ class AwsLambda:
         }
 
         self.hcl.process_resource(resource_type, function_arn, attributes)
-        files= {"filename":filename }
+        files = {"filename": filename}
         self.hcl.add_stack(resource_type, function_arn, ftstack, files)
 
         role_name = function_details["Configuration"]["Role"].split('/')[-1]
@@ -199,24 +215,29 @@ class AwsLambda:
             if vpc_id:
                 vpc_name = self.get_vpc_name(vpc_id)
                 if vpc_name:
-                    self.hcl.add_additional_data(resource_type, function_arn, "vpc_name", vpc_name)
+                    self.hcl.add_additional_data(
+                        resource_type, function_arn, "vpc_name", vpc_name)
                 subnet_names = self.get_subnet_names(subnet_ids)
                 if subnet_names:
-                    self.hcl.add_additional_data(resource_type, function_arn, "subnet_names", subnet_names)
+                    self.hcl.add_additional_data(
+                        resource_type, function_arn, "subnet_names", subnet_names)
 
-            final_security_group_ids=[]
+            final_security_group_ids = []
             for security_group_id in security_group_ids:
-                sg_name=self.security_group_instance.aws_security_group(security_group_id, ftstack)
+                sg_name = self.security_group_instance.aws_security_group(
+                    security_group_id, ftstack)
                 if sg_name == "default":
                     final_security_group_ids.append("default")
                 else:
                     final_security_group_ids.append(security_group_id)
-                self.hcl.add_additional_data(resource_type, function_arn, "security_group_ids",  final_security_group_ids)
-                                
+                self.hcl.add_additional_data(
+                    resource_type, function_arn, "security_group_ids",  final_security_group_ids)
+
     def aws_lambda_alias(self):
         logger.debug(f"Processing Lambda Aliases...")
 
-        functions = self.aws_clients.lambda_client.list_functions()["Functions"]
+        functions = self.aws_clients.lambda_client.list_functions()[
+            "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
@@ -224,7 +245,8 @@ class AwsLambda:
                 FunctionName=function_name)["Aliases"]
             for alias in aliases:
                 alias_name = alias["Name"]
-                logger.debug(f"Processing Lambda Alias: {alias_name} for Function: {function_name}")
+                logger.debug(
+                    f"Processing Lambda Alias: {alias_name} for Function: {function_name}")
 
                 attributes = {
                     "id": alias["AliasArn"],
@@ -244,7 +266,8 @@ class AwsLambda:
         for page in paginator.paginate():
             for config in page.get("CodeSigningConfigs", []):
                 config_id = config["CodeSigningConfigId"]
-                logger.debug(f"Processing Lambda Code Signing Config: {config_id}")
+                logger.debug(
+                    f"Processing Lambda Code Signing Config: {config_id}")
 
                 attributes = {
                     "id": config_id,
@@ -260,7 +283,8 @@ class AwsLambda:
     def aws_lambda_event_source_mapping(self):
         logger.debug(f"Processing Lambda Event Source Mappings...")
 
-        functions = self.aws_clients.lambda_client.list_functions()["Functions"]
+        functions = self.aws_clients.lambda_client.list_functions()[
+            "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
@@ -269,7 +293,8 @@ class AwsLambda:
 
             for mapping in event_source_mappings:
                 mapping_id = mapping["UUID"]
-                logger.debug(f"Processing Lambda Event Source Mapping: {mapping_id} for Function: {function_name}")
+                logger.debug(
+                    f"Processing Lambda Event Source Mapping: {mapping_id} for Function: {function_name}")
 
                 attributes = {
                     "id": mapping_id,
@@ -282,14 +307,16 @@ class AwsLambda:
     def aws_lambda_function_event_invoke_config(self):
         logger.debug(f"Processing Lambda Function Event Invoke Configs...")
 
-        functions = self.aws_clients.lambda_client.list_functions()["Functions"]
+        functions = self.aws_clients.lambda_client.list_functions()[
+            "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
             try:
                 event_invoke_config = self.aws_clients.lambda_client.get_function_event_invoke_config(
                     FunctionName=function_name)
-                logger.debug(f"Processing Event Invoke Config for Lambda Function: {function_name}")
+                logger.debug(
+                    f"Processing Event Invoke Config for Lambda Function: {function_name}")
 
                 attributes = {
                     "id": f"{function_name}:$LATEST",
@@ -301,14 +328,16 @@ class AwsLambda:
                     "aws_lambda_function_event_invoke_config", function_name.replace("-", "_"), attributes)
             except botocore.exceptions.ClientError as e:
                 if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                    logger.debug(f"  Lambda Function {function_name} doesn't have an EventInvokeConfig")
+                    logger.debug(
+                        f"  Lambda Function {function_name} doesn't have an EventInvokeConfig")
                 else:
                     raise e
 
     def aws_lambda_function_url(self):
         logger.debug(f"Processing Lambda Function URLs...")
 
-        functions = self.aws_clients.lambda_client.list_functions()["Functions"]
+        functions = self.aws_clients.lambda_client.list_functions()[
+            "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
@@ -316,7 +345,8 @@ class AwsLambda:
             region = self.region
             arn = function["FunctionArn"]
             url = f"https://{arn.split(':')[4]}.lambda.{region}.amazonaws.com/2015-03-31/functions/{arn}/invocations"
-            logger.debug(f"Processing URL for Lambda Function: {function_name}")
+            logger.debug(
+                f"Processing URL for Lambda Function: {function_name}")
 
             attributes = {
                 "id": f"{function_name}:$LATEST",
@@ -339,7 +369,8 @@ class AwsLambda:
 
             for layer_version in layer_versions:
                 version = layer_version["Version"]
-                logger.debug(f"Processing Layer Version {version} for Lambda Layer: {layer_name}")
+                logger.debug(
+                    f"Processing Layer Version {version} for Lambda Layer: {layer_name}")
 
                 attributes = {
                     "id": f"{layer_name}:{version}",
@@ -386,7 +417,8 @@ class AwsLambda:
     def aws_lambda_permission(self):
         logger.debug(f"Processing Lambda Permissions...")
 
-        functions = self.aws_clients.lambda_client.list_functions()["Functions"]
+        functions = self.aws_clients.lambda_client.list_functions()[
+            "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
@@ -397,7 +429,8 @@ class AwsLambda:
 
                 for statement in policy["Statement"]:
                     statement_id = statement["Sid"]
-                    logger.debug(f"Processing Permission {statement_id} for Lambda Function: {function_name}")
+                    logger.debug(
+                        f"Processing Permission {statement_id} for Lambda Function: {function_name}")
 
                     attributes = {
                         "id": f"{function_name}-{statement_id}",
@@ -407,12 +440,15 @@ class AwsLambda:
                     self.hcl.process_resource(
                         "aws_lambda_permission", f"{function_name.replace('-', '_')}_permission_{statement_id}", attributes)
             except self.aws_clients.lambda_client.exceptions.ResourceNotFoundException:
-                logger.debug(f"  Skipping Lambda Function: {function_name} because no resource policy found")
+                logger.debug(
+                    f"  Skipping Lambda Function: {function_name} because no resource policy found")
 
     def aws_lambda_provisioned_concurrency_config(self):
-        logger.debug(f"Processing Lambda Provisioned Concurrency Configurations...")
+        logger.debug(
+            f"Processing Lambda Provisioned Concurrency Configurations...")
 
-        functions = self.aws_clients.lambda_client.list_functions()["Functions"]
+        functions = self.aws_clients.lambda_client.list_functions()[
+            "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
@@ -423,7 +459,8 @@ class AwsLambda:
                 for config in concurrency_configs:
                     version = config["FunctionVersion"]
                     allocated_concurrent_executions = config["RequestedProvisionedConcurrentExecutions"]
-                    logger.debug(f"Processing Provisioned Concurrency Configuration for Lambda Function: {function_name}, Version: {version}")
+                    logger.debug(
+                        f"Processing Provisioned Concurrency Configuration for Lambda Function: {function_name}, Version: {version}")
 
                     attributes = {
                         "id": f"{function_name}-{version}",
@@ -434,4 +471,5 @@ class AwsLambda:
                     self.hcl.process_resource("aws_lambda_provisioned_concurrency_config",
                                               f"{function_name.replace('-', '_')}_provisioned_concurrency_{version}", attributes)
             except self.aws_clients.lambda_client.exceptions.ResourceNotFoundException:
-                logger.debug(f"  No provisioned concurrency configuration found for Lambda Function: {function_name}")
+                logger.debug(
+                    f"  No provisioned concurrency configuration found for Lambda Function: {function_name}")

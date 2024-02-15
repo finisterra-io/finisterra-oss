@@ -5,11 +5,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class Logs:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {
         }
@@ -32,21 +33,25 @@ class Logs:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def logs(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_cloudwatch_log_group()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-        
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
+
     def aws_cloudwatch_log_data_protection_policy(self):
         logger.debug("Processing CloudWatch Log Data Protection Policies...")
 
@@ -70,7 +75,8 @@ class Logs:
     def aws_cloudwatch_log_destination(self):
         logger.debug("Processing CloudWatch Log Destinations...")
 
-        paginator = self.aws_clients.logs_client.get_paginator("describe_destinations")
+        paginator = self.aws_clients.logs_client.get_paginator(
+            "describe_destinations")
         for page in paginator.paginate():
             for destination in page["destinations"]:
                 destination_name = destination["destinationName"]
@@ -91,7 +97,8 @@ class Logs:
     def aws_cloudwatch_log_destination_policy(self):
         logger.debug("Processing CloudWatch Log Destination Policies...")
 
-        paginator = self.aws_clients.logs_client.get_paginator("describe_destinations")
+        paginator = self.aws_clients.logs_client.get_paginator(
+            "describe_destinations")
         for page in paginator.paginate():
             for destination in page["destinations"]:
                 destination_name = destination["destinationName"]
@@ -121,27 +128,31 @@ class Logs:
             self.process_single_log_group(specific_log_group_name, ftstack)
             return
 
-        paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
+        paginator = self.aws_clients.logs_client.get_paginator(
+            "describe_log_groups")
         total = 0
         for page in paginator.paginate():
             total += len(page["logGroups"])
 
         if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for log_group in page["logGroups"]:
                 log_group_name = log_group["logGroupName"]
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{log_group_name}[/]")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{log_group_name}[/]")
                 if log_group_name.startswith("/aws"):
                     continue
                 self.process_single_log_group(log_group_name, ftstack)
 
     def process_single_log_group(self, log_group_name, ftstack=None):
         resource_type = "aws_cloudwatch_log_group"
-        log_group = self.aws_clients.logs_client.describe_log_groups(logGroupNamePrefix=log_group_name)['logGroups']
+        log_group = self.aws_clients.logs_client.describe_log_groups(
+            logGroupNamePrefix=log_group_name)['logGroups']
         if not log_group:
             return
-        log_group= log_group[0]
+        log_group = log_group[0]
         logger.debug(f"Processing CloudWatch Log Group: {log_group_name}")
         id = log_group_name
         attributes = {
@@ -154,17 +165,18 @@ class Logs:
             ftstack = "logs"
 
         # Fetch details of the log group for additional information like KMS key
-        log_group = self.aws_clients.logs_client.describe_log_groups(logGroupNamePrefix=log_group_name)["logGroups"][0]
+        log_group = self.aws_clients.logs_client.describe_log_groups(
+            logGroupNamePrefix=log_group_name)["logGroups"][0]
         if "kmsKeyId" in log_group:
             self.kms_instance.aws_kms_key(log_group["kmsKeyId"], ftstack)
 
         self.hcl.add_stack(resource_type, id, ftstack)
 
-
     def aws_cloudwatch_log_metric_filter(self):
         logger.debug("Processing CloudWatch Log Metric Filters...")
 
-        paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
+        paginator = self.aws_clients.logs_client.get_paginator(
+            "describe_log_groups")
         for page in paginator.paginate():
             for log_group in page["logGroups"]:
                 log_group_name = log_group["logGroupName"]
@@ -211,7 +223,8 @@ class Logs:
     def aws_cloudwatch_log_stream(self):
         logger.debug("Processing CloudWatch Log Streams...")
 
-        paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
+        paginator = self.aws_clients.logs_client.get_paginator(
+            "describe_log_groups")
         for page in paginator.paginate():
             for log_group in page["logGroups"]:
                 log_group_name = log_group["logGroupName"]
@@ -236,7 +249,8 @@ class Logs:
     def aws_cloudwatch_log_subscription_filter(self):
         logger.debug("Processing CloudWatch Log Subscription Filters...")
 
-        paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
+        paginator = self.aws_clients.logs_client.get_paginator(
+            "describe_log_groups")
         for page in paginator.paginate():
             for log_group in page["logGroups"]:
                 log_group_name = log_group["logGroupName"]

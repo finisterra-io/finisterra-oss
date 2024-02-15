@@ -8,9 +8,9 @@ logger = logging.getLogger('finisterra')
 
 class KMS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
 
         self.transform_rules = {
@@ -35,9 +35,7 @@ class KMS:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
         self.additional_data = {}
-
 
     def kms(self):
         self.hcl.prepare_folder(os.path.join("generated"))
@@ -46,12 +44,15 @@ class KMS:
         self.aws_kms_external_key()
         self.aws_kms_replica_external_key()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.task = self.progress.add_task(f"[orange9]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
             self.progress.update(self.task, advance=1)
 
     def aws_kms_key(self, key_arn=None, ftstack=None):
@@ -62,7 +63,8 @@ class KMS:
         if key_arn:
             # Process only the key specified by the ARN
             try:
-                key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_arn)["KeyMetadata"]
+                key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_arn)[
+                    "KeyMetadata"]
                 if key_metadata["KeyManager"] == "CUSTOMER":
                     self.process_key(key_metadata, ftstack)
                 else:
@@ -76,20 +78,21 @@ class KMS:
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     total += 1
+
             if total > 0:
-                self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+                self.task = self.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=total)
+
             for page in paginator.paginate():
                 for key in page["Keys"]:
+                    key_id = key["KeyId"]
+                    self.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{key_id}[/]")
                     try:
-                        key_id = key["KeyId"]
-                        self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{key_id}[/]")
-                        # if key_id != "e6a851cf-ad7f-4be1-8474-d9fb5c0c2af0":
-                        #     continue
-                        key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)["KeyMetadata"]
+                        key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)[
+                            "KeyMetadata"]
                         if key_metadata["KeyManager"] == "CUSTOMER":
-                            self.process_key(key_metadata,ftstack)
-                        else:
-                            return "MANAGED"
+                            self.process_key(key_metadata, ftstack)
                     except botocore.exceptions.ClientError as e:
                         logger.error(f"  Error processing KMS Key: {e}")
 
@@ -114,23 +117,22 @@ class KMS:
         self.hcl.add_stack(resource_type, id, ftstack)
 
         self.aws_kms_key_policy(key_metadata["Arn"])
-
         self.aws_kms_alias(key_metadata["Arn"])
-
         self.aws_kms_grant(key_metadata["Arn"])
-
 
     def aws_kms_alias(self, kms_arn):
         logger.debug("Processing KMS Aliases...")
         try:
             # List aliases directly for the specified key ARN
-            aliases = self.aws_clients.kms_client.list_aliases(KeyId=kms_arn)["Aliases"]
+            aliases = self.aws_clients.kms_client.list_aliases(KeyId=kms_arn)[
+                "Aliases"]
 
             for alias in aliases:
                 alias_name = alias["AliasName"]
                 target_key_id = alias.get("TargetKeyId", "")
                 if not target_key_id:
-                    logger.debug(f"Skipping {alias_name} due to empty TargetKeyId")
+                    logger.debug(
+                        f"Skipping {alias_name} due to empty TargetKeyId")
                     continue
                 if alias_name == "alias/":
                     logger.debug(f"Skipping empty {alias_name}")
@@ -148,8 +150,6 @@ class KMS:
 
         except botocore.exceptions.ClientError as e:
             logger.debug(f"  Error processing KMS Aliases: {e}")
-
-
 
     # def aws_kms_ciphertext(self, key_arns, plaintext_data):
     #     logger.debug("Processing KMS Ciphertexts...")
@@ -189,7 +189,6 @@ class KMS:
     #         self.hcl.process_resource(
     #             "aws_kms_custom_key_store", cks_id.replace("-", "_"), attributes)
 
-
     # def aws_kms_grant(self, kms_arn):
     #     logger.debug("Processing KMS Grants...")
     #     try:
@@ -224,7 +223,8 @@ class KMS:
         logger.debug("Processing KMS Grants...")
         try:
             # Directly list grants for the specified key ARN
-            grants = self.aws_clients.kms_client.list_grants(KeyId=kms_arn)["Grants"]
+            grants = self.aws_clients.kms_client.list_grants(KeyId=kms_arn)[
+                "Grants"]
 
             for grant in grants:
                 grant_id = grant["GrantId"]
@@ -235,7 +235,8 @@ class KMS:
 
                     role_name = grantee_principal.split(':')[-1]
                     if not self.check_iam_role_exists(role_name):
-                        logger.debug(f"  Skipping Grant ID: {grant_id} due to non-existent IAM role: {role_name}")
+                        logger.debug(
+                            f"  Skipping Grant ID: {grant_id} due to non-existent IAM role: {role_name}")
                         continue
 
                 logger.debug(f"Processing KMS Grant: {grant_id}")
@@ -247,8 +248,8 @@ class KMS:
                     "aws_kms_grant", grant_id.replace("-", "_"), attributes)
 
         except botocore.exceptions.ClientError as e:
-            logger.error(f"  Error processing KMS Grants: {e}")
-
+            pass
+            # logger.error(f"  Error processing KMS Grants: {e}")
 
     def aws_kms_key_policy(self, kms_arn):
         logger.debug("Processing KMS Key Policies...")
@@ -270,7 +271,6 @@ class KMS:
         except botocore.exceptions.ClientError as e:
             logger.debug(f"  Error processing KMS Key Policy: {e}")
 
-
     def aws_kms_replica_key(self):
         logger.debug("Processing KMS Replica Keys...")
         paginator = self.aws_clients.kms_client.get_paginator("list_keys")
@@ -278,17 +278,21 @@ class KMS:
         try:
             for page in paginator.paginate():
                 for key in page["Keys"]:
-                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])["KeyMetadata"]
+                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])[
+                        "KeyMetadata"]
 
                     # Check if the key is multi-region
                     if key_metadata.get("MultiRegion", False):
-                        multi_region_config = key_metadata.get("MultiRegionConfiguration", {})
-                        replica_keys = multi_region_config.get("ReplicaKeys", [])
+                        multi_region_config = key_metadata.get(
+                            "MultiRegionConfiguration", {})
+                        replica_keys = multi_region_config.get(
+                            "ReplicaKeys", [])
 
                         # Check for replicas in the same region
                         for replica_key in replica_keys:
                             if replica_key["Region"] == self.region:
-                                logger.debug(f"Processing Multi-Region KMS Replica Key: {replica_key['Arn']}")
+                                logger.debug(
+                                    f"Processing Multi-Region KMS Replica Key: {replica_key['Arn']}")
 
                                 attributes = {
                                     "id": key_metadata['KeyId'],
@@ -307,7 +311,6 @@ class KMS:
         except botocore.exceptions.ClientError as e:
             logger.error(f"  Error processing KMS Replica Key: {e}")
 
-
     def aws_kms_external_key(self):
         logger.debug("Processing KMS External Keys...")
         paginator = self.aws_clients.kms_client.get_paginator("list_keys")
@@ -315,7 +318,8 @@ class KMS:
             for key in page["Keys"]:
                 try:
                     key_id = key["KeyId"]
-                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)["KeyMetadata"]
+                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)[
+                        "KeyMetadata"]
 
                     if key_metadata["Origin"] == "EXTERNAL":
                         logger.debug(f"Processing KMS External Key: {key_id}")
@@ -333,7 +337,6 @@ class KMS:
                 except botocore.exceptions.ClientError as e:
                     logger.error(f"  Error processing KMS Grant: {e}")
 
-
     def aws_kms_replica_external_key(self):
         logger.debug("Processing KMS Replica External Keys...")
         paginator = self.aws_clients.kms_client.get_paginator("list_keys")
@@ -341,17 +344,21 @@ class KMS:
         try:
             for page in paginator.paginate():
                 for key in page["Keys"]:
-                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])["KeyMetadata"]
+                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])[
+                        "KeyMetadata"]
 
                     # Check if the key's origin is external and it's a multi-region key
                     if key_metadata["Origin"] == "EXTERNAL" and key_metadata.get("MultiRegion", False):
-                        multi_region_config = key_metadata.get("MultiRegionConfiguration", {})
-                        replica_keys = multi_region_config.get("ReplicaKeys", [])
+                        multi_region_config = key_metadata.get(
+                            "MultiRegionConfiguration", {})
+                        replica_keys = multi_region_config.get(
+                            "ReplicaKeys", [])
 
                         # Check for replicas in the same region
                         for replica_key in replica_keys:
                             if replica_key["Region"] == self.region:
-                                logger.debug(f"Processing KMS Replica External Key: {replica_key['Arn']}")
+                                logger.debug(
+                                    f"Processing KMS Replica External Key: {replica_key['Arn']}")
 
                                 attributes = {
                                     "id": key_metadata['KeyId'],

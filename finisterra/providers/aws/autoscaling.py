@@ -1,7 +1,7 @@
 import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 from ...providers.aws.launchtemplate import LaunchTemplate
 import logging
 
@@ -10,11 +10,11 @@ logger = logging.getLogger('finisterra')
 
 class AutoScaling:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
-        self.transform_rules = {        }
+        self.transform_rules = {}
         self.provider_name = provider_name
         self.script_dir = script_dir
         self.schema_data = schema_data
@@ -29,21 +29,24 @@ class AutoScaling:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
-
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)        
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)        
-        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
         for subnet_id in subnet_ids:
             try:
-                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                        subnet_id])
 
                 # Check if 'Subnets' key exists and it's not empty
                 if not response or 'Subnets' not in response or not response['Subnets']:
-                    logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
+                    logger.debug(
+                        f"No subnet information found for Subnet ID: {subnet_id}")
                     continue
 
                 # Extract the 'Tags' key safely using get
@@ -56,10 +59,12 @@ class AutoScaling:
                 if subnet_name:
                     subnet_names.append(subnet_name)
                 else:
-                    logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                    logger.debug(
+                        f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
             except Exception as e:
-                logger.error(f"Error occurred while retrieving subnet information for Subnet ID: {subnet_id}")
+                logger.error(
+                    f"Error occurred while retrieving subnet information for Subnet ID: {subnet_id}")
                 logger.error(f"Error message: {str(e)}")
 
         return subnet_names
@@ -69,13 +74,16 @@ class AutoScaling:
 
         self.aws_autoscaling_group()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_autoscaling_attachment(self):
         logger.debug(f"Processing AutoScaling Attachments...")
@@ -88,7 +96,7 @@ class AutoScaling:
 
             for elb_name in as_group.get("LoadBalancerNames", []):
                 logger.debug(
-f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
+                    f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
                 resource_name = f"{as_group_name}-{elb_name}-attachment"
                 attributes = {
@@ -104,13 +112,13 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
         as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
-        
+
         if len(as_groups) > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(as_groups))
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=len(as_groups))
 
         for as_group in as_groups:
             as_group_name = as_group["AutoScalingGroupName"]
-            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{as_group_name}[/]")
 
             # if as_group_name != "production-noovie-web-AutoScalingGroup-1MZ5FBASQRUJL":
             #     continue
@@ -122,8 +130,11 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                          for tag in as_group.get('Tags', []))
 
             if is_elasticbeanstalk or is_eks:
-                logger.debug(f"  Skipping Elastic Beanstalk or EKS AutoScaling Group: {as_group_name}")
-                continue  # Skip this AutoScaling group and move to the next
+                logger.debug(
+                    f"  Skipping Elastic Beanstalk or EKS AutoScaling Group: {as_group_name}")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{as_group_name}[/]")
+                continue
 
             logger.debug(f"Processing AutoScaling Group: {as_group_name}")
 
@@ -134,7 +145,7 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
             self.hcl.process_resource(
                 resource_type, id, attributes)
-            
+
             ftstack = "autoscaling"
             # get the autoscaling tags
             if "Tags" in as_group:
@@ -142,13 +153,15 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                     if tag["Key"] == "ftstack":
                         ftstack = "stack_"+tag["Value"]
                         break
-            
+
             self.hcl.add_stack(resource_type, id, ftstack)
 
             service_linked_role_arn = as_group.get("ServiceLinkedRoleARN", "")
             if service_linked_role_arn:
-                service_linked_role_name = service_linked_role_arn.split('/')[-1]
-                self.iam_role_instance.aws_iam_role(service_linked_role_name, ftstack)
+                service_linked_role_name = service_linked_role_arn.split(
+                    '/')[-1]
+                self.iam_role_instance.aws_iam_role(
+                    service_linked_role_name, ftstack)
 
             # Here we call the policy processing for this specific group
             self.aws_autoscaling_policy(as_group_name)
@@ -165,7 +178,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                     lt_id = lt_info["LaunchTemplateId"]
                     # Call the method for processing Launch Templates
                     # self.aws_launch_template(lt_id, ftstack)
-                    self.launchtemplate_instance.aws_launch_template(lt_id, ftstack)
+                    self.launchtemplate_instance.aws_launch_template(
+                        lt_id, ftstack)
 
             subnet_ids = as_group.get("VPCZoneIdentifier", "").split(",")
             if subnet_ids:
@@ -173,6 +187,9 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, as_group_name, "subnet_names", subnet_names)
+
+            self.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{as_group_name}[/]")
 
     def aws_autoscaling_group_tag(self):
         logger.debug(f"Processing AutoScaling Group Tags...")
@@ -187,7 +204,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                 key = tag["Key"]
                 value = tag["Value"]
 
-                logger.debug(f"Processing AutoScaling Group Tag: {key}={value} for ASG: {as_group_name}")
+                logger.debug(
+                    f"Processing AutoScaling Group Tag: {key}={value} for ASG: {as_group_name}")
 
                 resource_name = f"{as_group_name}-tag-{key}"
                 attributes = {
@@ -211,7 +229,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
             for hook in hooks:
                 hook_name = hook["LifecycleHookName"]
-                logger.debug(f"Processing AutoScaling Lifecycle Hook: {hook_name} for ASG: {as_group_name}")
+                logger.debug(
+                    f"Processing AutoScaling Lifecycle Hook: {hook_name} for ASG: {as_group_name}")
 
                 resource_name = f"{hook_name}".replace(
                     "-", "_")
@@ -254,11 +273,13 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                 as_group_name)
 
             if not sns_topic_arns:
-                logger.debug(f"  No SNS topic found for ASG: {as_group_name}. Skipping AutoScaling Notifications.")
+                logger.debug(
+                    f"  No SNS topic found for ASG: {as_group_name}. Skipping AutoScaling Notifications.")
                 continue
 
             for sns_topic_arn in sns_topic_arns:
-                logger.debug(f"Processing AutoScaling Notification for ASG: {as_group_name} with SNS Topic: {sns_topic_arn}")
+                logger.debug(
+                    f"Processing AutoScaling Notification for ASG: {as_group_name} with SNS Topic: {sns_topic_arn}")
 
                 resource_name = f"{as_group_name}-notification-{sns_topic_arn.split(':')[-1]}"
                 attributes = {
@@ -278,7 +299,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
         return sns_topic_arns
 
     def aws_autoscaling_policy(self, as_group_name):
-        logger.debug(f"Processing AutoScaling Policies for group: {as_group_name}")
+        logger.debug(
+            f"Processing AutoScaling Policies for group: {as_group_name}")
 
         # Retrieving policies for the specified AutoScaling group
         try:
@@ -291,7 +313,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
         policies = response.get("ScalingPolicies", [])
         if not policies:
-            logger.debug(f"No policies found for AutoScaling group: {as_group_name}")
+            logger.debug(
+                f"No policies found for AutoScaling group: {as_group_name}")
             return
 
         for policy in policies:
@@ -340,7 +363,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
             for action in scheduled_actions:
                 action_name = action["ScheduledActionName"]
-                logger.debug(f"Processing AutoScaling Schedule: {action_name} for ASG: {as_group_name}")
+                logger.debug(
+                    f"Processing AutoScaling Schedule: {action_name} for ASG: {as_group_name}")
 
                 attributes = {
                     "id": action_name,
@@ -365,7 +389,6 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
                 self.hcl.process_resource(
                     "aws_autoscaling_schedule", action_name.replace("-", "_"), attributes)
 
-
     def aws_launch_configuration(self, id, ftstack):
         logger.debug(f"Processing Launch Configuration: {id}")
 
@@ -373,7 +396,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
             response = self.aws_clients.autoscaling_client.describe_launch_configurations(
                 LaunchConfigurationNames=[id])
         except Exception as e:
-            logger.error(f"Error retrieving Launch Configuration {id}: {str(e)}")
+            logger.error(
+                f"Error retrieving Launch Configuration {id}: {str(e)}")
             return
 
         launch_configurations = response.get("LaunchConfigurations", [])
@@ -410,7 +434,6 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
             self.user_data[lc_name] = attributes["user_data"]
 
-
         self.hcl.process_resource(
             "aws_launch_configuration", lc_name.replace("-", "_"), attributes)
 
@@ -422,7 +445,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
             alarm = self.aws_clients.cloudwatch_client.describe_alarms(
                 AlarmNames=[alarm_name])
         except Exception as e:
-            logger.debug(f"Error retrieving CloudWatch Alarm {alarm_name}: {str(e)}")
+            logger.debug(
+                f"Error retrieving CloudWatch Alarm {alarm_name}: {str(e)}")
             return  # Exiting the function because there was an error retrieving the alarm
 
         if not alarm['MetricAlarms']:
@@ -431,7 +455,8 @@ f"Processing AutoScaling Attachment: ELB {elb_name} -> ASG: {as_group_name}")
 
         # Since we expect a specific alarm, we take the first element
         metric_alarm = alarm['MetricAlarms'][0]
-        logger.debug(f"  Retrieved details for CloudWatch Metric Alarm: {metric_alarm['AlarmName']}")
+        logger.debug(
+            f"  Retrieved details for CloudWatch Metric Alarm: {metric_alarm['AlarmName']}")
 
         attributes = {
             "id": metric_alarm['AlarmName'],

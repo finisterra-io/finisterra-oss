@@ -6,11 +6,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class Wafv2:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -30,23 +31,26 @@ class Wafv2:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
-        
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                              s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def wafv2(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_wafv2_web_acl()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-        
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_wafv2_ip_set(self, waf_id, ip_set_name, scope):
         logger.debug(f"Processing WAFv2 IP Set:  {ip_set_name}")
@@ -58,7 +62,6 @@ class Wafv2:
         }
         self.hcl.process_resource(
             "aws_wafv2_ip_set", waf_id.replace("-", "_"), attributes)
-
 
     # def aws_wafv2_regex_pattern_set(self):
     #     logger.debug("Processing WAFv2 Regex Pattern Sets...")
@@ -106,68 +109,77 @@ class Wafv2:
     #             "aws_wafv2_rule_group", rule_group_id.replace("-", "_"), attributes)
 
     def aws_wafv2_web_acl(self, web_acl_id=None, ftstack=None):
-        resource_type = "aws_wafv2_web_acl"
         logger.debug("Processing WAFv2 Web ACLs...")
 
-        total = 0 
+        total = 0
         for scope in ['REGIONAL', 'CLOUDFRONT']:
-            web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)["WebACLs"]
+            web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)[
+                "WebACLs"]
             total += len(web_acls)
-        
-        if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+
+        if total > 0 and not web_acl_id:
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         # iterate through both scopes
         for scope in ['REGIONAL', 'CLOUDFRONT']:
-            web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)["WebACLs"]
+            web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)[
+                "WebACLs"]
             for web_acl in web_acls:
-                web_acl_name = web_acl["Name"]
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{web_acl_name}[/]")
                 if web_acl_id and web_acl["Id"] != web_acl_id:
                     continue
+                self.process_single_wafv2_web_acl(web_acl, scope, ftstack)
+                if not web_acl_id:
+                    self.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{web_acl['Name']}[/]")
 
-                web_acl_id = web_acl["Id"]
+    def process_single_wafv2_web_acl(self, web_acl, scope, ftstack=None):
+        resource_type = "aws_wafv2_web_acl"
+        web_acl_name = web_acl["Name"]
 
-                # if web_acl_name != "aws-managed-waf-sandbox":
-                #     continue
+        web_acl_id = web_acl["Id"]
 
-                logger.debug(f"Processing WAFv2 Web ACL: {web_acl_id}")
+        # if web_acl_name != "aws-managed-waf-sandbox":
+        #     continue
 
-                web_acl_info = self.aws_clients.wafv2_client.get_web_acl(
-                    Id=web_acl_id, Name=web_acl_name, Scope=scope)["WebACL"]
+        logger.debug(f"Processing WAFv2 Web ACL: {web_acl_id}")
 
-                if not ftstack:
-                    ftstack = "wafv2"
-                    # Find tags for the ACL
-                    tags_response = self.aws_clients.wafv2_client.list_tags_for_resource(
-                        ResourceARN=web_acl_info["ARN"])
-                    if "TagInfoForResource" in tags_response:
-                        for tag in tags_response["TagInfoForResource"].get("TagList", []):
-                            if tag["Key"] == "ftstack":
-                                ftstack = tag["Value"]
-                                break
+        web_acl_info = self.aws_clients.wafv2_client.get_web_acl(
+            Id=web_acl_id, Name=web_acl_name, Scope=scope)["WebACL"]
 
-                id = web_acl_id
-                attributes = {
-                    "id": web_acl_id,
-                    "name": web_acl_info["Name"],
-                    "description": web_acl_info.get("Description", ""),
-                    "scope": scope,
-                }
-                self.hcl.process_resource(
-                    resource_type, id, attributes)
-                self.hcl.add_stack(resource_type, id, ftstack)
+        if not ftstack:
+            ftstack = "wafv2"
+            # Find tags for the ACL
+            tags_response = self.aws_clients.wafv2_client.list_tags_for_resource(
+                ResourceARN=web_acl_info["ARN"])
+            if "TagInfoForResource" in tags_response:
+                for tag in tags_response["TagInfoForResource"].get("TagList", []):
+                    if tag["Key"] == "ftstack":
+                        ftstack = tag["Value"]
+                        break
 
-                # Find IP sets for the ACL
-                ip_sets = self.aws_clients.wafv2_client.list_ip_sets(Scope=scope)["IPSets"]
-                for ip_set in ip_sets:
-                    ip_set_name = ip_set["Name"]
-                    self.aws_wafv2_ip_set(web_acl_id, ip_set_name, scope)
+        id = web_acl_id
+        attributes = {
+            "id": web_acl_id,
+            "name": web_acl_info["Name"],
+            "description": web_acl_info.get("Description", ""),
+            "scope": scope,
+        }
+        self.hcl.process_resource(
+            resource_type, id, attributes)
+        self.hcl.add_stack(resource_type, id, ftstack)
 
-                # call the other functions with appropriate arguments
-                # self.aws_wafv2_web_acl_association(web_acl_id)
-                self.aws_wafv2_web_acl_logging_configuration(
-                    web_acl_id, web_acl_info["ARN"], ftstack)
+        # Find IP sets for the ACL
+        ip_sets = self.aws_clients.wafv2_client.list_ip_sets(Scope=scope)[
+            "IPSets"]
+        for ip_set in ip_sets:
+            ip_set_name = ip_set["Name"]
+            self.aws_wafv2_ip_set(web_acl_id, ip_set_name, scope)
+
+        # call the other functions with appropriate arguments
+        # self.aws_wafv2_web_acl_association(web_acl_id)
+        self.aws_wafv2_web_acl_logging_configuration(
+            web_acl_id, web_acl_info["ARN"], ftstack)
 
     def aws_wafv2_web_acl_association(self, web_acl_id):
         logger.debug("Processing WAFv2 Web ACL Associations...")
@@ -208,7 +220,8 @@ class Wafv2:
         try:
             logging_config = self.aws_clients.wafv2_client.get_logging_configuration(ResourceArn=web_acl_arn)[
                 "LoggingConfiguration"]
-            log_destination_configs = logging_config.get("LogDestinationConfigs", [])
+            log_destination_configs = logging_config.get(
+                "LogDestinationConfigs", [])
 
             for index, log_destination_config in enumerate(log_destination_configs):
                 config_id = f"{web_acl_id}-{index}"
@@ -222,7 +235,8 @@ class Wafv2:
                 if "arn:aws:logs" in log_destination_config:
                     log_group = log_destination_config.split(":")[-1]
                     if log_group:
-                        self.logs_instance.aws_cloudwatch_log_group(log_group, ftstack)
+                        self.logs_instance.aws_cloudwatch_log_group(
+                            log_group, ftstack)
 
                 attributes = {
                     "id": web_acl_arn,

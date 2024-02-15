@@ -1,6 +1,6 @@
 import os
 from ...utils.hcl import HCL
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 from ...providers.aws.kms import KMS
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.logs import Logs
@@ -9,11 +9,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class EKS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -33,17 +34,22 @@ class EKS:
 
         self.aws_account_id = aws_account_id
 
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
         for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
@@ -61,9 +67,9 @@ class EKS:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")      
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
         return subnet_names
-    
+
     def get_vpc_name(self, vpc_id):
         response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
@@ -79,38 +85,43 @@ class EKS:
         if vpc_name is None:
             logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
-        return vpc_name    
+        return vpc_name
 
     def eks(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_eks_cluster()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-        
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
+
     def aws_eks_cluster(self):
         resource_type = 'aws_eks_cluster'
         logger.debug("Processing EKS Clusters...")
 
         clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
         if len(clusters):
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
-
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
 
         for cluster_name in clusters:
             cluster = self.aws_clients.eks_client.describe_cluster(name=cluster_name)[
                 "cluster"]
-            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
             tags = cluster.get("tags", {})
             ftstack = "eks"
             if tags.get("ftstack", "eks") != "eks":
                 ftstack = "stack_"+tags.get("ftstack", "eks")
-            
+
             # if cluster_name != "dev":
             #     continue
 
@@ -122,27 +133,30 @@ class EKS:
             }
             self.hcl.process_resource(
                 resource_type, cluster_name.replace("-", "_"), attributes)
-            
+
             self.hcl.add_stack(resource_type, id, ftstack)
 
             vpc_id = cluster["resourcesVpcConfig"]["vpcId"]
             if vpc_id:
                 vpc_name = self.get_vpc_name(vpc_id)
                 if vpc_name:
-                    self.hcl.add_additional_data(resource_type, id, "vpc_name", vpc_name)
+                    self.hcl.add_additional_data(
+                        resource_type, id, "vpc_name", vpc_name)
 
             # Call aws_iam_role for the cluster's associated IAM role
             role_name = cluster["roleArn"].split('/')[-1]
             self.iam_role_instance.aws_iam_role(role_name, ftstack)
 
-            #security_groups
+            # security_groups
             security_group_ids = cluster["resourcesVpcConfig"]["securityGroupIds"]
             for security_group_id in security_group_ids:
-                self.security_group_instance.aws_security_group(security_group_id, ftstack)
-            
-            #kms key
+                self.security_group_instance.aws_security_group(
+                    security_group_id, ftstack)
+
+            # kms key
             if 'encryptionConfig' in cluster:
-                self.kms_instance.aws_kms_key(cluster['encryptionConfig'][0]['provider']['keyArn'], ftstack)
+                self.kms_instance.aws_kms_key(
+                    cluster['encryptionConfig'][0]['provider']['keyArn'], ftstack)
 
             # Call aws_eks_addon for each cluster
             self.aws_eks_addon(cluster_name, ftstack)
@@ -154,7 +168,8 @@ class EKS:
             log_group_name = f"/aws/eks/{cluster_name}/cluster"
 
             # Call aws_cloudwatch_log_group for each cluster's associated log group
-            self.logs_instance.aws_cloudwatch_log_group(log_group_name, ftstack)
+            self.logs_instance.aws_cloudwatch_log_group(
+                log_group_name, ftstack)
             # self.aws_cloudwatch_log_group(log_group_name)
 
             # Extract the security group ID
@@ -166,7 +181,6 @@ class EKS:
 
             # eks node group
             self.aws_eks_node_group(cluster_name, ftstack)
-
 
     def aws_eks_addon(self, cluster_name, ftstack=None):
         resource_type = 'aws_eks_addon'
@@ -189,10 +203,11 @@ class EKS:
             }
             self.hcl.process_resource(
                 resource_type, f"{cluster_name}-{addon_name}".replace("-", "_"), attributes)
-            
+
             service_account_role_arn = addon.get("serviceAccountRoleArn", "")
             if service_account_role_arn:
-                self.iam_role_instance.aws_iam_role(service_account_role_arn.split('/')[-1], ftstack)
+                self.iam_role_instance.aws_iam_role(
+                    service_account_role_arn.split('/')[-1], ftstack)
 
     def aws_iam_openid_connect_provider(self, cluster_name):
         logger.debug(
@@ -357,16 +372,18 @@ class EKS:
             }
             self.hcl.process_resource(
                 "aws_eks_node_group", f"{cluster_name}-{node_group_name}".replace("-", "_"), attributes)
-            
+
             subnet_ids = node_group["subnets"]
             if subnet_ids:
                 subnet_names = self.get_subnet_names(subnet_ids)
                 if subnet_names:
-                    self.hcl.add_additional_data("aws_eks_node_group", id, "subnet_names", subnet_names)
+                    self.hcl.add_additional_data(
+                        "aws_eks_node_group", id, "subnet_names", subnet_names)
 
             # If the node group has a launch template, process it
             if 'launchTemplate' in node_group and 'id' in node_group['launchTemplate']:
-                self.launchtemplate_instance.aws_launch_template(node_group['launchTemplate']['id'], ftstack)
+                self.launchtemplate_instance.aws_launch_template(
+                    node_group['launchTemplate']['id'], ftstack)
                 # self.aws_launch_template(node_group['launchTemplate']['id'], ftstack)
 
             # Process IAM role associated with the EKS node group
@@ -378,7 +395,6 @@ class EKS:
             for asg in node_group.get('resources', {}).get('autoScalingGroups', []):
                 self.aws_autoscaling_schedule(node_group_name, asg['name'])
 
-
     def aws_autoscaling_schedule(self, node_group_name, autoscaling_group_name):
         logger.debug(
             f"Processing Auto Scaling Schedules for Group: {autoscaling_group_name}...")
@@ -387,7 +403,7 @@ class EKS:
             # List all scheduled actions for the specified Auto Scaling group
             scheduled_actions = self.aws_clients.autoscaling_client.describe_scheduled_actions(
                 AutoScalingGroupName=autoscaling_group_name)['ScheduledUpdateGroupActions']
-            
+
             for action in scheduled_actions:
                 id = action['ScheduledActionName']
                 logger.debug(
@@ -400,9 +416,10 @@ class EKS:
                     # You can add more attributes as needed
                 }
                 self.hcl.process_resource(
-                    "aws_autoscaling_schedule",id, attributes)
-                
-                self.hcl.add_additional_data("aws_autoscaling_schedule", id, "node_group_name", node_group_name)
+                    "aws_autoscaling_schedule", id, attributes)
+
+                self.hcl.add_additional_data(
+                    "aws_autoscaling_schedule", id, "node_group_name", node_group_name)
         except Exception as e:
             logger.error(
                 f"Error processing Auto Scaling schedule for group {autoscaling_group_name}: {str(e)}")

@@ -3,16 +3,17 @@ from ...utils.hcl import HCL
 import botocore
 import re
 from ...providers.aws.security_group import SECURITY_GROUP
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class ElasticBeanstalk:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -23,7 +24,7 @@ class ElasticBeanstalk:
         self.dynamoDBTable = dynamoDBTable
         self.state_key = state_key
         self.aws_account_id = aws_account_id
-        
+
         self.workspace_id = workspace_id
         self.modules = modules
         if not hcl:
@@ -31,28 +32,31 @@ class ElasticBeanstalk:
         else:
             self.hcl = hcl
 
-            
         self.service_roles = {}
         self.ec2_roles = {}
         self.insatce_profiles = {}
         self.security_groups = {}
 
-
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def elasticbeanstalk(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         # self.aws_elastic_beanstalk_application()
         self.aws_elastic_beanstalk_environment()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_elastic_beanstalk_application(self):
         logger.debug("Processing Elastic Beanstalk Applications...")
@@ -62,7 +66,8 @@ class ElasticBeanstalk:
 
         for app in applications:
             app_name = app["ApplicationName"]
-            logger.debug(f"Processing Elastic Beanstalk Application: {app_name}")
+            logger.debug(
+                f"Processing Elastic Beanstalk Application: {app_name}")
 
             attributes = {
                 "id": app_name,
@@ -161,14 +166,16 @@ class ElasticBeanstalk:
         resource_type = "aws_elastic_beanstalk_environment"
         logger.debug("Processing Elastic Beanstalk Environments...")
 
-        environments = self.aws_clients.elasticbeanstalk_client.describe_environments()["Environments"]
+        environments = self.aws_clients.elasticbeanstalk_client.describe_environments()[
+            "Environments"]
         if len(environments) > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(environments))
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=len(environments))
 
         for env in environments:
             env_id = env["EnvironmentId"]
-            self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{env_id}[/]")
-
+            self.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{env_id}[/]")
 
             # if env_id != "e-asi52zmcu8":
             #     continue
@@ -197,7 +204,7 @@ class ElasticBeanstalk:
             }
             self.hcl.process_resource(
                 resource_type, id, attributes)
-            
+
             self.hcl.add_stack(resource_type, id, ftstack)
 
             # Retrieve the environment configuration details
@@ -253,7 +260,7 @@ class ElasticBeanstalk:
                 )['LaunchConfigurations'][0]
                 security_group_names = launch_config['SecurityGroups']
                 for sg in security_group_names:
-                    #Get the id by the name using boto3
+                    # Get the id by the name using boto3
                     security_group_id = self.aws_clients.ec2_client.describe_security_groups(
                         GroupNames=[sg]
                     )['SecurityGroups'][0]
@@ -269,6 +276,6 @@ class ElasticBeanstalk:
             if security_group_ids:
                 self.security_groups[env_id] = security_group_ids[0]
                 for sg in security_group_ids:
-                    self.security_group_instance.aws_security_group(sg, ftstack)
+                    self.security_group_instance.aws_security_group(
+                        sg, ftstack)
                 # self.aws_security_group(security_group_ids)
-

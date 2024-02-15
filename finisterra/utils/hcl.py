@@ -1,3 +1,4 @@
+from ..utils.filesystem import create_version_file
 import subprocess
 import os
 import re
@@ -7,18 +8,18 @@ import json
 import http.client
 import zipfile
 import logging
+import time
 
 logger = logging.getLogger('finisterra')
 
-
-from ..utils.filesystem import create_version_file
 
 class HCL:
     def __init__(self, schema_data, provider_name):
         self.schema_data = schema_data
         self.provider_name = provider_name
         self.script_dir = tempfile.mkdtemp()
-        self.terraform_state_file = os.path.join(self.script_dir, "terraform.tfstate")
+        self.terraform_state_file = os.path.join(
+            self.script_dir, "terraform.tfstate")
         self.module_data = {}
         self.ftstacks = {}
         self.unique_ftstacks = set()
@@ -75,8 +76,6 @@ class HCL:
         if attributes["id"] not in self.state_instances[resource_type][resource_name]:
             self.state_instances[resource_type][resource_name][attributes["id"]] = True
 
-
-
     def replace_special_chars(self, input_string):
         # Define a mapping of special characters to their ASCII representations
         ascii_map = {
@@ -87,11 +86,12 @@ class HCL:
         # Function to replace each match
         def replace(match):
             char = match.group(0)
-            return ascii_map.get(char, f'_{ord(char):02X}_')  # Default to hex code representation
+            # Default to hex code representation
+            return ascii_map.get(char, f'_{ord(char):02X}_')
 
         # Replace using a regular expression and the replace function
         output_string = re.sub(r'\s|[-.]|\W', replace, input_string)
-        return output_string    
+        return output_string
 
     def add_underscore(self, string):
         if string[0].isdigit():
@@ -119,7 +119,7 @@ class HCL:
         except:
             pass
         return resource_count
-    
+
     def count_state_file(self):
         resource_count = {}
         try:
@@ -132,7 +132,7 @@ class HCL:
                         resource_count[resource["type"]] = 1
         except:
             pass
-        return resource_count    
+        return resource_count
 
     def refresh_state(self):
         # count resources in state file
@@ -141,21 +141,33 @@ class HCL:
         if not prev_resources_count:
             logger.debug("No state file found.")
             return 0
-        
+
         with open(self.terraform_state_file, 'w') as state_file:
-            json.dump(self.state_data, state_file, indent=2)        
-        
+            json.dump(self.state_data, state_file, indent=2)
+
         logger.debug("Initializing Terraform...")
-        subprocess.run(["terraform", "init"], cwd=self.script_dir, check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["terraform", "init"], cwd=self.script_dir,
+                       check=True, stdout=subprocess.DEVNULL)
 
         logger.debug("Refreshing state...")
-        subprocess.run(["terraform", "refresh"], cwd=self.script_dir, check=True, stdout=subprocess.DEVNULL)
+        try:
+            subprocess.run(["terraform", "refresh"], cwd=self.script_dir,
+                           check=True, stdout=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            logger.debug("Terraform refresh failed, retrying in 5 seconds...")
+            time.sleep(5)  # Wait for 5 seconds before retrying
+            try:
+                subprocess.run(["terraform", "refresh"], cwd=self.script_dir,
+                               check=True, stdout=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                logger.error("Terraform refresh failed on retry.")
 
+        # Attempt to remove the backup state file
         try:
             subprocess.run(
-                ["rm", self.terraform_state_file+".backup"], check=True)
-        except:
-            pass
+                ["rm", self.terraform_state_file + ".backup"], check=True)
+        except Exception as e:
+            logger.debug(f"Could not remove backup state file: {e}")
 
         logger.debug("Counting resources in state file...")
         resources_count = self.count_state_file()
@@ -173,7 +185,8 @@ class HCL:
     def create_folder(self, folder):
         if os.path.exists(folder):
             logger.debug(f"Folder '{folder}' already exists removing it.")
-            [shutil.rmtree(os.path.join(folder, f)) if os.path.isdir(os.path.join(folder, f)) else os.remove(os.path.join(folder, f)) for f in os.listdir(folder)]
+            [shutil.rmtree(os.path.join(folder, f)) if os.path.isdir(os.path.join(
+                folder, f)) else os.remove(os.path.join(folder, f)) for f in os.listdir(folder)]
             # shutil.rmtree(folder)
         os.makedirs(folder, exist_ok=True)
 
@@ -198,7 +211,7 @@ class HCL:
                 if ftstack not in self.ftstacks_files:
                     self.ftstacks_files[ftstack] = []
                 self.ftstacks_files[ftstack].append(files)
-                
+
     def id_resource_processed(self, resource_name, id, ftstack):
         if ftstack:
             if resource_name not in self.ftstacks:
@@ -217,7 +230,7 @@ class HCL:
         if id not in self.additional_data[resource_type]:
             self.additional_data[resource_type][id] = {}
         self.additional_data[resource_type][id][key] = value
-        
+
     def request_tf_code(self):
         tfstate = None
         # Check if self.terraform_state_file is file bigger than 0
@@ -232,8 +245,8 @@ class HCL:
 
         # Define the API endpoint
         api_token = os.environ.get('FT_API_TOKEN')
-        api_host = os.environ.get('API_HOST', 'api.finisterra.io')
-        api_port = os.environ.get('API_PORT', 443)
+        api_host = os.environ.get('FT_API_HOST', 'api.finisterra.io')
+        api_port = os.environ.get('FT_API_PORT', 443)
         api_path = '/hcl/'
 
         # Create a connection to the API server
@@ -242,7 +255,8 @@ class HCL:
         else:
             conn = http.client.HTTPConnection(api_host, api_port)
 
-        headers = {'Content-Type': 'application/json', "Authorization": "Bearer " + api_token}
+        headers = {'Content-Type': 'application/json',
+                   "Authorization": "Bearer " + api_token}
 
         # Define the request payload
         payload = {
@@ -278,14 +292,14 @@ class HCL:
             with open(zip_file_path, 'wb') as zip_file:
                 zip_file.write(response_data)
 
-            #clean up folder
+            # clean up folder
             try:
                 os.chdir(os.path.join(self.output_dir, "tf_code"))
                 for stack in self.unique_ftstacks:
                     shutil.rmtree(stack)
             except:
                 pass
-                
+
             # Unzip the file to the current directory
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 zip_ref.extractall(self.output_dir)
@@ -294,11 +308,13 @@ class HCL:
             for ftstack, zip_files in self.ftstacks_files.items():
                 for zip_file in zip_files:
                     filename = zip_file["filename"]
-                    target_dir = os.path.join(self.output_dir, "tf_code", ftstack)
+                    target_dir = os.path.join(
+                        self.output_dir, "tf_code", ftstack)
                     os.makedirs(os.path.dirname(target_dir), exist_ok=True)
-                    target_file = os.path.join(target_dir, os.path.basename(filename))
+                    target_file = os.path.join(
+                        target_dir, os.path.basename(filename))
                     shutil.copyfile(filename, target_file)
-            
+
         else:
             logger.error(response.status, response.reason)
 

@@ -1,6 +1,6 @@
 import os
 from ...utils.hcl import HCL
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 from ...providers.aws.logs import Logs
 from ...providers.aws.kms import KMS
 from ...providers.aws.security_group import SECURITY_GROUP
@@ -9,11 +9,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class ECS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {
         }
@@ -31,21 +32,26 @@ class ECS:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)        
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
-
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                 region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_subnet_names(self, network_configuration):
         if network_configuration:
-            awsvpcConfiguration = network_configuration.get("awsvpcConfiguration")
+            awsvpcConfiguration = network_configuration.get(
+                "awsvpcConfiguration")
             subnets = awsvpcConfiguration.get("subnets")
             subnet_names = []
             for subnet_id in subnets:
-                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                        subnet_id])
 
                 # Check if 'Subnets' key exists and it's not empty
                 if not response or 'Subnets' not in response or not response['Subnets']:
@@ -63,28 +69,33 @@ class ECS:
                 if subnet_name:
                     subnet_names.append(subnet_name)
                 else:
-                    logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                    logger.debug(
+                        f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
             if subnet_names:
                 return subnet_names
         return ""
-    
+
     def get_vpc_name(self, network_configuration):
         vpc_name = None
         vpc_id = None
         if network_configuration:
-            awsvpcConfiguration = network_configuration.get("awsvpcConfiguration")
+            awsvpcConfiguration = network_configuration.get(
+                "awsvpcConfiguration")
             subnets = awsvpcConfiguration.get("subnets")
             if subnets:
-                #get the vpc id for the first subnet
+                # get the vpc id for the first subnet
                 subnet_id = subnets[0]
-                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                        subnet_id])
                 vpc_id = response['Subnets'][0]['VpcId']
             if vpc_id:
-                response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+                response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                     vpc_id])
                 if not response or 'Vpcs' not in response or not response['Vpcs']:
                     # Handle this case as required, for example:
-                    logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
+                    logger.debug(
+                        f"No VPC information found for VPC ID: {vpc_id}")
                     return None
 
                 vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -98,21 +109,28 @@ class ECS:
 
         self.aws_ecs_cluster()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_ecs_cluster(self):
         resource_type = "aws_ecs_cluster"
         logger.debug("Processing ECS Clusters...")
 
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
-        clusters = self.aws_clients.ecs_client.describe_clusters(clusters=clusters_arns, include=["CONFIGURATIONS"])["clusters"]
+        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+            "clusterArns"]
+        clusters = self.aws_clients.ecs_client.describe_clusters(
+            clusters=clusters_arns, include=["CONFIGURATIONS"])["clusters"]
 
-        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=0)
+        self.task = self.progress.add_task(
+            f"[cyan]Processing {self.__class__.__name__}...", total=0)
 
         for cluster in clusters:
             cluster_name = cluster["clusterName"]
@@ -126,7 +144,8 @@ class ECS:
 
             ftstack = "ecs"
             try:
-                tags_response = self.aws_clients.ecs_client.list_tags_for_resource(resourceArn=cluster_arn)
+                tags_response = self.aws_clients.ecs_client.list_tags_for_resource(
+                    resourceArn=cluster_arn)
                 tags = tags_response.get('tags', [])
                 for tag in tags:
                     if tag['key'] == 'ftstack':
@@ -142,7 +161,7 @@ class ECS:
             }
             self.hcl.process_resource(
                 resource_type, cluster_name.replace("-", "_"), attributes)
-            
+
             self.hcl.add_stack(resource_type, id, ftstack)
 
             if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
@@ -151,18 +170,23 @@ class ECS:
                 kmsKeyId = None
                 configuration = cluster.get('configuration', {})
                 if configuration:
-                    execute_command_configuration = configuration.get('executeCommandConfiguration', {})
+                    execute_command_configuration = configuration.get(
+                        'executeCommandConfiguration', {})
                     if execute_command_configuration:
-                        log_configuration = execute_command_configuration.get('logConfiguration', {})
+                        log_configuration = execute_command_configuration.get(
+                            'logConfiguration', {})
                         if log_configuration:
-                            cloudwatch_log_group_name = log_configuration.get('cloudWatchLogGroupName')
+                            cloudwatch_log_group_name = log_configuration.get(
+                                'cloudWatchLogGroupName')
                             if cloudwatch_log_group_name:
-                                self.logs_instance.aws_cloudwatch_log_group(cloudwatch_log_group_name, ftstack)
-                        kmsKeyId = execute_command_configuration.get('kmsKeyId')
-                    
+                                self.logs_instance.aws_cloudwatch_log_group(
+                                    cloudwatch_log_group_name, ftstack)
+                        kmsKeyId = execute_command_configuration.get(
+                            'kmsKeyId')
 
                 if cloudwatch_log_group_name:
-                    self.logs_instance.aws_cloudwatch_log_group(cloudwatch_log_group_name, ftstack)
+                    self.logs_instance.aws_cloudwatch_log_group(
+                        cloudwatch_log_group_name, ftstack)
 
                 if kmsKeyId:
                     self.kms_instance.aws_kms_key(kmsKeyId, ftstack)
@@ -174,7 +198,8 @@ class ECS:
     def aws_cloudwatch_log_group(self, log_group_name):
         logger.debug(f"Processing CloudWatch Log Group...")
 
-        paginator = self.aws_clients.logs_client.get_paginator('describe_log_groups')
+        paginator = self.aws_clients.logs_client.get_paginator(
+            'describe_log_groups')
 
         for page in paginator.paginate():
             for log_group in page['logGroups']:
@@ -197,9 +222,11 @@ class ECS:
             f"  Warning: No matching CloudWatch Log Group found: {log_group_name}")
 
     def aws_ecs_cluster_capacity_providers(self, cluster_name):
-        logger.debug("Processing ECS Cluster Capacity Providers for the specified cluster...")
+        logger.debug(
+            "Processing ECS Cluster Capacity Providers for the specified cluster...")
 
-        cluster_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
+        cluster_arns = self.aws_clients.ecs_client.list_clusters()[
+            "clusterArns"]
         clusters = self.aws_clients.ecs_client.describe_clusters(
             clusters=cluster_arns)["clusters"]
 
@@ -219,13 +246,15 @@ class ECS:
                     self.hcl.process_resource(
                         "aws_ecs_cluster_capacity_providers", resource_name.replace("-", "_"), attributes)
             else:
-                logger.debug(f"Skipping aws_ecs_cluster_capacity_providers: {cluster['clusterName']}")
+                logger.debug(
+                    f"Skipping aws_ecs_cluster_capacity_providers: {cluster['clusterName']}")
 
     def aws_ecs_capacity_provider(self, cluster_name):
         logger.debug(
             f"Processing ECS Capacity Providers for cluster: {cluster_name}...")
 
-        cluster_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
+        cluster_arns = self.aws_clients.ecs_client.list_clusters()[
+            "clusterArns"]
         clusters = self.aws_clients.ecs_client.describe_clusters(
             clusters=cluster_arns)["clusters"]
 
@@ -255,38 +284,44 @@ class ECS:
                             f"Skipping provider: {provider_name} without auto scaling group")
 
             else:
-                logger.debug(f"Skipping aws_ecs_capacity_provider: {cluster['clusterName']}")
+                logger.debug(
+                    f"Skipping aws_ecs_capacity_provider: {cluster['clusterName']}")
 
     def aws_ecs_service(self, cluster_name, ftstack):
         resource_type = "aws_ecs_service"
         logger.debug(f"Processing ECS Services for cluster: {cluster_name}...")
 
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
+        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+            "clusterArns"]
         clusters = self.aws_clients.ecs_client.describe_clusters(
             clusters=clusters_arns)["clusters"]
 
         for cluster in clusters:
             if cluster['clusterName'] == cluster_name:
                 cluster_arn = cluster['clusterArn']
-                paginator = self.aws_clients.ecs_client.get_paginator('list_services')
+                paginator = self.aws_clients.ecs_client.get_paginator(
+                    'list_services')
                 total = 0
                 for page in paginator.paginate(cluster=cluster_arn):
                     total += len(page["serviceArns"])
 
                 if total > 0:
-                    self.task = self.progress.update(self.task_id, desciption=f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
+                    self.task = self.progress.update(
+                        self.task_id, desciption=f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
 
                 for page in paginator.paginate(cluster=cluster_arn):
                     services_arns = page["serviceArns"]
                     if not services_arns:
-                        logger.debug(f"  No services found for cluster. {cluster_name}")
+                        logger.debug(
+                            f"  No services found for cluster. {cluster_name}")
                         continue
                     services = self.aws_clients.ecs_client.describe_services(
                         cluster=cluster_arn, services=services_arns)["services"]
 
                     for service in services:
                         service_name = service["serviceName"]
-                        self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} - {cluster_name} [bold]{service_name}[/]")
+                        self.progress.update(
+                            self.task, advance=1, description=f"[cyan]{self.__class__.__name__} - {cluster_name} [bold]{service_name}[/]")
 
                         # if service_name != "eureka-discovery-service":
                         # if service_name != "eureka-discovery-service" and service_name != "spring-config-server":
@@ -314,10 +349,12 @@ class ECS:
                             subnet_names = self.get_subnet_names(
                                 network_configuration)
                             if subnet_names:
-                                self.hcl.add_additional_data(resource_type, service_arn, "subnet_names", subnet_names)
+                                self.hcl.add_additional_data(
+                                    resource_type, service_arn, "subnet_names", subnet_names)
                             vpc_name = self.get_vpc_name(network_configuration)
                             if vpc_name:
-                                self.hcl.add_additional_data(resource_type, service_arn, "vpc_name", vpc_name)
+                                self.hcl.add_additional_data(
+                                    resource_type, service_arn, "vpc_name", vpc_name)
 
                         self.aws_appautoscaling_target(
                             cluster_name, service_name)
@@ -325,7 +362,8 @@ class ECS:
                         if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
                             if service.get('roleArn'):
                                 role_name = service['roleArn'].split('/')[-1]
-                                self.iam_role_instance.aws_iam_role(role_name, ftstack)
+                                self.iam_role_instance.aws_iam_role(
+                                    role_name, ftstack)
 
                         # Call task definition for this service's task definition
                         if service.get('taskDefinition'):
@@ -347,7 +385,8 @@ class ECS:
                                     security_groups = aws_vpc_configuration.get(
                                         'securityGroups', [])
                                     for sg in security_groups:
-                                        self.security_group_instance.aws_security_group(sg, ftstack)
+                                        self.security_group_instance.aws_security_group(
+                                            sg, ftstack)
 
                             # Get the load balancer and the the target group arn
                             load_balancers = service.get('loadBalancers', [])
@@ -355,11 +394,14 @@ class ECS:
                                 # lb_name = lb.get('loadBalancerName')
                                 target_group_arn = lb.get('targetGroupArn')
                                 if target_group_arn:
-                                    logger.debug(f"Processing Target Group: {target_group_arn}...")
-                                    self.target_group_instance.aws_lb_target_group(target_group_arn, ftstack)
+                                    logger.debug(
+                                        f"Processing Target Group: {target_group_arn}...")
+                                    self.target_group_instance.aws_lb_target_group(
+                                        target_group_arn, ftstack)
 
-                        #Cloudmap
-                        serviceRegistries = service.get('serviceRegistries', [])
+                        # Cloudmap
+                        serviceRegistries = service.get(
+                            'serviceRegistries', [])
                         for serviceRegistry in serviceRegistries:
                             registry_arn = serviceRegistry.get('registryArn')
                             registry_id = registry_arn.split('/')[-1]
@@ -369,17 +411,20 @@ class ECS:
                             if cloudmap:
                                 registry_name = cloudmap['Name']
                                 if registry_name:
-                                    self.hcl.add_additional_data("aws_service_discovery_service", registry_arn, "registry_name", registry_name)
+                                    self.hcl.add_additional_data(
+                                        "aws_service_discovery_service", registry_arn, "registry_name", registry_name)
                                     namespace = self.aws_clients.cloudmap_client.get_namespace(
                                         Id=cloudmap['NamespaceId'])['Namespace']
                                     namespace_name = namespace['Name']
                                     if namespace_name:
-                                         self.hcl.add_additional_data("aws_service_discovery_service", registry_arn, "namespace_name", namespace_name)
+                                        self.hcl.add_additional_data(
+                                            "aws_service_discovery_service", registry_arn, "namespace_name", namespace_name)
             # else:
             #     logger.debug(f"Skipping aws_ecs_service: {cluster['clusterName']}")
 
     def aws_ecs_task_definition(self, task_definition_arn, ftstack):
-        logger.debug(f"Processing ECS Task Definition: {task_definition_arn}...")
+        logger.debug(
+            f"Processing ECS Task Definition: {task_definition_arn}...")
 
         task_definition = self.aws_clients.ecs_client.describe_task_definition(
             taskDefinition=task_definition_arn)["taskDefinition"]
@@ -400,9 +445,9 @@ class ECS:
                 role_name = task_definition.get('taskRoleArn').split('/')[-1]
                 self.iam_role_instance.aws_iam_role(role_name, ftstack)
             if task_definition.get('executionRoleArn'):
-                role_name = task_definition.get('executionRoleArn').split('/')[-1]
+                role_name = task_definition.get(
+                    'executionRoleArn').split('/')[-1]
                 self.iam_role_instance.aws_iam_role(role_name, ftstack)
-
 
     def aws_appautoscaling_target(self, cluster_name, service_name):
         service_namespace = 'ecs'
@@ -420,7 +465,8 @@ class ECS:
             if scalable_targets:
                 # We expect only one target per service
                 target = scalable_targets[0]
-                logger.debug(f"Processing ECS AppAutoScaling Target: {resource_id}")
+                logger.debug(
+                    f"Processing ECS AppAutoScaling Target: {resource_id}")
 
                 resource_name = f"{service_namespace}-{resource_id.replace('/', '-')}"
                 attributes = {
@@ -508,7 +554,8 @@ class ECS:
     def aws_ecs_account_setting_default(self):
         logger.debug("Processing ECS Account Setting Defaults...")
 
-        settings = self.aws_clients.ecs_client.list_account_settings()["settings"]
+        settings = self.aws_clients.ecs_client.list_account_settings()[
+            "settings"]
         for setting in settings:
             name = setting["name"]
             value = setting["value"]
@@ -526,7 +573,8 @@ class ECS:
         logger.debug("Processing ECS Tags...")
 
         # Process tags for ECS clusters
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
+        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+            "clusterArns"]
         for cluster_arn in clusters_arns:
             cluster = self.aws_clients.ecs_client.describe_clusters(
                 clusters=[cluster_arn])["clusters"][0]
@@ -582,7 +630,8 @@ class ECS:
     def aws_ecs_task_set(self):
         logger.debug("Processing ECS Task Sets...")
 
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
+        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+            "clusterArns"]
         for cluster_arn in clusters_arns:
             services_arns = self.aws_clients.ecs_client.list_services(
                 cluster=cluster_arn)["serviceArns"]
@@ -638,7 +687,7 @@ class ECS:
 
     def aws_lb_listener_rule(self, target_group_arn):
         logger.debug("Processing Load Balancer Listener Rules for Target Group ARN:",
-              target_group_arn)
+                     target_group_arn)
 
         load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
             "LoadBalancers"]
@@ -679,7 +728,7 @@ class ECS:
 
     def aws_lb_listener(self, target_group_arn):
         logger.debug("Processing Load Balancer Listeners for Target Group ARN:",
-              target_group_arn)
+                     target_group_arn)
 
         # Get all Load Balancers
         load_balancer_arns = [lb["LoadBalancerArn"]
@@ -687,14 +736,16 @@ class ECS:
 
         # Get all Listeners for the Load Balancers
         for lb_arn in load_balancer_arns:
-            paginator = self.aws_clients.elbv2_client.get_paginator("describe_listeners")
+            paginator = self.aws_clients.elbv2_client.get_paginator(
+                "describe_listeners")
             for page in paginator.paginate(LoadBalancerArn=lb_arn):
                 for listener in page["Listeners"]:
                     # Check if the target group ARN is in the default actions
                     for action in listener['DefaultActions']:
                         if action['Type'] == 'forward' and any(tg['TargetGroupArn'] == target_group_arn for tg in action['ForwardConfig']['TargetGroups']):
                             listener_arn = listener["ListenerArn"]
-                            logger.debug(f"Processing Listener: {listener_arn}")
+                            logger.debug(
+                                f"Processing Listener: {listener_arn}")
 
                             attributes = {
                                 "id": listener_arn,

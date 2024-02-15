@@ -1,6 +1,6 @@
 import os
 from ...utils.hcl import HCL
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 from ...providers.aws.logs import Logs
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
@@ -9,11 +9,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class RDS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -37,11 +38,14 @@ class RDS:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_kms_alias(self, kms_key_id):
         try:
@@ -49,7 +53,8 @@ class RDS:
             response = self.aws_clients.kms_client.list_aliases()
             aliases = response.get('Aliases', [])
             while 'NextMarker' in response:
-                response = self.aws_clients.kms_client.list_aliases(Marker=response['NextMarker'])
+                response = self.aws_clients.kms_client.list_aliases(
+                    Marker=response['NextMarker'])
                 aliases.extend(response.get('Aliases', []))
             for alias in aliases:
                 if 'TargetKeyId' in alias and alias['TargetKeyId'] == kms_key_id.split('/')[-1]:
@@ -65,7 +70,8 @@ class RDS:
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
         for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
@@ -103,17 +109,19 @@ class RDS:
             logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
-        
+
     def get_vpc_name_by_subnet(self, subnet_ids):
         vpc_id = ""
         vpc_name = ""
         if subnet_ids:
             subnet_id = subnet_ids[0]
-            #get the vpc id for the subnet_id
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            # get the vpc id for the subnet_id
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
-                logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
+                logger.debug(
+                    f"No subnet information found for Subnet ID: {subnet_id}")
                 return None
             vpc_id = response['Subnets'][0].get('VpcId', None)
 
@@ -127,28 +135,35 @@ class RDS:
 
         self.aws_db_instance()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_db_instance(self):
         resource_type = "aws_db_instance"
         logger.debug("Processing DB Instances...")
 
-        paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
+        paginator = self.aws_clients.rds_client.get_paginator(
+            "describe_db_instances")
         total = 0
         for page in paginator.paginate():
             total += len(page.get("DBInstances", []))
 
         if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for instance in page.get("DBInstances", []):
                 instance_id = instance["DBInstanceIdentifier"]
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
                 # Skip instances that belong to a cluster
                 if instance.get("DBClusterIdentifier") is not None:
                     continue
@@ -164,7 +179,8 @@ class RDS:
 
                 ftstack = "rds"
                 try:
-                    tags_response = self.aws_clients.rds_client.list_tags_for_resource(ResourceName=instance["DBInstanceArn"])
+                    tags_response = self.aws_clients.rds_client.list_tags_for_resource(
+                        ResourceName=instance["DBInstanceArn"])
                     tags = tags_response.get('TagList', [])
                     for tag in tags:
                         if tag['Key'] == 'ftstack':
@@ -190,7 +206,8 @@ class RDS:
                 db_parameter_group_name = instance.get(
                     'DBParameterGroups', [{}])[0].get('DBParameterGroupName', None)
                 if db_parameter_group_name is not None:
-                    self.aws_db_parameter_group(db_parameter_group_name, ftstack)
+                    self.aws_db_parameter_group(
+                        db_parameter_group_name, ftstack)
 
                 db_subnet_group_name = instance.get(
                     'DBSubnetGroup', {}).get('DBSubnetGroupName', None)
@@ -198,11 +215,13 @@ class RDS:
                     self.aws_db_subnet_group(db_subnet_group_name, ftstack)
 
                 arn = instance.get("DBInstanceArn")
-                self.aws_db_instance_automated_backups_replication(arn, ftstack)
+                self.aws_db_instance_automated_backups_replication(
+                    arn, ftstack)
 
                 # call aws_cloudwatch_log_group function with instance_id and each log export name as parameters
                 for log_export_name in instance.get("EnabledCloudwatchLogsExports", []):
-                    self.logs_instance.aws_cloudwatch_log_group(f"/aws/rds/instance/{instance_id}/{log_export_name}", ftstack)
+                    self.logs_instance.aws_cloudwatch_log_group(
+                        f"/aws/rds/instance/{instance_id}/{log_export_name}", ftstack)
                     # self.aws_cloudwatch_log_group(instance_id, log_export_name)
 
                 monitoring_role_arn = instance.get("MonitoringRoleArn")
@@ -214,28 +233,35 @@ class RDS:
                 vpc_security_groups = instance.get("VpcSecurityGroups", [])
                 security_group_ids = []
                 for sg in vpc_security_groups:
-                    sg_name=self.security_group_instance.aws_security_group(sg['VpcSecurityGroupId'], ftstack)
+                    sg_name = self.security_group_instance.aws_security_group(
+                        sg['VpcSecurityGroupId'], ftstack)
                     if sg_name == "default":
                         security_group_ids.append("default")
                     else:
                         security_group_ids.append(sg['VpcSecurityGroupId'])
-                self.hcl.add_additional_data(resource_type, id, "vpc_security_group_ids",  security_group_ids)
+                self.hcl.add_additional_data(
+                    resource_type, id, "vpc_security_group_ids",  security_group_ids)
 
                 kms_key_id = instance.get("KmsKeyId")
                 if kms_key_id:
-                    type=self.kms_instance.aws_kms_key(kms_key_id, ftstack)
+                    type = self.kms_instance.aws_kms_key(kms_key_id, ftstack)
                     if type == "MANAGED":
                         kms_key_alias = self.get_kms_alias(kms_key_id)
                         if kms_key_alias:
-                            self.hcl.add_additional_data(resource_type, id, "kms_key_alias",  kms_key_alias)
+                            self.hcl.add_additional_data(
+                                resource_type, id, "kms_key_alias",  kms_key_alias)
 
-                performance_insights_kms_key_id = instance.get("PerformanceInsightsKMSKeyId")
+                performance_insights_kms_key_id = instance.get(
+                    "PerformanceInsightsKMSKeyId")
                 if performance_insights_kms_key_id:
-                    type=self.kms_instance.aws_kms_key(performance_insights_kms_key_id, ftstack)
+                    type = self.kms_instance.aws_kms_key(
+                        performance_insights_kms_key_id, ftstack)
                     if type == "MANAGED":
-                        kms_key_alias = self.get_kms_alias(performance_insights_kms_key_id)
+                        kms_key_alias = self.get_kms_alias(
+                            performance_insights_kms_key_id)
                         if kms_key_alias:
-                            self.hcl.add_additional_data(resource_type, id, "performance_insights_kms_key_alias",  kms_key_alias)
+                            self.hcl.add_additional_data(
+                                resource_type, id, "performance_insights_kms_key_alias",  kms_key_alias)
 
     def aws_db_option_group(self, option_group_name, ftstack):
         resource_type = "aws_db_option_group"
@@ -243,14 +269,16 @@ class RDS:
         if option_group_name.startswith("default"):
             return
 
-        paginator = self.aws_clients.rds_client.get_paginator("describe_option_groups")
+        paginator = self.aws_clients.rds_client.get_paginator(
+            "describe_option_groups")
         for page in paginator.paginate():
             for option_group in page.get("OptionGroupsList", []):
                 # Skip the option group if it's not the given one
                 if option_group["OptionGroupName"] != option_group_name:
                     continue
 
-                logger.debug(f"Processing DB Option Group: {option_group_name}")
+                logger.debug(
+                    f"Processing DB Option Group: {option_group_name}")
                 id = option_group_name
                 attributes = {
                     "id": id,
@@ -294,32 +322,40 @@ class RDS:
         resource_type = "aws_db_subnet_group"
         logger.debug(f"Processing DB Subnet Groups {db_subnet_group_name}")
 
-        paginator = self.aws_clients.rds_client.get_paginator("describe_db_subnet_groups")
+        paginator = self.aws_clients.rds_client.get_paginator(
+            "describe_db_subnet_groups")
         for page in paginator.paginate():
             for db_subnet_group in page.get("DBSubnetGroups", []):
                 # Skip the subnet group if it's not the given one
                 if db_subnet_group["DBSubnetGroupName"] != db_subnet_group_name:
                     continue
-                
+
                 # Fetch the subnet names even for the default one
                 id = db_subnet_group_name
-                subnet_ids = [subnet["SubnetIdentifier"] for subnet in db_subnet_group["Subnets"]]
+                subnet_ids = [subnet["SubnetIdentifier"]
+                              for subnet in db_subnet_group["Subnets"]]
                 subnet_names = self.get_subnet_names(subnet_ids)
                 if subnet_names:
-                    self.hcl.add_additional_data(resource_type, id, "subnet_names",  subnet_names)
+                    self.hcl.add_additional_data(
+                        resource_type, id, "subnet_names",  subnet_names)
 
                 vpc_id, vpc_name = self.get_vpc_name_by_subnet(subnet_ids)
                 if vpc_id:
-                    self.hcl.add_additional_data(resource_type, id, "vpc_id",  vpc_id)
-                    self.hcl.add_additional_data("aws_db_instance", id, "vpc_id",  vpc_id)
+                    self.hcl.add_additional_data(
+                        resource_type, id, "vpc_id",  vpc_id)
+                    self.hcl.add_additional_data(
+                        "aws_db_instance", id, "vpc_id",  vpc_id)
                 if vpc_name:
-                    self.hcl.add_additional_data(resource_type, id, "vpc_name",  vpc_name)
-                    self.hcl.add_additional_data("aws_db_instance", id, "vpc_name",  vpc_name)
+                    self.hcl.add_additional_data(
+                        resource_type, id, "vpc_name",  vpc_name)
+                    self.hcl.add_additional_data(
+                        "aws_db_instance", id, "vpc_name",  vpc_name)
 
                 if db_subnet_group_name.startswith("default"):
                     return
-                
-                logger.debug(f"Processing DB Subnet Group: {db_subnet_group_name}")
+
+                logger.debug(
+                    f"Processing DB Subnet Group: {db_subnet_group_name}")
                 attributes = {
                     "id": id,
                 }
@@ -332,16 +368,19 @@ class RDS:
         logger.debug(
             f"Processing DB Instance Automated Backups Replication {source_instance_arn}")
 
-        paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
+        paginator = self.aws_clients.rds_client.get_paginator(
+            "describe_db_instances")
         for page in paginator.paginate():
             for instance in page.get("DBInstances", []):
                 if instance.get("ReadReplicaDBInstanceIdentifiers") and instance["DBInstanceArn"] == source_instance_arn:
                     if instance.get("Engine", None) not in ["mysql", "postgres"]:
                         continue
-                    
+
                     # Fetching automated backup details
-                    backups_paginator = self.aws_clients.rds_client.get_paginator("describe_db_instance_automated_backups")
-                    backups_page = backups_paginator.paginate(DBInstanceIdentifier=instance["DBInstanceIdentifier"])
+                    backups_paginator = self.aws_clients.rds_client.get_paginator(
+                        "describe_db_instance_automated_backups")
+                    backups_page = backups_paginator.paginate(
+                        DBInstanceIdentifier=instance["DBInstanceIdentifier"])
 
                     for backup_page in backups_page:
                         for backup in backup_page.get("DBInstanceAutomatedBackups", []):
@@ -351,18 +390,21 @@ class RDS:
                             for replica_id in instance["ReadReplicaDBInstanceIdentifiers"]:
                                 logger.debug(
                                     f"Processing DB Instance Automated Backups Replication for {source_instance_id} to {replica_id}")
-                                id=automated_backup_arn
+                                id = automated_backup_arn
                                 attributes = {
                                     "id": automated_backup_arn,
                                 }
-                                self.hcl.process_resource(resource_type, id, attributes)
+                                self.hcl.process_resource(
+                                    resource_type, id, attributes)
                                 self.hcl.add_stack(resource_type, id, ftstack)
 
                                 kms_key_id = backup.get("KmsKeyId")
                                 if kms_key_id:
-                                    type=self.kms_instance.aws_kms_key(kms_key_id, ftstack)
+                                    type = self.kms_instance.aws_kms_key(
+                                        kms_key_id, ftstack)
                                     if type == "MANAGED":
-                                        kms_key_alias = self.get_kms_alias(kms_key_id)
+                                        kms_key_alias = self.get_kms_alias(
+                                            kms_key_id)
                                         if kms_key_alias:
-                                            self.hcl.add_additional_data(resource_type, id, "kms_key_alias",  kms_key_alias)
-
+                                            self.hcl.add_additional_data(
+                                                resource_type, id, "kms_key_alias",  kms_key_alias)

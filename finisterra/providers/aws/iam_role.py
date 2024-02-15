@@ -6,11 +6,11 @@ import logging
 logger = logging.getLogger('finisterra')
 
 
-class IAM_ROLE:
+class IAM:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.aws_account_id = aws_account_id
         self.workspace_id = workspace_id
@@ -32,32 +32,37 @@ class IAM_ROLE:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
-    def iam(self):        
+    def iam(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_iam_role()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-        
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
+
     def aws_iam_role(self, role_name=None, ftstack=None):
         resource_type = "aws_iam_role"
         logger.debug("Processing IAM Roles...")
-        
+
         # If role_name is provided, process only that specific role
         if role_name:
             if ftstack and self.hcl.id_resource_processed(resource_type, role_name, ftstack):
-                logger.debug(f"  Skipping IAM Role: {role_name} - already processed")
+                logger.debug(
+                    f"  Skipping IAM Role: {role_name} - already processed")
                 return
 
             # Fetch and process the specific role
             try:
-                role = self.aws_clients.iam_client.get_role(RoleName=role_name)["Role"]
+                role = self.aws_clients.iam_client.get_role(
+                    RoleName=role_name)["Role"]
                 self.process_iam_role(role, ftstack)
             except Exception as e:
                 logger.debug(f"Error fetching IAM Role {role_name}: {e}")
@@ -69,10 +74,12 @@ class IAM_ROLE:
         for page in paginator.paginate():
             total += len(page["Roles"])
         if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for role in page["Roles"]:
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{role['RoleName']}[/]")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{role['RoleName']}[/]")
                 self.process_iam_role(role, ftstack)
 
     def process_iam_role(self, role, ftstack=None):
@@ -104,10 +111,10 @@ class IAM_ROLE:
         # Now call aws_iam_instance_profile for the current role_name
         self.aws_iam_instance_profile(current_role_name)
 
-
     def aws_iam_instance_profile(self, role_name):
         logger.debug("Processing IAM Instance Profiles...")
-        paginator = self.aws_clients.iam_client.get_paginator("list_instance_profiles")
+        paginator = self.aws_clients.iam_client.get_paginator(
+            "list_instance_profiles")
 
         for page in paginator.paginate():
             for instance_profile in page["InstanceProfiles"]:
@@ -132,7 +139,8 @@ class IAM_ROLE:
                     "aws_iam_instance_profile", instance_profile_name, attributes)
 
     def aws_iam_role_policy_attachment(self, role_name, ftstack):
-        logger.debug(f"Processing IAM Role Policy Attachments for {role_name}...")
+        logger.debug(
+            f"Processing IAM Role Policy Attachments for {role_name}...")
 
         policy_paginator = self.aws_clients.iam_client.get_paginator(
             "list_attached_role_policies")
@@ -150,12 +158,12 @@ class IAM_ROLE:
                 }
                 self.hcl.process_resource(
                     "aws_iam_role_policy_attachment", f"{role_name}_{policy_arn.split(':')[-1]}", attributes)
-                
+
                 if not policy_arn.startswith('arn:aws:iam::aws:policy/') and '/service-role/' not in policy_arn:
                     self.aws_iam_policy(policy_arn, ftstack)
 
     def aws_iam_policy(self, policy_arn, ftstack=None):
-        resource_type="aws_iam_policy"
+        resource_type = "aws_iam_policy"
         policy_name = policy_arn.split('/')[-1]
         # Ignore AWS managed policies and policies with '/service-role/' in the ARN
         # if policy_arn.startswith('arn:aws:iam::aws:policy/') or '/service-role/' in policy_arn:

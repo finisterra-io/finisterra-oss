@@ -3,16 +3,17 @@ from ...utils.hcl import HCL
 import base64
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
-from ...providers.aws.iam_role import IAM_ROLE
+from ...providers.aws.iam_role import IAM
 import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class EC2:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.transform_rules = {}
         self.provider_name = provider_name
@@ -30,14 +31,15 @@ class EC2:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
-
         self.aws_account_id = aws_account_id
         self.additional_ips_count = 0
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.iam_role_instance = IAM_ROLE(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)        
-        
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+
     def decode_base64(self, encoded_str):
         if encoded_str is not None:
             # Decode the base64 string
@@ -46,11 +48,11 @@ class EC2:
             decoded_str = decoded_bytes.decode('utf-8')
             return decoded_str
         else:
-            return "No data to decode."    
-    
+            return "No data to decode."
+
     def ec2_get_user_data(self, instance_id):
         response = self.aws_clients.ec2_client.describe_instance_attribute(
-            InstanceId=instance_id, 
+            InstanceId=instance_id,
             Attribute='userData'
         )
         if "UserData" in response:
@@ -60,11 +62,13 @@ class EC2:
 
     def get_subnet_name_ec2(self, subnet_id):
         subnet_name = ""
-        response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+        response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                subnet_id])
 
         # Check if 'Subnets' key exists and it's not empty
         if not response or 'Subnets' not in response or not response['Subnets']:
-            logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
+            logger.debug(
+                f"No subnet information found for Subnet ID: {subnet_id}")
             return ""
 
         # Extract the 'Tags' key safely using get
@@ -80,7 +84,8 @@ class EC2:
         if not volume_id:
             return None
 
-        response = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[volume_id])
+        response = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[
+                                                                volume_id])
 
         # Check if the volume exists and has attachments
         if response["Volumes"] and response["Volumes"][0]["Attachments"]:
@@ -93,30 +98,36 @@ class EC2:
         response = self.aws_clients.kms_client.list_aliases()
         aliases = response.get('Aliases', [])
         while 'NextMarker' in response:
-            response = self.aws_clients.kms_client.list_aliases(Marker=response['NextMarker'])
+            response = self.aws_clients.kms_client.list_aliases(
+                Marker=response['NextMarker'])
             aliases.extend(response.get('Aliases', []))
         for alias in aliases:
             if 'TargetKeyId' in alias and alias['TargetKeyId'] == kms_key_id.split('/')[-1]:
                 value = alias['AliasName']
                 break
-        return value    
-    
+        return value
+
     def ec2(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_instance()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_ami(self):
         logger.debug(f"Processing AMIs...")
 
-        images = self.aws_clients.ec2_client.describe_images(Owners=["self"])["Images"]
+        images = self.aws_clients.ec2_client.describe_images(Owners=["self"])[
+            "Images"]
 
         for image in images:
             image_id = image["ImageId"]
@@ -136,7 +147,8 @@ class EC2:
     def aws_ami_launch_permission(self):
         logger.debug(f"Processing AMI Launch Permissions...")
 
-        images = self.aws_clients.ec2_client.describe_images(Owners=["self"])["Images"]
+        images = self.aws_clients.ec2_client.describe_images(Owners=["self"])[
+            "Images"]
 
         for image in images:
             image_id = image["ImageId"]
@@ -146,7 +158,8 @@ class EC2:
 
             for permission in launch_permissions:
                 user_id = permission["UserId"]
-                logger.debug(f"Processing Launch Permission for AMI: {image_id}, User: {user_id}")
+                logger.debug(
+                    f"Processing Launch Permission for AMI: {image_id}, User: {user_id}")
 
                 attributes = {
                     "id": f"{image_id}-{user_id}",
@@ -166,7 +179,8 @@ class EC2:
 
         for reservation in capacity_reservations:
             reservation_id = reservation["CapacityReservationId"]
-            logger.debug(f"Processing EC2 Capacity Reservation: {reservation_id}")
+            logger.debug(
+                f"Processing EC2 Capacity Reservation: {reservation_id}")
 
             attributes = {
                 "id": reservation_id,
@@ -234,7 +248,8 @@ class EC2:
         eips = self.aws_clients.ec2_client.describe_addresses(
             AllocationIds=[allocation_id])
         if not eips["Addresses"]:
-            logger.debug(f"  No Elastic IP found for Allocation ID: {allocation_id}")
+            logger.debug(
+                f"  No Elastic IP found for Allocation ID: {allocation_id}")
             return
 
         eip = eips["Addresses"][0]
@@ -263,7 +278,8 @@ class EC2:
         for eip in eips["Addresses"]:
             if "AssociationId" in eip:
                 association_id = eip["AssociationId"]
-                logger.debug(f"Processing Elastic IP Association: {association_id}")
+                logger.debug(
+                    f"Processing Elastic IP Association: {association_id}")
 
                 attributes = {
                     "id": association_id,
@@ -284,7 +300,7 @@ class EC2:
 
     def is_managed_by_auto_scaling_group(self, instance_id):
         response = self.aws_clients.autoscaling_client.describe_auto_scaling_instances(InstanceIds=[
-                                                                           instance_id])
+            instance_id])
         return bool(response["AutoScalingInstances"])
 
     def aws_instance(self):
@@ -296,21 +312,25 @@ class EC2:
         for reservation in instances["Reservations"]:
             total += len(reservation["Instances"])
         if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for reservation in instances["Reservations"]:
             for instance in reservation["Instances"]:
                 instance_id = instance["InstanceId"]
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
 
                 if self.is_managed_by_auto_scaling_group(instance_id):
-                    logger.debug(f"  Skipping EC2 Instance (managed by Auto Scaling group): {instance_id}")
+                    logger.debug(
+                        f"  Skipping EC2 Instance (managed by Auto Scaling group): {instance_id}")
                     continue
 
                 # Check if the instance has EKS related tags and skip if it does
                 eks_tags = [tag for tag in instance.get(
                     "Tags", []) if tag["Key"].startswith("kubernetes.io/cluster/")]
                 if eks_tags:
-                    logger.debug(f"  Skipping EC2 Instance (managed by EKS): {instance_id}")
+                    logger.debug(
+                        f"  Skipping EC2 Instance (managed by EKS): {instance_id}")
                     continue
 
                 # if instance_id != "i-0a8f69f50619306c3":
@@ -322,7 +342,8 @@ class EC2:
                 ftstack = "ec2"
                 try:
                     tags_response = self.aws_clients.ec2_client.describe_tags(
-                        Filters=[{'Name': 'resource-id', 'Values': [instance_id]}]
+                        Filters=[{'Name': 'resource-id',
+                                  'Values': [instance_id]}]
                     )
                     tags = tags_response.get('Tags', [])
                     for tag in tags:
@@ -331,7 +352,7 @@ class EC2:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)                
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -339,8 +360,9 @@ class EC2:
 
                 # Call root_block_device.kms_key_id
                 if "RootDeviceName" in instance:
-                    logger.debug(f" RootDeviceName: instance['RootDeviceName']")
-                    
+                    logger.debug(
+                        f" RootDeviceName: instance['RootDeviceName']")
+
                     # Get the KMS key for the root device
                     response = self.aws_clients.ec2_client.describe_volumes(Filters=[{
                         'Name': 'attachment.instance-id',
@@ -350,8 +372,9 @@ class EC2:
                         if volume['Attachments'][0]['Device'] == instance["RootDeviceName"]:
                             if 'KmsKeyId' in volume:
                                 keyArn = volume['KmsKeyId']
-                                type=self.kms_instance.aws_kms_key(keyArn, ftstack)
-                                if type == "MANAGED":                                
+                                type = self.kms_instance.aws_kms_key(
+                                    keyArn, ftstack)
+                                if type == "MANAGED":
                                     kms_key_alias = self.get_kms_alias(keyArn)
                                     if kms_key_alias:
                                         self.hcl.add_additional_data(
@@ -361,8 +384,8 @@ class EC2:
                     attributes["iam_instance_profile"] = instance["IamInstanceProfile"]["Arn"]
                     iam_instance_profile_id = instance["IamInstanceProfile"]["Arn"].split(
                         "/")[-1]  # Updated this line
-                    self.aws_iam_instance_profile(iam_instance_profile_id, ftstack)
-
+                    self.aws_iam_instance_profile(
+                        iam_instance_profile_id, ftstack)
 
                 self.hcl.process_resource(
                     resource_type, instance_id.replace("-", "_"), attributes)
@@ -384,7 +407,7 @@ class EC2:
                             self.hcl.additional_data[resource_type] = {}
                         if id not in self.hcl.additional_data[resource_type]:
                             self.hcl.additional_data[resource_type][id] = {}
-                        self.hcl.additional_data[resource_type][id]["subnet_name"] =  subnet_name
+                        self.hcl.additional_data[resource_type][id]["subnet_name"] = subnet_name
 
                 # Process all EIPs associated with the instance
                 eips_associated = self.aws_clients.ec2_client.describe_addresses(Filters=[{
@@ -402,23 +425,28 @@ class EC2:
                     # Process the volume attachment for the EBS volume
                     self.aws_volume_attachment(instance_id, block_device)
 
-                    #Get the KMS key for the volume
-                    response = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[block_device["Ebs"]["VolumeId"]])
+                    # Get the KMS key for the volume
+                    response = self.aws_clients.ec2_client.describe_volumes(
+                        VolumeIds=[block_device["Ebs"]["VolumeId"]])
                     for volume in response['Volumes']:
                         if 'KmsKeyId' in volume:
                             keyArn = volume['KmsKeyId']
-                            type=self.kms_instance.aws_kms_key(keyArn, ftstack)
+                            type = self.kms_instance.aws_kms_key(
+                                keyArn, ftstack)
                             if type == "MANAGED":
                                 kms_key_alias = self.get_kms_alias(keyArn)
                                 if kms_key_alias:
                                     if "aws_ebs_volume" not in self.hcl.additional_data:
-                                        self.hcl.additional_data["aws_ebs_volume"] = {}
+                                        self.hcl.additional_data["aws_ebs_volume"] = {
+                                        }
                                     if volume_id not in self.hcl.additional_data["aws_ebs_volume"]:
-                                        self.hcl.additional_data["aws_ebs_volume"][volume_id] = {}
+                                        self.hcl.additional_data["aws_ebs_volume"][volume_id] = {
+                                        }
                                     self.hcl.additional_data["aws_ebs_volume"][volume_id]["kms_key_alias"] = kms_key_alias
 
                 for sg in instance.get("SecurityGroups", []):
-                    self.security_group_instance.aws_security_group(sg["GroupId"], ftstack)
+                    self.security_group_instance.aws_security_group(
+                        sg["GroupId"], ftstack)
 
                 # disable for now until i know how to handle private and public ips
                 # for ni in instance.get("NetworkInterfaces", []):
@@ -429,7 +457,8 @@ class EC2:
 
     def aws_iam_instance_profile(self, iam_instance_profile_id, ftstack=None):
         resource_type = "aws_iam_instance_profile"
-        logger.debug(f"Processing IAM Instance Profile: {iam_instance_profile_id}")
+        logger.debug(
+            f"Processing IAM Instance Profile: {iam_instance_profile_id}")
 
         # Fetch the details of IAM Instance Profile using the IAM client
         response = self.aws_clients.iam_client.get_instance_profile(
@@ -437,22 +466,20 @@ class EC2:
 
         profile = response["InstanceProfile"]
 
-
         # Process only the first associated role
         for role in profile["Roles"]:
-            role_name=role["RoleName"]
+            role_name = role["RoleName"]
             self.iam_role_instance.aws_iam_role(role_name, ftstack)
-
-
 
         # if profile["Roles"]:
         #     self.aws_iam_role(profile["Roles"][0]["Arn"])
 
     def aws_ebs_volume(self, volume_id):
-        resource_type ="aws_ebs_volume"
+        resource_type = "aws_ebs_volume"
         logger.debug(f"Processing EBS Volume: {volume_id}")
 
-        volume = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[volume_id])
+        volume = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[
+                                                              volume_id])
 
         if not volume["Volumes"]:
             logger.debug(f"  No EBS Volume found for Volume ID: {volume_id}")
@@ -476,20 +503,21 @@ class EC2:
 
         self.hcl.process_resource(
             resource_type, volume_id.replace("-", "_"), attributes)
-        
+
         device_name = self.ec2_get_device_name(id)
         if device_name:
             if resource_type not in self.hcl.additional_data:
                 self.hcl.additional_data[resource_type] = {}
             if id not in self.hcl.additional_data[resource_type]:
                 self.hcl.additional_data[resource_type][id] = {}
-            self.hcl.additional_data[resource_type][id]["device_name"] =  device_name
+            self.hcl.additional_data[resource_type][id]["device_name"] = device_name
 
     def aws_volume_attachment(self, instance_id, block_device):
         device_name = block_device["DeviceName"]
         volume_id = block_device["Ebs"]["VolumeId"]
 
-        logger.debug(f"Processing EBS Volume Attachment for Volume: {volume_id} on Instance: {instance_id}")
+        logger.debug(
+            f"Processing EBS Volume Attachment for Volume: {volume_id} on Instance: {instance_id}")
 
         attributes = {
             'id': f"{device_name}:{volume_id}:{instance_id}",
@@ -508,17 +536,20 @@ class EC2:
             NetworkInterfaceIds=[network_interface_id])
 
         if not network_interface["NetworkInterfaces"]:
-            logger.debug(f"  No Network Interface found for ID: {network_interface_id}")
+            logger.debug(
+                f"  No Network Interface found for ID: {network_interface_id}")
             return
 
         ni = network_interface["NetworkInterfaces"][0]
 
         attachment = ni.get("Attachment")
         if not attachment:
-            logger.debug(f"  Skipping Detached Network Interface: {network_interface_id}")
+            logger.debug(
+                f"  Skipping Detached Network Interface: {network_interface_id}")
             return
         if attachment["DeviceIndex"] == 0:
-            logger.debug(f"  Skipping Primary Network Interface: {network_interface_id}")
+            logger.debug(
+                f"  Skipping Primary Network Interface: {network_interface_id}")
             return
 
         attributes = {
@@ -535,11 +566,13 @@ class EC2:
         self.hcl.process_resource(
             "aws_network_interface", network_interface_id.replace("-", "_"), attributes)
 
-    def aws_network_interface_attachment(self, instance_id, network_interface):        
-        logger.debug(f"Processing Network Interface Attachment for Network Interface: {network_interface['NetworkInterfaceId']} on Instance: {instance_id}")
+    def aws_network_interface_attachment(self, instance_id, network_interface):
+        logger.debug(
+            f"Processing Network Interface Attachment for Network Interface: {network_interface['NetworkInterfaceId']} on Instance: {instance_id}")
 
         if network_interface["Attachment"]["DeviceIndex"] == 0:
-            logger.debug(f"  Skipping Primary Network Interface: {network_interface['NetworkInterfaceId']}")
+            logger.debug(
+                f"  Skipping Primary Network Interface: {network_interface['NetworkInterfaceId']}")
             return
 
         attributes = {

@@ -36,14 +36,16 @@ def execute_provider_method(provider, method_name):
             original_region = provider.aws_region
             provider.region = "global"
             method = getattr(provider, method_name)
-            ftstacks=ftstacks.union(method())
+            ftstacks = ftstacks.union(method())
             provider.region = original_region
         else:
             # Regular execution for other modules
             method = getattr(provider, method_name)
-            ftstacks=ftstacks.union(method())
+            ftstacks = ftstacks.union(method())
     except Exception as e:
-        console.log(f"[bold red]Error executing {method_name}[/bold red]: {str(e)}", style="bold red")  # Log fail status
+        # Log fail status
+        console.log(
+            f"[bold red]Error executing {method_name}[/bold red]: {str(e)}", style="bold red")
         console.print(Traceback())
 
 
@@ -93,11 +95,12 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
 
         progress = Progress(
             SpinnerColumn(spinner_name="dots"),
-            TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
             MofNCompleteColumn(),
             TimeElapsedColumn(),
+            TextColumn(
+                "[progress.description]{task.description}"),
             console=console
         )
         with progress:
@@ -108,13 +111,14 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
             dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
             stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
 
-            provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable, stateKey, aws_account_id, aws_region, output_dir)
+            provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable,
+                                    stateKey, aws_account_id, aws_region, output_dir)
 
             # Define all provider methods for execution
             all_provider_methods = [
                 'vpc',
                 'acm',
-                # 'apigateway',
+                # 'apigateway', too long
                 'autoscaling',
                 'cloudmap',
                 'cloudfront',
@@ -149,54 +153,65 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
 
             # Check for invalid modules
             modules_to_execute = module.split(',')
-            invalid_modules = [mod.strip() for mod in modules_to_execute if mod.strip() not in all_provider_methods and mod.lower() != 'all']
+            invalid_modules = [mod.strip() for mod in modules_to_execute if mod.strip(
+            ) not in all_provider_methods and mod.lower() != 'all']
             if invalid_modules:
-                logger.error(f"Error: Invalid module(s) specified: {', '.join(invalid_modules)}")
+                logger.error(
+                    f"Error: Invalid module(s) specified: {', '.join(invalid_modules)}")
                 exit()
 
             # Handling for 'all' module
             if module.lower() == "all":
                 modules_to_execute = all_provider_methods
             else:
-                modules_to_execute = [mod.strip() for mod in modules_to_execute]
+                modules_to_execute = [mod.strip()
+                                      for mod in modules_to_execute]
 
-            max_parallel = int(os.getenv('MAX_PARALLEL', 5))
+            max_parallel = int(os.getenv('MAX_PARALLEL', 3))
             with ThreadPoolExecutor(max_workers=max_parallel) as executor:
-                futures = [executor.submit(execute_provider_method, provider_instance, method) for method in modules_to_execute]
+                futures = [executor.submit(
+                    execute_provider_method, provider_instance, method) for method in modules_to_execute]
                 for future in as_completed(futures):
                     pass
 
-
-        
         if run_plan:
-            with console.status("[bold green]Planning Terraform...", spinner="dots"):
+            with console.status("[cyan][bold green]Planning Terraform...", spinner="dots"):
                 # logger.info(("Planning Terraform...")
                 os.chdir(os.path.join(output_dir, "tf_code"))
-                shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.remote-state")
-                shutil.copyfile("./terragrunt.hcl.local-state", "./terragrunt.hcl")
+                shutil.copyfile("./terragrunt.hcl",
+                                "./terragrunt.hcl.remote-state")
+                shutil.copyfile("./terragrunt.hcl.local-state",
+                                "./terragrunt.hcl")
                 for ftstack in ftstacks:
                     os.chdir(os.path.join(output_dir, "tf_code", ftstack))
-                    subprocess.run(["terragrunt", "init"], check=True, stdout=subprocess.DEVNULL)
+                    subprocess.run(["terragrunt", "init"],
+                                   check=True, stdout=subprocess.DEVNULL)
                     plan_file_name = f"{ftstack}_plan"
-                    subprocess.run(["terragrunt", "plan", "-out", plan_file_name], check=True, stdout=subprocess.DEVNULL)
+                    subprocess.run(
+                        ["terragrunt", "plan", "-out", plan_file_name], check=True, stdout=subprocess.DEVNULL)
                     json_file_name = f"{ftstack}_plan.json"
-                    subprocess.run(f"terragrunt show -json {plan_file_name} > {json_file_name}", shell=True, check=True)
+                    subprocess.run(
+                        f"terragrunt show -json {plan_file_name} > {json_file_name}", shell=True, check=True)
                     os.remove(plan_file_name)
-                    counts, updates = count_resources_by_action_and_collect_changes(open(json_file_name).read())
+                    counts, updates = count_resources_by_action_and_collect_changes(
+                        open(json_file_name).read())
                     print_detailed_changes(updates)
                     print_summary(counts, ftstack)
                 os.chdir(os.path.join(output_dir, "tf_code"))
-                shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.local-state")
-                shutil.copyfile("./terragrunt.hcl.remote-state", "./terragrunt.hcl")
+                shutil.copyfile("./terragrunt.hcl",
+                                "./terragrunt.hcl.local-state")
+                shutil.copyfile("./terragrunt.hcl.remote-state",
+                                "./terragrunt.hcl")
 
         for ftstack in ftstacks:
-            generated_path = os.path.join(output_dir,"tf_code", ftstack)
+            generated_path = os.path.join(output_dir, "tf_code", ftstack)
             logger.info(f"Terraform code created at: {generated_path}")
+
 
 def setup_logger():
     # Set the log level for the root logger to NOTSET (this is required to allow handlers to control the logging level)
     logging.root.setLevel(logging.NOTSET)
-    
+
     # Configure your application's logger
     log_level_name = os.getenv('FT_LOG_LEVEL', 'INFO').upper()
     app_log_level = getattr(logging, log_level_name, logging.INFO)
@@ -204,16 +219,17 @@ def setup_logger():
     # Setup the 'finisterra' logger to use RichHandler with the shared console instance
     logger = logging.getLogger('finisterra')
     logger.setLevel(app_log_level)
-    rich_handler = RichHandler(console=console, show_time=False, show_level=True, show_path=False)
+    rich_handler = RichHandler(
+        console=console, show_time=False, show_level=True, show_path=False)
     rich_handler.setLevel(app_log_level)
-    logger.handlers = [rich_handler]  # Replace any default handlers with just the RichHandler
-    
+    # Replace any default handlers with just the RichHandler
+    logger.handlers = [rich_handler]
+
     # Set higher logging level for noisy libraries
     logging.getLogger('boto3').setLevel(logging.INFO)
     logging.getLogger('botocore').setLevel(logging.INFO)
-    logging.getLogger('urllib3').setLevel(logging.INFO)   
+    logging.getLogger('urllib3').setLevel(logging.INFO)
 
 
 if __name__ == "__main__":
     main()
-

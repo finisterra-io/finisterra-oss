@@ -5,11 +5,12 @@ import logging
 
 logger = logging.getLogger('finisterra')
 
+
 class MSK:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.aws_account_id = aws_account_id
         self.transform_rules = {}
@@ -32,14 +33,14 @@ class MSK:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
-        
     def get_subnet_names(self, subnet_ids):
         subnet_names = []
         for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
@@ -70,7 +71,7 @@ class MSK:
 
         # Describe the security group to get its VPC ID
         response = self.aws_clients.ec2_client.describe_security_groups(GroupIds=[
-                                                            first_sg_id])
+            first_sg_id])
 
         # Extract and return the VPC ID
         vpc_id = response["SecurityGroups"][0]["VpcId"]
@@ -93,18 +94,21 @@ class MSK:
 
         return vpc_name
 
-
     def msk(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_msk_cluster()
         if self.hcl.count_state():
-            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
-            self.hcl.refresh_state()            
+            self.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()
             self.hcl.request_tf_code()
-            self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            self.progress.update(
+                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            self.task = self.progress.add_task(
+                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_msk_cluster(self):
         resource_type = "aws_msk_cluster"
@@ -118,19 +122,22 @@ class MSK:
             total += len(page["ClusterInfoList"])
 
         if total > 0:
-            self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            self.task = self.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in page_iterator:
             for cluster_info in page["ClusterInfoList"]:
                 cluster_arn = cluster_info["ClusterArn"]
                 cluster_name = cluster_info["ClusterName"]
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
                 logger.debug(f"Processing MSK Cluster: {cluster_name}")
                 id = cluster_arn
 
                 ftstack = "msk"
                 try:
-                    tags_response = self.aws_clients.msk_client.list_tags_for_resource(ResourceArn=cluster_arn)
+                    tags_response = self.aws_clients.msk_client.list_tags_for_resource(
+                        ResourceArn=cluster_arn)
                     tags = tags_response.get('Tags', {})
                     if tags.get('ftstack', 'msk') != 'msk':
                         ftstack = "stack_"+tags.get('ftstack', 'msk')
@@ -155,19 +162,23 @@ class MSK:
                 sg_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["SecurityGroups"]
 
                 # Calling aws_security_group function with the extracted SG IDs
-                for sg in sg_ids:   
-                    self.security_group_instance.aws_security_group(sg, ftstack)
+                for sg in sg_ids:
+                    self.security_group_instance.aws_security_group(
+                        sg, ftstack)
                 vpc_id = self.get_vpc_id(sg_ids)
                 if vpc_id:
-                    self.hcl.add_additional_data(resource_type, id, "vpc_id", vpc_id)
+                    self.hcl.add_additional_data(
+                        resource_type, id, "vpc_id", vpc_id)
                     vpc_name = self.get_vpc_name(vpc_id)
                     if vpc_name:
-                        self.hcl.add_additional_data(resource_type, id, "vpc_name", vpc_name)
+                        self.hcl.add_additional_data(
+                            resource_type, id, "vpc_name", vpc_name)
                 subnet_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["ClientSubnets"]
                 if subnet_ids:
                     subnet_names = self.get_subnet_names(subnet_ids)
                     if subnet_names:
-                        self.hcl.add_additional_data(resource_type, id, "subnet_names", subnet_names)
+                        self.hcl.add_additional_data(
+                            resource_type, id, "subnet_names", subnet_names)
 
                 self.aws_msk_configuration(cluster_arn)
                 # self.aws_msk_scram_secret_association(cluster_arn)
@@ -248,7 +259,8 @@ class MSK:
 
                 id = f"{service_namespace}/{resource_id}/{scalable_dimension}/{policy_name}"
 
-                logger.debug(f"Processing AppAutoScaling Policy: {policy_name}")
+                logger.debug(
+                    f"Processing AppAutoScaling Policy: {policy_name}")
 
                 attributes = {
                     "id": id,
@@ -262,7 +274,8 @@ class MSK:
                     "aws_appautoscaling_policy", id, attributes)
 
     def aws_msk_configuration(self, cluster_arn):
-        logger.debug(f"Processing MSK Configuration for Cluster {cluster_arn}...")
+        logger.debug(
+            f"Processing MSK Configuration for Cluster {cluster_arn}...")
 
         cluster_details = self.aws_clients.msk_client.describe_cluster(
             ClusterArn=cluster_arn
