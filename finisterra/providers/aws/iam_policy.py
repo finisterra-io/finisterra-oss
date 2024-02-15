@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 import json
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 class IAM_POLICY:
@@ -36,7 +39,7 @@ class IAM_POLICY:
         
         
     def aws_iam_access_key(self):
-        print("Processing IAM Access Keys...")
+        logger.debug("Processing IAM Access Keys...")
         paginator = self.aws_clients.iam_client.get_paginator("list_users")
 
         for page in paginator.paginate():
@@ -48,7 +51,7 @@ class IAM_POLICY:
                 for access_keys_page in access_keys_paginator.paginate(UserName=user_name):
                     for access_key in access_keys_page["AccessKeyMetadata"]:
                         access_key_id = access_key["AccessKeyId"]
-                        print(
+                        logger.debug(
                             f"Processing IAM Access Key: {access_key_id} for User: {user_name}")
 
                         attributes = {
@@ -61,12 +64,12 @@ class IAM_POLICY:
                             "aws_iam_access_key", access_key_id.replace("-", "_"), attributes)
 
     def aws_iam_account_alias(self):
-        print("Processing IAM Account Aliases...")
+        logger.debug("Processing IAM Account Aliases...")
         paginator = self.aws_clients.iam_client.get_paginator("list_account_aliases")
 
         for page in paginator.paginate():
             for alias in page["AccountAliases"]:
-                print(f"Processing IAM Account Alias: {alias}")
+                logger.debug(f"Processing IAM Account Alias: {alias}")
 
                 attributes = {
                     "id": alias,
@@ -76,7 +79,7 @@ class IAM_POLICY:
                     "aws_iam_account_alias", alias.replace("-", "_"), attributes)
 
     def aws_iam_account_password_policy(self):
-        print("Processing IAM Account Password Policy...")
+        logger.debug("Processing IAM Account Password Policy...")
 
         try:
             response = self.aws_clients.iam_client.get_account_password_policy()
@@ -96,18 +99,18 @@ class IAM_POLICY:
             }
             self.hcl.process_resource(
                 "aws_iam_account_password_policy", "iam_account_password_policy", attributes)
-            print("  IAM Account Password Policy processed.")
+            logger.debug("  IAM Account Password Policy processed.")
         except self.aws_clients.iam_client.exceptions.NoSuchEntityException:
-            print("  No IAM Account Password Policy found.")
+            logger.debug("  No IAM Account Password Policy found.")
 
     def aws_iam_group(self):
-        print("Processing IAM Groups...")
+        logger.debug("Processing IAM Groups...")
         paginator = self.aws_clients.iam_client.get_paginator("list_groups")
 
         for page in paginator.paginate():
             for group in page["Groups"]:
                 group_name = group["GroupName"]
-                print(f"Processing IAM Group: {group_name}")
+                logger.debug(f"Processing IAM Group: {group_name}")
 
                 attributes = {
                     "id": group["GroupId"],
@@ -120,7 +123,7 @@ class IAM_POLICY:
                     "aws_iam_group", group_name.replace("-", "_"), attributes)
 
     def aws_iam_group_policy(self):
-        print("Processing IAM Group Policies...")
+        logger.debug("Processing IAM Group Policies...")
         paginator = self.aws_clients.iam_client.get_paginator("list_groups")
 
         for page in paginator.paginate():
@@ -131,7 +134,7 @@ class IAM_POLICY:
 
                 for policies_page in policies_paginator.paginate(GroupName=group_name):
                     for policy_name in policies_page["PolicyNames"]:
-                        print(
+                        logger.debug(
                             f"Processing IAM Group Policy: {group_name} - {policy_name}")
 
                         policy_document = self.aws_clients.iam_client.get_group_policy(
@@ -146,13 +149,13 @@ class IAM_POLICY:
                             "aws_iam_group_policy", f"{group_name}_{policy_name}", attributes)
 
     def aws_iam_instance_profile(self):
-        print("Processing IAM Instance Profiles...")
+        logger.debug("Processing IAM Instance Profiles...")
         paginator = self.aws_clients.iam_client.get_paginator("list_instance_profiles")
 
         for page in paginator.paginate():
             for instance_profile in page["InstanceProfiles"]:
                 instance_profile_name = instance_profile["InstanceProfileName"]
-                print(
+                logger.debug(
                     f"Processing IAM Instance Profile: {instance_profile_name}")
 
                 attributes = {
@@ -165,13 +168,13 @@ class IAM_POLICY:
                     "aws_iam_instance_profile", instance_profile_name, attributes)
 
     def aws_iam_openid_connect_provider(self):
-        print("Processing IAM OpenID Connect Providers...")
+        logger.debug("Processing IAM OpenID Connect Providers...")
         openid_providers = self.aws_clients.iam_client.list_open_id_connect_providers()[
             "OpenIDConnectProviderList"]
 
         for provider in openid_providers:
             provider_arn = provider["Arn"]
-            print(f"Processing IAM OpenID Connect Provider: {provider_arn}")
+            logger.debug(f"Processing IAM OpenID Connect Provider: {provider_arn}")
 
             provider_details = self.aws_clients.iam_client.get_open_id_connect_provider(
                 OpenIDConnectProviderArn=provider_arn)
@@ -185,7 +188,7 @@ class IAM_POLICY:
                 "aws_iam_openid_connect_provider", provider_arn.split(':')[-1], attributes)
 
     def aws_iam_policy(self):
-        print("Processing IAM Policies...")
+        logger.debug("Processing IAM Policies...")
         paginator = self.aws_clients.iam_client.get_paginator("list_policies")
 
         for page in paginator.paginate(Scope='Local'):
@@ -200,7 +203,7 @@ class IAM_POLICY:
                 # if policy_name != "DenyCannedPublicACL":
                 #     continue
 
-                print(f"Processing IAM Policy: {policy_name}")
+                logger.debug(f"Processing IAM Policy: {policy_name}")
 
                 attributes = {
                     "id": policy_arn,
@@ -210,87 +213,8 @@ class IAM_POLICY:
                 self.hcl.process_resource(
                     "aws_iam_policy", policy_name, attributes)
 
-    # def aws_iam_policy_attachment(self):
-    #     print("Processing IAM Policy Attachments...")
-    #     paginator = self.aws_clients.iam_client.get_paginator("list_policies")
-
-    #     for page in paginator.paginate(Scope='Local'):
-    #         for policy in page["Policies"]:
-    #             policy_arn = policy["Arn"]
-    #             policy_name = policy["PolicyName"]
-
-    #             # Process Group Attachments
-    #             group_paginator = self.aws_clients.iam_client.get_paginator(
-    #                 "list_entities_for_policy")
-    #             for group_page in group_paginator.paginate(PolicyArn=policy_arn, EntityFilter="Group"):
-    #                 for group in group_page["PolicyGroups"]:
-    #                     group_name = group["GroupName"]
-    #                     attachment_name = f"{policy_name}_to_{group_name}"
-    #                     attributes = {
-    #                         "id": attachment_name,
-    #                         "policy_arn": policy_arn,
-    #                         "groups": [group_name],
-    #                     }
-    #                     self.hcl.process_resource(
-    #                         "aws_iam_policy_attachment", attachment_name, attributes)
-
-    #             # Process Role Attachments
-    #             role_paginator = self.aws_clients.iam_client.get_paginator(
-    #                 "list_entities_for_policy")
-    #             for role_page in role_paginator.paginate(PolicyArn=policy_arn, EntityFilter="Role"):
-    #                 for role in role_page["PolicyRoles"]:
-    #                     role_name = role["RoleName"]
-    #                     attachment_name = f"{policy_name}_to_{role_name}"
-    #                     attributes = {
-    #                         "id": attachment_name,
-    #                         "policy_arn": policy_arn,
-    #                         "roles": [role_name],
-    #                     }
-    #                     self.hcl.process_resource(
-    #                         "aws_iam_policy_attachment", attachment_name, attributes)
-
-    #             # Process User Attachments
-    #             user_paginator = self.aws_clients.iam_client.get_paginator(
-    #                 "list_entities_for_policy")
-    #             for user_page in user_paginator.paginate(PolicyArn=policy_arn, EntityFilter="User"):
-    #                 for user in user_page["PolicyUsers"]:
-    #                     user_name = user["UserName"]
-    #                     attachment_name = f"{policy_name}_to_{user_name}"
-    #                     attributes = {
-    #                         "id": attachment_name,
-    #                         "policy_arn": policy_arn,
-    #                         "users": [user_name],
-    #                     }
-    #                     self.hcl.process_resource(
-    #                         "aws_iam_policy_attachment", attachment_name, attributes)
-
-    def aws_iam_role(self):
-        print("Processing IAM Roles...")
-        paginator = self.aws_clients.iam_client.get_paginator("list_roles")
-
-        for page in paginator.paginate():
-            for role in page["Roles"]:
-                role_name = role["RoleName"]
-                role_path = role["Path"]
-
-                # Ignore roles managed or created by AWS
-                if role_path.startswith("/aws-service-role/") or "AWS-QuickSetup" in role_name:
-                    continue
-
-                print(f"Processing IAM Role: {role_name}")
-
-                attributes = {
-                    "id": role_name,
-                    "name": role_name,
-                    "assume_role_policy": json.dumps(role["AssumeRolePolicyDocument"]),
-                    "description": role.get("Description"),
-                    "path": role_path,
-                }
-                self.hcl.process_resource(
-                    "aws_iam_role", role_name, attributes)
-
     def aws_iam_role_policy(self):
-        print("Processing IAM Role Policies...")
+        logger.debug("Processing IAM Role Policies...")
         paginator = self.aws_clients.iam_client.get_paginator("list_roles")
 
         for page in paginator.paginate():
@@ -303,7 +227,7 @@ class IAM_POLICY:
                     for policy_name in policy_page["PolicyNames"]:
                         policy_document = self.aws_clients.iam_client.get_role_policy(
                             RoleName=role_name, PolicyName=policy_name)
-                        print(
+                        logger.debug(
                             f"Processing IAM Role Policy: {policy_name} for Role: {role_name}")
 
                         attributes = {
@@ -316,14 +240,14 @@ class IAM_POLICY:
                             "aws_iam_role_policy", f"{role_name}_{policy_name}", attributes)
 
     def aws_iam_saml_provider(self):
-        print("Processing IAM SAML Providers...")
+        logger.debug("Processing IAM SAML Providers...")
         saml_providers = self.aws_clients.iam_client.list_saml_providers()[
             "SAMLProviderList"]
 
         for provider in saml_providers:
             provider_arn = provider["Arn"]
             provider_name = provider_arn.split("/")[-1]
-            print(f"Processing IAM SAML Provider: {provider_name}")
+            logger.debug(f"Processing IAM SAML Provider: {provider_name}")
 
             metadata_document = self.aws_clients.iam_client.get_saml_provider(
                 SAMLProviderArn=provider_arn)["SAMLMetadataDocument"]
@@ -337,14 +261,14 @@ class IAM_POLICY:
                 "aws_iam_saml_provider", provider_name, attributes)
 
     def aws_iam_server_certificate(self):
-        print("Processing IAM Server Certificates...")
+        logger.debug("Processing IAM Server Certificates...")
         paginator = self.aws_clients.iam_client.get_paginator("list_server_certificates")
 
         for page in paginator.paginate():
             for cert in page["ServerCertificateMetadataList"]:
                 cert_id = cert["ServerCertificateId"]
                 cert_name = cert["ServerCertificateName"]
-                print(f"Processing IAM Server Certificate: {cert_name}")
+                logger.debug(f"Processing IAM Server Certificate: {cert_name}")
 
                 server_cert = self.aws_clients.iam_client.get_server_certificate(
                     ServerCertificateName=cert_name)
@@ -364,14 +288,14 @@ class IAM_POLICY:
                     "aws_iam_server_certificate", cert_name, attributes)
 
     def aws_iam_service_linked_role(self):
-        print("Processing IAM Service Linked Roles...")
+        logger.debug("Processing IAM Service Linked Roles...")
         paginator = self.aws_clients.iam_client.get_paginator("list_roles")
 
         for page in paginator.paginate():
             for role in page["Roles"]:
                 if "ServiceLinkedRole" in role["Path"]:
                     role_name = role["RoleName"]
-                    print(f"Processing IAM Service Linked Role: {role_name}")
+                    logger.debug(f"Processing IAM Service Linked Role: {role_name}")
 
                     attributes = {
                         "id": role["RoleId"],
@@ -382,7 +306,7 @@ class IAM_POLICY:
                         "aws_iam_service_linked_role", role_name, attributes)
 
     def aws_iam_service_specific_credential(self):
-        print("Processing IAM Service Specific Credentials...")
+        logger.debug("Processing IAM Service Specific Credentials...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -394,7 +318,7 @@ class IAM_POLICY:
                 service_name = credential["ServiceName"]
                 credential_id = service_name+":"+user_name + \
                     ":"+credential["ServiceSpecificCredentialId"]
-                print(
+                logger.debug(
                     f"Processing IAM Service Specific Credential: {credential_id} for user: {user_name}")
 
                 attributes = {
@@ -406,7 +330,7 @@ class IAM_POLICY:
                     "aws_iam_service_specific_credential", credential_id, attributes)
 
     def aws_iam_signing_certificate(self):
-        print("Processing IAM Signing Certificates...")
+        logger.debug("Processing IAM Signing Certificates...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -416,7 +340,7 @@ class IAM_POLICY:
 
             for certificate in signing_certificates:
                 certificate_id = certificate["CertificateId"]
-                print(
+                logger.debug(
                     f"Processing IAM Signing Certificate: {certificate_id} for user: {user_name}")
 
                 attributes = {
@@ -429,12 +353,12 @@ class IAM_POLICY:
                     "aws_iam_signing_certificate", certificate_id, attributes)
 
     def aws_iam_user(self):
-        print("Processing IAM Users...")
+        logger.debug("Processing IAM Users...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
             user_name = user["UserName"]
-            print(f"Processing IAM User: {user_name}")
+            logger.debug(f"Processing IAM User: {user_name}")
 
             attributes = {
                 "id": user_name,
@@ -445,7 +369,7 @@ class IAM_POLICY:
             self.hcl.process_resource("aws_iam_user", user_name, attributes)
 
     def aws_iam_user_group_membership(self):
-        print("Processing IAM User Group Memberships...")
+        logger.debug("Processing IAM User Group Memberships...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -456,7 +380,7 @@ class IAM_POLICY:
             for group in groups_for_user:
                 group_name = group["GroupName"]
                 membership_id = f"{user_name}/{group_name}"
-                print(
+                logger.debug(
                     f"Processing IAM User Group Membership: {membership_id}")
 
                 attributes = {
@@ -468,7 +392,7 @@ class IAM_POLICY:
                     "aws_iam_user_group_membership", membership_id, attributes)
 
     def aws_iam_user_login_profile(self):
-        print("Processing IAM User Login Profiles...")
+        logger.debug("Processing IAM User Login Profiles...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -477,7 +401,7 @@ class IAM_POLICY:
             try:
                 login_profile = self.aws_clients.iam_client.get_login_profile(UserName=user_name)[
                     "LoginProfile"]
-                print(f"Processing IAM User Login Profile: {user_name}")
+                logger.debug(f"Processing IAM User Login Profile: {user_name}")
 
                 attributes = {
                     "id": user_name,
@@ -487,10 +411,10 @@ class IAM_POLICY:
                 self.hcl.process_resource(
                     "aws_iam_user_login_profile", user_name, attributes)
             except self.aws_clients.iam_client.exceptions.NoSuchEntityException:
-                print(f"  No login profile found for IAM User: {user_name}")
+                logger.debug(f"  No login profile found for IAM User: {user_name}")
 
     def aws_iam_user_policy(self):
-        print("Processing IAM User Policies...")
+        logger.debug("Processing IAM User Policies...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -500,7 +424,7 @@ class IAM_POLICY:
 
             for policy_name in user_policies:
                 policy_id = f"{user_name}:{policy_name}"
-                print(f"Processing IAM User Policy: {policy_id}")
+                logger.debug(f"Processing IAM User Policy: {policy_id}")
 
                 policy_document = self.aws_clients.iam_client.get_user_policy(
                     UserName=user_name, PolicyName=policy_name
@@ -516,7 +440,7 @@ class IAM_POLICY:
                     "aws_iam_user_policy", policy_id, attributes)
 
     def aws_iam_user_policy_attachment(self):
-        print("Processing IAM User Policy Attachments...")
+        logger.debug("Processing IAM User Policy Attachments...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -528,7 +452,7 @@ class IAM_POLICY:
                 policy_arn = policy["PolicyArn"]
                 policy_name = policy["PolicyName"]
                 attachment_id = f"{user_name}_{policy_name}"
-                print(
+                logger.debug(
                     f"Processing IAM User Policy Attachment: {attachment_id}")
 
                 attributes = {
@@ -540,7 +464,7 @@ class IAM_POLICY:
                     "aws_iam_user_policy_attachment", attachment_id, attributes)
 
     def aws_iam_user_ssh_key(self):
-        print("Processing IAM User SSH Keys...")
+        logger.debug("Processing IAM User SSH Keys...")
 
         users = self.aws_clients.iam_client.list_users()["Users"]
         for user in users:
@@ -550,7 +474,7 @@ class IAM_POLICY:
 
             for ssh_key in ssh_keys:
                 ssh_key_id = ssh_key["SSHPublicKeyId"]
-                print(f"Processing IAM User SSH Key: {ssh_key_id}")
+                logger.debug(f"Processing IAM User SSH Key: {ssh_key_id}")
 
                 attributes = {
                     "id": ssh_key_id,
@@ -563,7 +487,7 @@ class IAM_POLICY:
                     "aws_iam_user_ssh_key", ssh_key_id, attributes)
 
     def aws_iam_virtual_mfa_device(self):
-        print("Processing IAM Virtual MFA Devices...")
+        logger.debug("Processing IAM Virtual MFA Devices...")
 
         mfa_devices = self.aws_clients.iam_client.list_virtual_mfa_devices()[
             "VirtualMFADevices"]
@@ -574,7 +498,7 @@ class IAM_POLICY:
                 path = mfa_device["User"]["Path"]
             else:
                 path = "/"
-            print(f"Processing IAM Virtual MFA Device: {mfa_device_id}")
+            logger.debug(f"Processing IAM Virtual MFA Device: {mfa_device_id}")
 
             attributes = {
                 "id": mfa_device_arn,
@@ -591,7 +515,7 @@ class IAM_POLICY:
                 "aws_iam_virtual_mfa_device", mfa_device_id, attributes)
 
     def aws_iam_group_policy_attachment(self):
-        print("Processing IAM Group Policy Attachments...")
+        logger.debug("Processing IAM Group Policy Attachments...")
         paginator = self.aws_clients.iam_client.get_paginator("list_groups")
 
         for page in paginator.paginate():
@@ -603,7 +527,7 @@ class IAM_POLICY:
                 for policy_page in policy_paginator.paginate(GroupName=group_name):
                     for policy in policy_page["AttachedPolicies"]:
                         policy_arn = policy["PolicyArn"]
-                        print(
+                        logger.debug(
                             f"Processing IAM Group Policy Attachment: {group_name} - {policy_arn}")
 
                         attributes = {
@@ -615,7 +539,7 @@ class IAM_POLICY:
                             "aws_iam_group_policy_attachment", f"{group_name}_{policy_arn.split(':')[-1]}", attributes)
 
     def aws_iam_role_policy_attachment(self):
-        print("Processing IAM Role Policy Attachments...")
+        logger.debug("Processing IAM Role Policy Attachments...")
         paginator = self.aws_clients.iam_client.get_paginator("list_roles")
 
         for page in paginator.paginate():
@@ -627,7 +551,7 @@ class IAM_POLICY:
                 for policy_page in policy_paginator.paginate(RoleName=role_name):
                     for policy in policy_page["AttachedPolicies"]:
                         policy_arn = policy["PolicyArn"]
-                        print(
+                        logger.debug(
                             f"Processing IAM Role Policy Attachment: {role_name} - {policy_arn}")
 
                         attributes = {

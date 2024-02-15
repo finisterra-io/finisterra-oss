@@ -4,6 +4,9 @@ import botocore
 import re
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.iam_role import IAM_ROLE
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class ElasticBeanstalk:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -43,22 +46,23 @@ class ElasticBeanstalk:
         self.hcl.prepare_folder(os.path.join("generated"))
         # self.aws_elastic_beanstalk_application()
         self.aws_elastic_beanstalk_environment()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+
     def aws_elastic_beanstalk_application(self):
-        print("Processing Elastic Beanstalk Applications...")
+        logger.debug("Processing Elastic Beanstalk Applications...")
 
         applications = self.aws_clients.elasticbeanstalk_client.describe_applications()[
             "Applications"]
 
         for app in applications:
             app_name = app["ApplicationName"]
-            print(f"Processing Elastic Beanstalk Application: {app_name}")
+            logger.debug(f"Processing Elastic Beanstalk Application: {app_name}")
 
             attributes = {
                 "id": app_name,
@@ -69,7 +73,7 @@ class ElasticBeanstalk:
                 "aws_elastic_beanstalk_application", app_name, attributes)
 
     def aws_elastic_beanstalk_application_version(self):
-        print("Processing Elastic Beanstalk Application Versions...")
+        logger.debug("Processing Elastic Beanstalk Application Versions...")
 
         applications = self.aws_clients.elasticbeanstalk_client.describe_applications()[
             "Applications"]
@@ -82,7 +86,7 @@ class ElasticBeanstalk:
             for version in versions:
                 version_label = version["VersionLabel"]
                 version_id = f"{app_name}-{version_label}"
-                print(
+                logger.debug(
                     f"Processing Elastic Beanstalk Application Version: {version_id}")
 
                 source_bundle = version.get("SourceBundle")
@@ -105,7 +109,7 @@ class ElasticBeanstalk:
                     "aws_elastic_beanstalk_application_version", version_id, attributes)
 
     def aws_elastic_beanstalk_configuration_template(self):
-        print("Processing Elastic Beanstalk Configuration Templates...")
+        logger.debug("Processing Elastic Beanstalk Configuration Templates...")
 
         applications = self.aws_clients.elasticbeanstalk_client.describe_applications()[
             "Applications"]
@@ -137,11 +141,11 @@ class ElasticBeanstalk:
                                 }
                             templates[template_name]["options"][name] = value
                 except botocore.exceptions.ClientError as e:
-                    print(f"  Error processing KMS Grant: {e}")
+                    logger.error(f"  Error processing KMS Grant: {e}")
 
                 for template_name, template in templates.items():
                     template_id = template["id"]
-                    print(
+                    logger.debug(
                         f"Processing Elastic Beanstalk Configuration Template: {template_id}")
 
                     attributes = {
@@ -155,7 +159,7 @@ class ElasticBeanstalk:
 
     def aws_elastic_beanstalk_environment(self):
         resource_type = "aws_elastic_beanstalk_environment"
-        print("Processing Elastic Beanstalk Environments...")
+        logger.debug("Processing Elastic Beanstalk Environments...")
 
         environments = self.aws_clients.elasticbeanstalk_client.describe_environments()["Environments"]
         if len(environments) > 0:
@@ -168,7 +172,7 @@ class ElasticBeanstalk:
 
             # if env_id != "e-asi52zmcu8":
             #     continue
-            print(f"Processing Elastic Beanstalk Environment: {env_id}")
+            logger.debug(f"Processing Elastic Beanstalk Environment: {env_id}")
             id = env_id
 
             ftstack = "beanstalk"
@@ -183,7 +187,7 @@ class ElasticBeanstalk:
                             ftstack = "stack_"+tag['Value']
                         break
             except Exception as e:
-                print("Error occurred: ", e)
+                logger.error("Error occurred: ", e)
 
             attributes = {
                 "id": id,

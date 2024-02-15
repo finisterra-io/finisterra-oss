@@ -2,6 +2,9 @@ import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class LaunchTemplate:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -34,21 +37,21 @@ class LaunchTemplate:
     def launchtemplate(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_launch_template()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_launch_template(self, launch_template_id=None, ftstack=None):
-        print("Processing AWS Launch Templates...")
+        logger.debug("Processing AWS Launch Templates...")
         # If launch_template_id is not provided, process all launch templates
         if launch_template_id is None:
             all_templates_response = self.aws_clients.ec2_client.describe_launch_templates()
             if 'LaunchTemplates' not in all_templates_response or not all_templates_response['LaunchTemplates']:
-                print("No launch templates found!")
+                logger.debug("No launch templates found!")
                 return
             
             if len(all_templates_response['LaunchTemplates']) > 0:
@@ -70,13 +73,13 @@ class LaunchTemplate:
 
         # Check if we have the launch template versions in the response
         if 'LaunchTemplateVersions' not in response or not response['LaunchTemplateVersions']:
-            print(f"Launch template with ID '{launch_template_id}' not found!")
+            logger.debug(f"Launch template with ID '{launch_template_id}' not found!")
             return
 
         latest_version = response['LaunchTemplateVersions'][0]
         launch_template_data = latest_version['LaunchTemplateData']
 
-        print(f"Processing Launch Template: {latest_version['LaunchTemplateName']} with ID: {launch_template_id}")
+        logger.debug(f"Processing Launch Template: {latest_version['LaunchTemplateName']} with ID: {launch_template_id}")
 
         id = launch_template_id
 
@@ -104,8 +107,8 @@ class LaunchTemplate:
             for mapping in launch_template_data['BlockDeviceMappings']:
                 if 'Ebs' in mapping and 'KmsKeyId' in mapping['Ebs']:
                     kms_key_id = mapping['Ebs']['KmsKeyId']
-                    print(f"Found KMS Key ID for EBS: {kms_key_id}")
+                    logger.debug(f"Found KMS Key ID for EBS: {kms_key_id}")
                     self.kms_instance.aws_kms_key(kms_key_id, ftstack)
                     break  # Assuming we need the first KMS Key ID found
         else:
-            print("No Block Device Mappings with EBS found in the Launch Template.")
+            logger.debug("No Block Device Mappings with EBS found in the Launch Template.")

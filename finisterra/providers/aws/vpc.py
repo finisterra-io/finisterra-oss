@@ -3,6 +3,9 @@ from ...utils.hcl import HCL
 from ...providers.aws.iam_role import IAM_ROLE
 from ...providers.aws.s3 import S3
 from ...providers.aws.logs import Logs
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class VPC:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -69,18 +72,18 @@ class VPC:
     def vpc(self):        
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_vpc()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
         
     def aws_vpc(self):
         resource_type = "aws_vpc"
-        print("Processing VPCs...")
+        logger.debug("Processing VPCs...")
         vpcs = self.aws_clients.ec2_client.describe_vpcs()["Vpcs"]
         if len(vpcs) > 0:
             self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(vpcs))
@@ -91,7 +94,7 @@ class VPC:
                 vpc_id = vpc["VpcId"]
                 # if vpc_id != "vpc-0d4f801cafb8943b1":
                 #     continue
-                print(f"Processing VPC: {vpc_id}")
+                logger.debug(f"Processing VPC: {vpc_id}")
                 id = vpc_id
 
                 ftstack = "vpc"
@@ -106,7 +109,7 @@ class VPC:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.debug("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -136,7 +139,7 @@ class VPC:
                 self.aws_nat_gateway(vpc_id)
 
     def aws_subnet(self, vpc):
-        print("Processing Subnets...")
+        logger.debug("Processing Subnets...")
 
         vpc_id = vpc["VpcId"]
 
@@ -144,7 +147,7 @@ class VPC:
         for subnet in subnets:
             if subnet["VpcId"] == vpc_id:
                 subnet_id = subnet["SubnetId"]
-                print(f"    Processing Subnet: {subnet_id}")
+                logger.debug(f"    Processing Subnet: {subnet_id}")
                 attributes = {
                     "id": subnet_id,
                     "vpc_id": vpc_id,
@@ -164,7 +167,7 @@ class VPC:
 
 
     def aws_internet_gateway(self, vpc_id):
-        print("Processing Internet Gateways...")
+        logger.debug("Processing Internet Gateways...")
         internet_gateways = self.aws_clients.ec2_client.describe_internet_gateways()[
             "InternetGateways"]
 
@@ -173,7 +176,7 @@ class VPC:
             attached_vpc_id = igw["Attachments"][0]["VpcId"] if igw["Attachments"] else ""
 
             if attached_vpc_id == vpc_id:
-                print(f"Processing Internet Gateway: {igw_id}")
+                logger.debug(f"Processing Internet Gateway: {igw_id}")
 
                 attributes = {
                     "id": igw_id,
@@ -192,7 +195,7 @@ class VPC:
                             self.aws_route(rt["RouteTableId"], route)
 
     def aws_default_route_table(self, vpc_id):
-        print("Processing Default Route Tables...")
+        logger.debug("Processing Default Route Tables...")
         route_tables = self.aws_clients.ec2_client.describe_route_tables(
             Filters=[{"Name": "association.main", "Values": ["true"]},
                      {"Name": "vpc-id", "Values": [vpc_id]}]  # Filter for the given vpc_id
@@ -200,7 +203,7 @@ class VPC:
 
         for route_table in route_tables:
             route_table_id = route_table["RouteTableId"]
-            print(
+            logger.debug(
                 f"Processing Default Route Table: {route_table_id} for VPC: {vpc_id}")
             
             self.default_routes[route_table_id] = []
@@ -217,7 +220,7 @@ class VPC:
                 "aws_default_route_table", route_table_id.replace("-", "_"), attributes)
 
     def aws_default_network_acl(self, vpc_id):
-        print("Processing Default Network ACLs...")
+        logger.debug("Processing Default Network ACLs...")
         network_acls = self.aws_clients.ec2_client.describe_network_acls(
             Filters=[{"Name": "default", "Values": ["true"]},
                      {"Name": "vpc-id", "Values": [vpc_id]}]  # Filter for the given vpc_id
@@ -225,7 +228,7 @@ class VPC:
         for network_acl in network_acls:
             network_acl_id = network_acl["NetworkAclId"]
             default_network_acl_id = network_acl["NetworkAclId"]
-            print(
+            logger.debug(
                 f"Processing Default Network ACL: {network_acl_id} for VPC: {vpc_id}")
 
             attributes = {
@@ -237,7 +240,7 @@ class VPC:
                 "aws_default_network_acl", network_acl_id.replace("-", "_"), attributes)
 
     def aws_default_security_group(self, vpc_id):
-        print("Processing Default Security Groups...")
+        logger.debug("Processing Default Security Groups...")
         security_groups = self.aws_clients.ec2_client.describe_security_groups(
             Filters=[{"Name": "group-name", "Values": ["default"]},
                      {"Name": "vpc-id", "Values": [vpc_id]}]  # Filter for the given vpc_id
@@ -245,7 +248,7 @@ class VPC:
 
         for security_group in security_groups:
             security_group_id = security_group["GroupId"]
-            print(
+            logger.debug(
                 f"Processing Default Security Group: {security_group_id} for VPC: {vpc_id}")
 
             attributes = {
@@ -256,7 +259,7 @@ class VPC:
                 "aws_default_security_group", security_group_id.replace("-", "_"), attributes)
 
     def aws_default_subnet(self):
-        print("Processing Default Subnets...")
+        logger.debug("Processing Default Subnets...")
         subnets = self.aws_clients.ec2_client.describe_subnets(
             Filters=[{"Name": "default-for-az", "Values": ["true"]}]
         )["Subnets"]
@@ -264,7 +267,7 @@ class VPC:
         for subnet in subnets:
             vpc_id = subnet["VpcId"]
             subnet_id = subnet["SubnetId"]
-            print(
+            logger.debug(
                 f"Processing Default Subnet: {subnet_id} for VPC: {vpc_id}")
 
             attributes = {
@@ -277,14 +280,14 @@ class VPC:
                 "aws_default_subnet", subnet_id.replace("-", "_"), attributes)
 
     def aws_default_vpc(self):
-        print("Processing Default VPCs...")
+        logger.debug("Processing Default VPCs...")
         vpcs = self.aws_clients.ec2_client.describe_vpcs(
             Filters=[{"Name": "isDefault", "Values": ["true"]}]
         )["Vpcs"]
 
         for vpc in vpcs:
             vpc_id = vpc["VpcId"]
-            print(f"Processing Default VPC: {vpc_id}")
+            logger.debug(f"Processing Default VPC: {vpc_id}")
 
             attributes = {
                 "id": vpc_id,
@@ -293,14 +296,14 @@ class VPC:
                 "aws_default_vpc", vpc_id.replace("-", "_"), attributes)
 
     def aws_default_vpc_dhcp_options(self):
-        print("Processing Default VPC DHCP Options...")
+        logger.debug("Processing Default VPC DHCP Options...")
         dhcp_options = self.aws_clients.ec2_client.describe_dhcp_options(
             Filters=[{"Name": "default", "Values": ["true"]}]
         )["DhcpOptions"]
 
         for dhcp_option in dhcp_options:
             dhcp_options_id = dhcp_option["DhcpOptionsId"]
-            print(f"Processing Default VPC DHCP Options: {dhcp_options_id}")
+            logger.debug(f"Processing Default VPC DHCP Options: {dhcp_options_id}")
 
             attributes = {
                 "id": dhcp_options_id,
@@ -309,13 +312,13 @@ class VPC:
                 "aws_default_vpc_dhcp_options", dhcp_options_id.replace("-", "_"), attributes)
 
     def aws_ec2_managed_prefix_list(self):
-        print("Processing EC2 Managed Prefix Lists...")
+        logger.debug("Processing EC2 Managed Prefix Lists...")
         prefix_lists = self.aws_clients.ec2_client.describe_managed_prefix_lists()[
             "PrefixLists"]
 
         for prefix_list in prefix_lists:
             prefix_list_id = prefix_list["PrefixListId"]
-            print(f"Processing EC2 Managed Prefix List: {prefix_list_id}")
+            logger.debug(f"Processing EC2 Managed Prefix List: {prefix_list_id}")
 
             # Get the entries for the prefix list
             entries = self.aws_clients.ec2_client.get_managed_prefix_list_entries(
@@ -338,13 +341,13 @@ class VPC:
                 "aws_ec2_managed_prefix_list", prefix_list_id.replace("-", "_"), attributes)
 
     def aws_ec2_network_insights_analysis(self):
-        print("Processing EC2 Network Insights Analysis...")
+        logger.debug("Processing EC2 Network Insights Analysis...")
         network_insights_analyses = self.aws_clients.ec2_client.describe_network_insights_analyses()[
             "NetworkInsightsAnalyses"]
 
         for analysis in network_insights_analyses:
             analysis_id = analysis["NetworkInsightsAnalysisId"]
-            print(f"Processing EC2 Network Insights Analysis: {analysis_id}")
+            logger.debug(f"Processing EC2 Network Insights Analysis: {analysis_id}")
 
             attributes = {
                 "id": analysis_id,
@@ -356,13 +359,13 @@ class VPC:
                 "aws_ec2_network_insights_analysis", analysis_id.replace("-", "_"), attributes)
 
     def aws_ec2_network_insights_path(self):
-        print("Processing EC2 Network Insights Paths...")
+        logger.debug("Processing EC2 Network Insights Paths...")
         network_insights_paths = self.aws_clients.ec2_client.describe_network_insights_paths()[
             "NetworkInsightsPaths"]
 
         for path in network_insights_paths:
             path_id = path["NetworkInsightsPathId"]
-            print(f"Processing EC2 Network Insights Path: {path_id}")
+            logger.debug(f"Processing EC2 Network Insights Path: {path_id}")
 
             attributes = {
                 "id": path_id,
@@ -374,7 +377,7 @@ class VPC:
                 "aws_ec2_network_insights_path", path_id.replace("-", "_"), attributes)
 
     def aws_ec2_subnet_cidr_reservation(self):
-        print("Processing Subnet CIDR Reservations...")
+        logger.debug("Processing Subnet CIDR Reservations...")
         subnets = self.aws_clients.ec2_client.describe_subnets()["Subnets"]
 
         for subnet in subnets:
@@ -386,7 +389,7 @@ class VPC:
             ipv4_cidr_reservations = cidr_reservations_response["SubnetIpv4CidrReservations"]
             for cidr_reservation in ipv4_cidr_reservations:
                 reservation_id = cidr_reservation["CidrReservationId"]
-                print(
+                logger.debug(
                     f"Processing IPv4 Subnet CIDR Reservation: {reservation_id} in Subnet: {subnet_id}")
 
                 attributes = {
@@ -401,7 +404,7 @@ class VPC:
             ipv6_cidr_reservations = cidr_reservations_response["SubnetIpv6CidrReservations"]
             for cidr_reservation in ipv6_cidr_reservations:
                 reservation_id = cidr_reservation["CidrReservationId"]
-                print(
+                logger.debug(
                     f"Processing IPv6 Subnet CIDR Reservation: {reservation_id} in Subnet: {subnet_id}")
 
                 attributes = {
@@ -413,13 +416,13 @@ class VPC:
                     "aws_ec2_subnet_cidr_reservation", reservation_id.replace("-", "_"), attributes)
 
     def aws_ec2_traffic_mirror_filter(self):
-        print("Processing EC2 Traffic Mirror Filters...")
+        logger.debug("Processing EC2 Traffic Mirror Filters...")
         traffic_mirror_filters = self.aws_clients.ec2_client.describe_traffic_mirror_filters()[
             "TrafficMirrorFilters"]
 
         for tm_filter in traffic_mirror_filters:
             tm_filter_id = tm_filter["TrafficMirrorFilterId"]
-            print(f"Processing EC2 Traffic Mirror Filter: {tm_filter_id}")
+            logger.debug(f"Processing EC2 Traffic Mirror Filter: {tm_filter_id}")
 
             attributes = {
                 "id": tm_filter_id,
@@ -429,7 +432,7 @@ class VPC:
                 "aws_ec2_traffic_mirror_filter", tm_filter_id.replace("-", "_"), attributes)
 
     def aws_ec2_traffic_mirror_filter_rule(self):
-        print("Processing EC2 Traffic Mirror Filter Rules...")
+        logger.debug("Processing EC2 Traffic Mirror Filter Rules...")
         traffic_mirror_filters = self.aws_clients.ec2_client.describe_traffic_mirror_filters()[
             "TrafficMirrorFilters"]
 
@@ -454,7 +457,7 @@ class VPC:
 
             for rule in rules:
                 rule_id = rule["TrafficMirrorFilterRuleId"]
-                print(
+                logger.debug(
                     f"Processing EC2 Traffic Mirror Filter Rule: {rule_id} for Filter: {tm_filter_id}")
 
                 attributes = {
@@ -472,13 +475,13 @@ class VPC:
                     "aws_ec2_traffic_mirror_filter_rule", rule_id.replace("-", "_"), attributes)
 
     def aws_ec2_traffic_mirror_session(self):
-        print("Processing EC2 Traffic Mirror Sessions...")
+        logger.debug("Processing EC2 Traffic Mirror Sessions...")
         traffic_mirror_sessions = self.aws_clients.ec2_client.describe_traffic_mirror_sessions()[
             "TrafficMirrorSessions"]
 
         for tm_session in traffic_mirror_sessions:
             tm_session_id = tm_session["TrafficMirrorSessionId"]
-            print(f"Processing EC2 Traffic Mirror Session: {tm_session_id}")
+            logger.debug(f"Processing EC2 Traffic Mirror Session: {tm_session_id}")
 
             attributes = {
                 "id": tm_session_id,
@@ -493,13 +496,13 @@ class VPC:
                 "aws_ec2_traffic_mirror_session", tm_session_id.replace("-", "_"), attributes)
 
     def aws_ec2_traffic_mirror_target(self):
-        print("Processing EC2 Traffic Mirror Targets...")
+        logger.debug("Processing EC2 Traffic Mirror Targets...")
         traffic_mirror_targets = self.aws_clients.ec2_client.describe_traffic_mirror_targets()[
             "TrafficMirrorTargets"]
 
         for tm_target in traffic_mirror_targets:
             tm_target_id = tm_target["TrafficMirrorTargetId"]
-            print(f"Processing EC2 Traffic Mirror Target: {tm_target_id}")
+            logger.debug(f"Processing EC2 Traffic Mirror Target: {tm_target_id}")
 
             attributes = {
                 "id": tm_target_id,
@@ -511,13 +514,13 @@ class VPC:
                 "aws_ec2_traffic_mirror_target", tm_target_id.replace("-", "_"), attributes)
 
     def aws_egress_only_internet_gateway(self):
-        print("Processing Egress Only Internet Gateways...")
+        logger.debug("Processing Egress Only Internet Gateways...")
         egress_only_igws = self.aws_clients.ec2_client.describe_egress_only_internet_gateways()[
             "EgressOnlyInternetGateways"]
 
         for egress_only_igw in egress_only_igws:
             egress_only_igw_id = egress_only_igw["EgressOnlyInternetGatewayId"]
-            print(
+            logger.debug(
                 f"Processing Egress Only Internet Gateway: {egress_only_igw_id}")
 
             # Assuming there is only one attachment per egress-only internet gateway
@@ -531,14 +534,14 @@ class VPC:
                 "aws_egress_only_internet_gateway", egress_only_igw_id.replace("-", "_"), attributes)
 
     def aws_flow_log(self, vpc_id, ftstack):
-        print("Processing Flow Logs...")
+        logger.debug("Processing Flow Logs...")
         flow_logs = self.aws_clients.ec2_client.describe_flow_logs()["FlowLogs"]
 
         for flow_log in flow_logs:
             # Filter out flow_logs not associated with the vpc_id
             if flow_log["ResourceId"] == vpc_id:
                 flow_log_id = flow_log["FlowLogId"]
-                print(f"Processing Flow Log: {flow_log_id}")
+                logger.debug(f"Processing Flow Log: {flow_log_id}")
 
                 attributes = {
                     "id": flow_log_id,
@@ -575,7 +578,7 @@ class VPC:
     #     role_name = role_arn.split('/')[-1]
 
     #     role = self.aws_clients.iam_client.get_role(RoleName=role_name)
-    #     print(f"Processing IAM Role: {role_name}")
+    #     logger.debug(f"Processing IAM Role: {role_name}")
 
     #     attributes = {
     #         "id": role_name,
@@ -591,7 +594,7 @@ class VPC:
     #     self.aws_iam_role_policy_attachment(role_name)
 
     # def aws_iam_role_policy_attachment(self, role_name):
-    #     print(f"Processing IAM Role Policy Attachments for {role_name}...")
+    #     logger.debug(f"Processing IAM Role Policy Attachments for {role_name}...")
 
     #     policy_paginator = self.aws_clients.iam_client.get_paginator(
     #         "list_attached_role_policies")
@@ -599,7 +602,7 @@ class VPC:
     #     for policy_page in policy_paginator.paginate(RoleName=role_name):
     #         for policy in policy_page["AttachedPolicies"]:
     #             policy_arn = policy["PolicyArn"]
-    #             print(
+    #             logger.debug(
     #                 f"Processing IAM Role Policy Attachment: {role_name} - {policy_arn}")
 
     #             attributes = {
@@ -611,7 +614,7 @@ class VPC:
     #                 "aws_iam_role_policy_attachment", f"{role_name}_{policy_arn.split(':')[-1]}", attributes)
 
     # def aws_iam_policy(self, policy_arn):
-    #     print(f"Processing IAM Policy: {policy_arn}...")
+    #     logger.debug(f"Processing IAM Policy: {policy_arn}...")
 
     #     try:
     #         policy = self.aws_clients.iam_client.get_policy(PolicyArn=policy_arn)
@@ -625,16 +628,16 @@ class VPC:
     #         self.hcl.process_resource(
     #             "aws_iam_policy", policy['Policy']['PolicyName'].replace("-", "_"), attributes)
     #     except self.aws_clients.iam_client.exceptions.NoSuchEntityException:
-    #         print(f"  Policy: {policy_arn} does not exist.")
+    #         logger.debug(f"  Policy: {policy_arn} does not exist.")
 
     def aws_cloudwatch_log_group(self, log_group_name):
-        print(f"Processing CloudWatch Log Group: {log_group_name}...")
+        logger.debug(f"Processing CloudWatch Log Group: {log_group_name}...")
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
         for page in paginator.paginate(logGroupNamePrefix=log_group_name):
             for log_group in page["logGroups"]:
                 if log_group["logGroupName"] == log_group_name:
-                    print(
+                    logger.debug(
                         f"Processing CloudWatch Log Group: {log_group_name}")
 
                     attributes = {
@@ -646,10 +649,10 @@ class VPC:
                         "aws_cloudwatch_log_group", log_group_name.replace("-", "_"), attributes)
                     return
 
-        print(f"  Log group: {log_group_name} does not exist.")
+        logger.debug(f"  Log group: {log_group_name} does not exist.")
 
     def aws_internet_gateway_attachment(self):
-        print("Processing Internet Gateway Attachments...")
+        logger.debug("Processing Internet Gateway Attachments...")
         internet_gateways = self.aws_clients.ec2_client.describe_internet_gateways()[
             "InternetGateways"]
 
@@ -658,7 +661,7 @@ class VPC:
 
             for attachment in igw["Attachments"]:
                 vpc_id = attachment["VpcId"]
-                print(
+                logger.debug(
                     f"Processing Internet Gateway Attachment: {igw_id} <-> {vpc_id}")
 
                 attributes = {
@@ -670,7 +673,7 @@ class VPC:
                     "aws_internet_gateway_attachment", f"{igw_id.replace('-', '_')}-{vpc_id.replace('-', '_')}", attributes)
 
     def aws_main_route_table_association(self):
-        print("Processing Main Route Table Associations...")
+        logger.debug("Processing Main Route Table Associations...")
         route_tables = self.aws_clients.ec2_client.describe_route_tables()["RouteTables"]
 
         for rt in route_tables:
@@ -680,7 +683,7 @@ class VPC:
             for assoc in rt["Associations"]:
                 if assoc["Main"]:
                     assoc_id = assoc["RouteTableAssociationId"]
-                    print(
+                    logger.debug(
                         f"Processing Main Route Table Association: {assoc_id} for VPC: {vpc_id}")
 
                     attributes = {
@@ -692,7 +695,7 @@ class VPC:
                         "aws_main_route_table_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_nat_gateway(self, vpc_id):
-        print("Processing NAT Gateways for VPC: ", vpc_id)
+        logger.debug("Processing NAT Gateways for VPC: ", vpc_id)
 
         # Describe all subnets for the given VPC
         subnets = self.aws_clients.ec2_client.describe_subnets(
@@ -713,7 +716,7 @@ class VPC:
                 nat_gw_state = nat_gw["State"]
 
                 if nat_gw_state == "available":  # Add this condition
-                    print(f"Processing NAT Gateway: {nat_gw_id}")
+                    logger.debug(f"Processing NAT Gateway: {nat_gw_id}")
 
                     attributes = {
                         "id": nat_gw_id,
@@ -748,11 +751,11 @@ class VPC:
                             "aws_nat_gateway", nat_gw_id, "subnet_cidr", subnet_cidr)
 
     def aws_eip(self, allocation_id):
-        print("Processing Elastic IPs associated with NAT Gateway: ", allocation_id)
+        logger.debug("Processing Elastic IPs associated with NAT Gateway: ", allocation_id)
 
         eip = self.aws_clients.ec2_client.describe_addresses(
             AllocationIds=[allocation_id])["Addresses"][0]
-        print(f"Processing Elastic IP: {allocation_id}")
+        logger.debug(f"Processing Elastic IP: {allocation_id}")
 
         attributes = {
             "id": allocation_id,
@@ -790,13 +793,13 @@ class VPC:
                 "aws_eip", allocation_id, "nat_gateway_name", nat_gateway_name)
 
     def aws_network_acl(self, vpc_id):
-        print("Processing Network ACLs...")
+        logger.debug("Processing Network ACLs...")
         network_acls = self.aws_clients.ec2_client.describe_network_acls()["NetworkAcls"]
 
         for network_acl in network_acls:
             if not network_acl["IsDefault"] and network_acl["VpcId"] == vpc_id:
                 network_acl_id = network_acl["NetworkAclId"]
-                print(
+                logger.debug(
                     f"Processing Network ACL: {network_acl_id} for VPC: {vpc_id}")
 
                 attributes = {
@@ -811,7 +814,7 @@ class VPC:
                 self.aws_network_acl_rule(network_acl_id)
 
     def aws_network_acl_association(self, network_acl_id):
-        print("Processing Network ACL Associations...")
+        logger.debug("Processing Network ACL Associations...")
         network_acls = self.aws_clients.ec2_client.describe_network_acls()["NetworkAcls"]
 
         for network_acl in network_acls:
@@ -819,7 +822,7 @@ class VPC:
                 for assoc in network_acl["Associations"]:
                     assoc_id = assoc["NetworkAclAssociationId"]
                     subnet_id = assoc["SubnetId"]
-                    print(
+                    logger.debug(
                         f"Processing Network ACL Association: {assoc_id} for Subnet: {subnet_id}")
 
                     attributes = {
@@ -833,7 +836,7 @@ class VPC:
                 # call aws_network_acl_rule with network_acl_id
 
     def aws_network_acl_rule(self, network_acl_id):
-        print("Processing Network ACL Rules...")
+        logger.debug("Processing Network ACL Rules...")
         network_acls = self.aws_clients.ec2_client.describe_network_acls()["NetworkAcls"]
 
         for network_acl in network_acls:
@@ -844,7 +847,7 @@ class VPC:
                         continue
                     rule_action = entry["RuleAction"]
                     rule_egress = entry["Egress"]
-                    print(
+                    logger.debug(
                         f"Processing Network ACL Rule: {rule_number} for Network ACL: {network_acl_id}")
 
                     attributes = {
@@ -864,7 +867,7 @@ class VPC:
                         "aws_network_acl_rule", f"{network_acl_id.replace('-', '_')}-{rule_number}-{type}", attributes)
 
     def aws_network_interface(self, network_interface_id):
-        print("Processing Network Interface: ", network_interface_id)
+        logger.debug("Processing Network Interface: ", network_interface_id)
         network_interfaces = self.aws_clients.ec2_client.describe_network_interfaces(NetworkInterfaceIds=[network_interface_id])[
             "NetworkInterfaces"]
 
@@ -874,7 +877,7 @@ class VPC:
             description = network_interface.get("Description", "")
             private_ips = [private_ip["PrivateIpAddress"]
                            for private_ip in network_interface["PrivateIpAddresses"]]
-            print(f"Processing Network Interface: {eni_id}")
+            logger.debug(f"Processing Network Interface: {eni_id}")
 
             attributes = {
                 "id": eni_id,
@@ -887,7 +890,7 @@ class VPC:
                 "aws_network_interface", eni_id.replace("-", "_"), attributes)
 
     def aws_network_interface_attachment(self, network_interfaces):
-        print("Processing Network Interface Attachments...")
+        logger.debug("Processing Network Interface Attachments...")
 
         for eni in network_interfaces:
             eni_id = eni["NetworkInterfaceId"]
@@ -896,7 +899,7 @@ class VPC:
                 attachment_id = attachment["AttachmentId"]
                 instance_id = attachment["InstanceId"]
                 device_index = attachment["DeviceIndex"]
-                print(
+                logger.debug(
                     f"Processing Network Interface Attachment: {attachment_id} for ENI: {eni_id}")
 
                 attributes = {
@@ -909,14 +912,14 @@ class VPC:
                     "aws_network_interface_attachment", attachment_id.replace("-", "_"), attributes)
 
     def aws_network_interface_sg_attachment(self, network_interfaces):
-        print("Processing Network Interface Security Group Attachments...")
+        logger.debug("Processing Network Interface Security Group Attachments...")
 
         for eni in network_interfaces:
             eni_id = eni["NetworkInterfaceId"]
 
             for sg in eni["Groups"]:
                 sg_id = sg["GroupId"]
-                print(
+                logger.debug(
                     f"Processing Security Group Attachment for ENI: {eni_id} and SG: {sg_id}")
 
                 attributes = {
@@ -928,7 +931,7 @@ class VPC:
                                           f"{eni_id.replace('-', '_')}-{sg_id.replace('-', '_')}", attributes)
 
     def aws_route_table(self, vpc_id):
-        print("Processing Route Tables...")
+        logger.debug("Processing Route Tables...")
         route_tables = self.aws_clients.ec2_client.describe_route_tables()["RouteTables"]
 
         # Sort the route_tables list based on CreationTime
@@ -942,7 +945,7 @@ class VPC:
                     continue
 
                 route_table_id = rt["RouteTableId"]
-                print(
+                logger.debug(
                     f"Processing Route Table: {route_table_id} for VPC: {vpc_id}")
 
                 attributes = {
@@ -976,7 +979,7 @@ class VPC:
         if route.get("GatewayId", "") == "local":
             return
 
-        print(
+        logger.debug(
             f"Processing Route in Route Table: {route_table_id} for destination: {destination}")
         
         id = f"{route_table_id.replace('-', '_')}-{destination.replace('/', '-')}"
@@ -1022,7 +1025,7 @@ class VPC:
             
 
     def aws_route_table_association(self, subnet_id):
-        print("Processing Route Table Associations...")
+        logger.debug("Processing Route Table Associations...")
         route_tables = self.aws_clients.ec2_client.describe_route_tables()["RouteTables"]
 
         for rt in route_tables:
@@ -1036,7 +1039,7 @@ class VPC:
                 # check the subnet_id and ensure this isn't a main association
                 if not assoc.get("Main") and assoc["SubnetId"] == subnet_id:
                     assoc_id = assoc["RouteTableAssociationId"]
-                    print(
+                    logger.debug(
                         f"Processing Route Table Association: {assoc_id} for Route Table: {route_table_id}")
 
                     attributes = {
@@ -1064,7 +1067,7 @@ class VPC:
                             "aws_route_table_association", assoc_id, "subnet_cidr", subnet_cidr)
 
     def aws_security_group(self):
-        print("Processing Security Groups...")
+        logger.debug("Processing Security Groups...")
         security_groups = self.aws_clients.ec2_client.describe_security_groups()[
             "SecurityGroups"]
 
@@ -1075,11 +1078,11 @@ class VPC:
 
             # Skip Elastic Beanstalk security groups
             if any(tag['Key'].startswith("elasticbeanstalk:") for tag in tags):
-                print(
+                logger.debug(
                     f"  Skipping Elastic Beanstalk Security Group: {sg_id} for VPC: {vpc_id}")
                 continue
 
-            print(f"Processing Security Group: {sg_id} for VPC: {vpc_id}")
+            logger.debug(f"Processing Security Group: {sg_id} for VPC: {vpc_id}")
 
             attributes = {
                 "id": sg_id,
@@ -1091,11 +1094,11 @@ class VPC:
                 "aws_security_group", sg_id.replace("-", "_"), attributes)
 
     def aws_vpc_dhcp_options(self, dhcp_options_id):
-        print("Processing VPC DHCP Options...")
+        logger.debug("Processing VPC DHCP Options...")
         dhcp_options = self.aws_clients.ec2_client.describe_dhcp_options(
             DhcpOptionsIds=[dhcp_options_id])["DhcpOptions"][0]
 
-        print(f"Processing VPC DHCP Options: {dhcp_options_id}")
+        logger.debug(f"Processing VPC DHCP Options: {dhcp_options_id}")
 
         attributes = {
             "id": dhcp_options_id,
@@ -1110,11 +1113,11 @@ class VPC:
             "aws_vpc_dhcp_options", dhcp_options_id.replace("-", "_"), attributes)
 
     def aws_vpc_dhcp_options_association(self, vpc_id):
-        print("Processing VPC DHCP Options Associations...")
+        logger.debug("Processing VPC DHCP Options Associations...")
         vpc = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])["Vpcs"][0]
         dhcp_options_id = vpc["DhcpOptionsId"]
         if dhcp_options_id != "default":
-            print(
+            logger.debug(
                 f"Processing VPC DHCP Options Association: {dhcp_options_id} for VPC: {vpc_id}")
 
             assoc_id = f"{dhcp_options_id}-{vpc_id}"
@@ -1139,7 +1142,7 @@ class VPC:
             self.aws_vpc_dhcp_options(dhcp_options_id)
 
     def aws_vpc_endpoint(self):
-        print("Processing VPC Endpoints...")
+        logger.debug("Processing VPC Endpoints...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -1147,7 +1150,7 @@ class VPC:
             endpoint_id = endpoint["VpcEndpointId"]
             vpc_id = endpoint["VpcId"]
             service_name = endpoint["ServiceName"]
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint: {endpoint_id} for VPC: {vpc_id}")
             attributes = {
                 "id": endpoint_id,
@@ -1162,7 +1165,7 @@ class VPC:
                 "aws_vpc_endpoint", endpoint_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_connection_accepter(self):
-        print("Processing VPC Endpoint Connection Accepters...")
+        logger.debug("Processing VPC Endpoint Connection Accepters...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -1171,7 +1174,7 @@ class VPC:
                 endpoint_id = endpoint["VpcEndpointId"]
                 vpc_id = endpoint["VpcId"]
                 service_name = endpoint["ServiceName"]
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Connection Accepter: {endpoint_id} for VPC: {vpc_id}")
 
                 accepter_id = f"{vpc_id}-{endpoint_id}"
@@ -1185,7 +1188,7 @@ class VPC:
                     "aws_vpc_endpoint_connection_accepter", accepter_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_connection_notification(self):
-        print("Processing VPC Endpoint Connection Notifications...")
+        logger.debug("Processing VPC Endpoint Connection Notifications...")
         connection_notifications = self.aws_clients.ec2_client.describe_vpc_endpoint_connection_notifications()[
             "ConnectionNotificationSet"]
 
@@ -1194,7 +1197,7 @@ class VPC:
             vpc_endpoint_id = notification["VpcEndpointId"]
             service_id = notification["ServiceId"]
             sns_topic_arn = notification["ConnectionNotificationArn"]
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint Connection Notification: {notification_id}")
 
             attributes = {
@@ -1209,7 +1212,7 @@ class VPC:
                 "aws_vpc_endpoint_connection_notification", notification_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_policy(self):
-        print("Processing VPC Endpoint Policies...")
+        logger.debug("Processing VPC Endpoint Policies...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -1218,7 +1221,7 @@ class VPC:
             vpc_id = endpoint["VpcId"]
             service_name = endpoint["ServiceName"]
             policy_document = endpoint["PolicyDocument"]
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint Policy: {endpoint_id} for VPC: {vpc_id}")
 
             attributes = {
@@ -1230,7 +1233,7 @@ class VPC:
                 "aws_vpc_endpoint_policy", endpoint_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_route_table_association(self):
-        print("Processing VPC Endpoint Route Table Associations...")
+        logger.debug("Processing VPC Endpoint Route Table Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -1239,7 +1242,7 @@ class VPC:
             route_table_ids = endpoint.get("RouteTableIds", [])
 
             for route_table_id in route_table_ids:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Route Table Association: {endpoint_id} - {route_table_id}")
 
                 assoc_id = f"{endpoint_id}-{route_table_id}"
@@ -1252,7 +1255,7 @@ class VPC:
                     "aws_vpc_endpoint_route_table_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_security_group_association(self):
-        print("Processing VPC Endpoint Security Group Associations...")
+        logger.debug("Processing VPC Endpoint Security Group Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -1262,7 +1265,7 @@ class VPC:
                                   for group in endpoint.get("Groups", [])]
 
             for security_group_id in security_group_ids:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Security Group Association: {endpoint_id} - {security_group_id}")
 
                 assoc_id = f"{endpoint_id}-{security_group_id}"
@@ -1275,7 +1278,7 @@ class VPC:
                     "aws_vpc_endpoint_security_group_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_service(self):
-        print("Processing VPC Endpoint Services...")
+        logger.debug("Processing VPC Endpoint Services...")
         vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_services()[
             "ServiceDetails"]
 
@@ -1287,7 +1290,7 @@ class VPC:
             if service_name.startswith('com.amazonaws') or service_name.startswith('aws.'):
                 continue
 
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint Service: {service_id} {service_name}")
 
             attributes = {
@@ -1302,7 +1305,7 @@ class VPC:
                 "aws_vpc_endpoint_service", service_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_service_allowed_principal(self):
-        print("Processing VPC Endpoint Service Allowed Principals...")
+        logger.debug("Processing VPC Endpoint Service Allowed Principals...")
         vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_service_configurations()[
             "ServiceConfigurations"]
 
@@ -1311,7 +1314,7 @@ class VPC:
             allowed_principals = service.get("AllowedPrincipals", [])
 
             for principal in allowed_principals:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Service Allowed Principal: {principal} for Service: {service_id}")
 
                 assoc_id = f"{service_id}-{principal}"
@@ -1324,7 +1327,7 @@ class VPC:
                     "aws_vpc_endpoint_service_allowed_principal", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_subnet_association(self):
-        print("Processing VPC Endpoint Subnet Associations...")
+        logger.debug("Processing VPC Endpoint Subnet Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -1333,7 +1336,7 @@ class VPC:
             subnet_ids = endpoint["SubnetIds"]
 
             for subnet_id in subnet_ids:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Subnet Association: {endpoint_id} - {subnet_id}")
 
                 assoc_id = f"{endpoint_id}-{subnet_id}"
@@ -1346,7 +1349,7 @@ class VPC:
                     "aws_vpc_endpoint_subnet_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_ipv4_cidr_block_association(self):
-        print("Processing VPC IPv4 CIDR Block Associations...")
+        logger.debug("Processing VPC IPv4 CIDR Block Associations...")
         vpcs = self.aws_clients.ec2_client.describe_vpcs()["Vpcs"]
 
         for vpc in vpcs:
@@ -1355,7 +1358,7 @@ class VPC:
 
             for cidr_block in cidr_blocks:
                 assoc_id = cidr_block["AssociationId"]
-                print(
+                logger.debug(
                     f"Processing VPC IPv4 CIDR Block Association: {assoc_id} for VPC: {vpc_id}")
 
                 attributes = {
@@ -1367,7 +1370,7 @@ class VPC:
                     "aws_vpc_ipv4_cidr_block_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_ipv6_cidr_block_association(self):
-        print("Processing VPC IPv6 CIDR Block Associations...")
+        logger.debug("Processing VPC IPv6 CIDR Block Associations...")
         vpcs = self.aws_clients.ec2_client.describe_vpcs()["Vpcs"]
 
         for vpc in vpcs:
@@ -1376,7 +1379,7 @@ class VPC:
 
             for ipv6_cidr_block in ipv6_cidr_blocks:
                 assoc_id = ipv6_cidr_block["AssociationId"]
-                print(
+                logger.debug(
                     f"Processing VPC IPv6 CIDR Block Association: {assoc_id} for VPC: {vpc_id}")
 
                 attributes = {
@@ -1392,13 +1395,13 @@ class VPC:
                     "aws_vpc_ipv6_cidr_block_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_peering_connection(self):
-        print("Processing VPC Peering Connections...")
+        logger.debug("Processing VPC Peering Connections...")
         vpc_peering_connections = self.aws_clients.ec2_client.describe_vpc_peering_connections()[
             "VpcPeeringConnections"]
 
         for peering_connection in vpc_peering_connections:
             peering_connection_id = peering_connection["VpcPeeringConnectionId"]
-            print(
+            logger.debug(
                 f"Processing VPC Peering Connection: {peering_connection_id}")
 
             attributes = {
@@ -1412,7 +1415,7 @@ class VPC:
                 "aws_vpc_peering_connection", peering_connection_id.replace("-", "_"), attributes)
 
     def aws_vpc_peering_connection_accepter(self):
-        print("Processing VPC Peering Connection Accepters...")
+        logger.debug("Processing VPC Peering Connection Accepters...")
         vpc_peering_connections = self.aws_clients.ec2_client.describe_vpc_peering_connections()[
             "VpcPeeringConnections"]
 
@@ -1421,7 +1424,7 @@ class VPC:
             if peering_connection["Status"]["Code"] != "active":
                 continue
 
-            print(
+            logger.debug(
                 f"Processing VPC Peering Connection Accepter: {peering_connection_id}")
 
             attributes = {
@@ -1433,13 +1436,13 @@ class VPC:
                 "aws_vpc_peering_connection_accepter", peering_connection_id.replace("-", "_"), attributes)
 
     def aws_vpc_peering_connection_options(self):
-        print("Processing VPC Peering Connection Options...")
+        logger.debug("Processing VPC Peering Connection Options...")
         vpc_peering_connections = self.aws_clients.ec2_client.describe_vpc_peering_connections()[
             "VpcPeeringConnections"]
 
         for peering_connection in vpc_peering_connections:
             peering_connection_id = peering_connection["VpcPeeringConnectionId"]
-            print(
+            logger.debug(
                 f"Processing VPC Peering Connection Options: {peering_connection_id}")
             attributes = {
                 "id": peering_connection_id,
@@ -1449,7 +1452,7 @@ class VPC:
                 "aws_vpc_peering_connection_options", peering_connection_id.replace("-", "_"), attributes)
 
     def aws_vpc_security_group_egress_rule(self):
-        print("Processing VPC Security Group Egress Rules...")
+        logger.debug("Processing VPC Security Group Egress Rules...")
         security_group_rules = self.aws_clients.ec2_client.describe_security_group_rules()[
             "SecurityGroupRules"]
 
@@ -1464,7 +1467,7 @@ class VPC:
                     "aws_vpc_security_group_egress_rule", rule_id.replace("-", "_"), attributes)
 
     def aws_vpc_security_group_ingress_rule(self):
-        print("Processing VPC Security Group Ingress Rules...")
+        logger.debug("Processing VPC Security Group Ingress Rules...")
         security_group_rules = self.aws_clients.ec2_client.describe_security_group_rules()[
             "SecurityGroupRules"]
 

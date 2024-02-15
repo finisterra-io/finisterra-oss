@@ -5,6 +5,9 @@ from ...providers.aws.logs import Logs
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
 import botocore
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class RDS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -66,7 +69,7 @@ class RDS:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -80,7 +83,7 @@ class RDS:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
 
@@ -89,7 +92,7 @@ class RDS:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -97,7 +100,7 @@ class RDS:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
         
@@ -110,7 +113,7 @@ class RDS:
             response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
-                print(f"No subnet information found for Subnet ID: {subnet_id}")
+                logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
                 return None
             vpc_id = response['Subnets'][0].get('VpcId', None)
 
@@ -123,17 +126,17 @@ class RDS:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_db_instance()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
     def aws_db_instance(self):
         resource_type = "aws_db_instance"
-        print("Processing DB Instances...")
+        logger.debug("Processing DB Instances...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
         total = 0
@@ -152,7 +155,7 @@ class RDS:
 
                 if instance.get("Engine", None) not in ["mysql", "postgres"]:
                     continue
-                print(f"Processing DB Instance: {instance_id}")
+                logger.debug(f"Processing DB Instance: {instance_id}")
 
                 # if instance_id != "piwik-analytics":
                 #     continue
@@ -169,7 +172,7 @@ class RDS:
                                 ftstack = "stack_" + tag['Value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -236,7 +239,7 @@ class RDS:
 
     def aws_db_option_group(self, option_group_name, ftstack):
         resource_type = "aws_db_option_group"
-        print(f"Processing DB Option Group {option_group_name}")
+        logger.debug(f"Processing DB Option Group {option_group_name}")
         if option_group_name.startswith("default"):
             return
 
@@ -247,7 +250,7 @@ class RDS:
                 if option_group["OptionGroupName"] != option_group_name:
                     continue
 
-                print(f"Processing DB Option Group: {option_group_name}")
+                logger.debug(f"Processing DB Option Group: {option_group_name}")
                 id = option_group_name
                 attributes = {
                     "id": id,
@@ -262,7 +265,7 @@ class RDS:
 
     def aws_db_parameter_group(self, parameter_group_name, ftstack):
         resource_type = "aws_db_parameter_group"
-        print(f"Processing DB Parameter Group {parameter_group_name}")
+        logger.debug(f"Processing DB Parameter Group {parameter_group_name}")
         if parameter_group_name.startswith("default"):
             return
 
@@ -274,7 +277,7 @@ class RDS:
                 if parameter_group["DBParameterGroupName"] != parameter_group_name:
                     continue
 
-                print(
+                logger.debug(
                     f"Processing DB Parameter Group: {parameter_group_name}")
                 id = parameter_group_name
                 attributes = {
@@ -289,7 +292,7 @@ class RDS:
 
     def aws_db_subnet_group(self, db_subnet_group_name, ftstack):
         resource_type = "aws_db_subnet_group"
-        print(f"Processing DB Subnet Groups {db_subnet_group_name}")
+        logger.debug(f"Processing DB Subnet Groups {db_subnet_group_name}")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_subnet_groups")
         for page in paginator.paginate():
@@ -316,7 +319,7 @@ class RDS:
                 if db_subnet_group_name.startswith("default"):
                     return
                 
-                print(f"Processing DB Subnet Group: {db_subnet_group_name}")
+                logger.debug(f"Processing DB Subnet Group: {db_subnet_group_name}")
                 attributes = {
                     "id": id,
                 }
@@ -326,7 +329,7 @@ class RDS:
 
     def aws_db_instance_automated_backups_replication(self, source_instance_arn, ftstack):
         resource_type = "aws_db_instance_automated_backups_replication"
-        print(
+        logger.debug(
             f"Processing DB Instance Automated Backups Replication {source_instance_arn}")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
@@ -346,7 +349,7 @@ class RDS:
 
                             source_instance_id = instance["DBInstanceIdentifier"]
                             for replica_id in instance["ReadReplicaDBInstanceIdentifiers"]:
-                                print(
+                                logger.debug(
                                     f"Processing DB Instance Automated Backups Replication for {source_instance_id} to {replica_id}")
                                 id=automated_backup_arn
                                 attributes = {

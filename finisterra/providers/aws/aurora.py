@@ -5,6 +5,9 @@ from ...providers.aws.logs import Logs
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
 import botocore
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class Aurora:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -70,7 +73,7 @@ class Aurora:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -84,7 +87,7 @@ class Aurora:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
 
@@ -93,7 +96,7 @@ class Aurora:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -101,7 +104,7 @@ class Aurora:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
         
@@ -114,7 +117,7 @@ class Aurora:
             response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
-                print(f"No subnet information found for Subnet ID: {subnet_id}")
+                logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
                 return None
             vpc_id = response['Subnets'][0].get('VpcId', None)
 
@@ -127,16 +130,16 @@ class Aurora:
     def aurora(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_rds_cluster()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
     def aws_db_cluster_snapshot(self):
-        print("Processing DB Cluster Snapshots...")
+        logger.debug(f"Processing DB Cluster Snapshots...")
 
         paginator = self.aws_clients.rds_client.get_paginator(
             "describe_db_cluster_snapshots")
@@ -144,7 +147,7 @@ class Aurora:
             for snapshot in page.get("DBClusterSnapshots", []):
                 if snapshot["Engine"] in ["mysql", "postgres"]:
                     snapshot_id = snapshot["DBClusterSnapshotIdentifier"]
-                    print(f"Processing DB Cluster Snapshot: {snapshot_id}")
+                    logger.debug(f"Processing DB Cluster Snapshot: {snapshot_id}")
 
                     attributes = {
                         "id": snapshot_id,
@@ -153,7 +156,7 @@ class Aurora:
                         "aws_db_cluster_snapshot", snapshot_id.replace("-", "_"), attributes)
 
     def aws_appautoscaling_target(self, cluster_arn):
-        print(
+        logger.debug(
             f"Processing AppAutoScaling Targets for Aurora Cluster ARN {cluster_arn}...")
 
         paginator = self.aws_clients.appautoscaling_client.get_paginator(
@@ -166,7 +169,7 @@ class Aurora:
         for page in page_iterator:
             for target in page["ScalableTargets"]:
                 target_id = target["ResourceId"]
-                print(f"Processing AppAutoScaling Target: {target_id}")
+                logger.debug(f"Processing AppAutoScaling Target: {target_id}")
 
                 attributes = {
                     "id": target_id,
@@ -179,7 +182,7 @@ class Aurora:
                     "aws_appautoscaling_target", target_id, attributes)
 
     def aws_appautoscaling_policy(self, cluster_arn):
-        print(
+        logger.debug(
             f"Processing AppAutoScaling Policies for Aurora Cluster ARN {cluster_arn}...")
 
         paginator = self.aws_clients.appautoscaling_client.get_paginator(
@@ -192,7 +195,7 @@ class Aurora:
         for page in page_iterator:
             for policy in page["ScalingPolicies"]:
                 policy_name = policy["PolicyName"]
-                print(f"Processing AppAutoScaling Policy: {policy_name}")
+                logger.debug(f"Processing AppAutoScaling Policy: {policy_name}")
 
                 attributes = {
                     "id": policy_name,
@@ -205,14 +208,14 @@ class Aurora:
                     "aws_appautoscaling_policy", policy_name, attributes)
 
     def aws_db_event_subscription(self):
-        print("Processing DB Event Subscriptions...")
+        logger.debug(f"Processing DB Event Subscriptions...")
 
         paginator = self.aws_clients.rds_client.get_paginator(
             "describe_event_subscriptions")
         for page in paginator.paginate():
             for subscription in page.get("EventSubscriptionsList", []):
                 subscription_id = subscription["CustSubscriptionId"]
-                print(f"Processing DB Event Subscription: {subscription_id}")
+                logger.debug(f"Processing DB Event Subscription: {subscription_id}")
 
                 attributes = {
                     "id": subscription_id,
@@ -226,7 +229,7 @@ class Aurora:
                     "aws_db_event_subscription", subscription_id.replace("-", "_"), attributes)
 
     def aws_db_instance(self):
-        print("Processing DB Instances...")
+        logger.debug(f"Processing DB Instances...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
         for page in paginator.paginate():
@@ -234,7 +237,7 @@ class Aurora:
                 if instance.get("Engine", None) not in ["mysql", "postgres"]:
                     continue
                 instance_id = instance["DBInstanceIdentifier"]
-                print(f"Processing DB Instance: {instance_id}")
+                logger.debug(f"Processing DB Instance: {instance_id}")
 
                 attributes = {
                     "id": instance_id,
@@ -255,7 +258,7 @@ class Aurora:
                     "aws_db_instance", instance_id.replace("-", "_"), attributes)
 
     def aws_db_instance_automated_backups_replication(self):
-        print("Processing DB Instance Automated Backups Replications...")
+        logger.debug(f"Processing DB Instance Automated Backups Replications...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
         for page in paginator.paginate():
@@ -265,7 +268,7 @@ class Aurora:
                         continue
                     source_instance_id = instance["DBInstanceIdentifier"]
                     for replica_id in instance["ReadReplicaDBInstanceIdentifiers"]:
-                        print(
+                        logger.debug(
                             f"Processing DB Instance Automated Backups Replication for {source_instance_id} to {replica_id}")
                         attributes = {
                             "id": f"{source_instance_id}-{replica_id}",
@@ -276,7 +279,7 @@ class Aurora:
                                                   f"{source_instance_id}-{replica_id}".replace("-", "_"), attributes)
 
     def aws_db_instance_role_association(self):
-        print("Processing DB Instance Role Associations...")
+        logger.debug(f"Processing DB Instance Role Associations...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
         for page in paginator.paginate():
@@ -287,7 +290,7 @@ class Aurora:
                 associated_roles = instance.get("AssociatedRoles", [])
                 for role in associated_roles:
                     role_arn = role["RoleArn"]
-                    print(
+                    logger.debug(
                         f"Processing DB Instance Role Association for {instance_id} with Role ARN {role_arn}")
                     attributes = {
                         "id": f"{instance_id}-{role_arn}",
@@ -299,13 +302,13 @@ class Aurora:
                         "aws_db_instance_role_association", f"{instance_id}-{role_arn}".replace("-", "_"), attributes)
 
     def aws_db_option_group(self):
-        print("Processing DB Option Groups...")
+        logger.debug(f"Processing DB Option Groups...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_option_groups")
         for page in paginator.paginate():
             for option_group in page.get("OptionGroupsList", []):
                 option_group_name = option_group["OptionGroupName"]
-                print(f"Processing DB Option Group: {option_group_name}")
+                logger.debug(f"Processing DB Option Group: {option_group_name}")
                 attributes = {
                     "id": option_group_name,
                     "name": option_group_name,
@@ -318,7 +321,7 @@ class Aurora:
 
     def aws_db_parameter_group(self, parameter_group_name, ftstack):
         resource_type = "aws_db_parameter_group"
-        print(f"Processing DB Parameter Group {parameter_group_name}")
+        logger.debug(f"Processing DB Parameter Group {parameter_group_name}")
         if parameter_group_name.startswith("default"):
             return
 
@@ -330,7 +333,7 @@ class Aurora:
                 if parameter_group["DBParameterGroupName"] != parameter_group_name:
                     continue
 
-                print(
+                logger.debug(
                     f"Processing DB Parameter Group: {parameter_group_name}")
                 id = parameter_group_name
                 attributes = {
@@ -344,13 +347,13 @@ class Aurora:
                 self.hcl.add_stack(resource_type, id, ftstack)
 
     def aws_db_proxy(self):
-        print("Processing DB Proxies...")
+        logger.debug(f"Processing DB Proxies...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_proxies")
         for page in paginator.paginate():
             for db_proxy in page.get("DBProxies", []):
                 db_proxy_name = db_proxy["DBProxyName"]
-                print(f"Processing DB Proxy: {db_proxy_name}")
+                logger.debug(f"Processing DB Proxy: {db_proxy_name}")
                 attributes = {
                     "id": db_proxy["DBProxyArn"],
                     "name": db_proxy_name,
@@ -362,7 +365,7 @@ class Aurora:
                     "aws_db_proxy", db_proxy_name.replace("-", "_"), attributes)
 
     def aws_db_proxy_default_target_group(self):
-        print("Processing DB Proxy Default Target Groups...")
+        logger.debug(f"Processing DB Proxy Default Target Groups...")
 
         # Get all DB Proxies
         db_proxies_response = self.aws_clients.rds_client.describe_db_proxies()
@@ -378,7 +381,7 @@ class Aurora:
 
             for target_group in target_groups:
                 target_group_name = target_group.get("DBProxyName")
-                print(
+                logger.debug(
                     f"Processing DB Proxy Default Target Group: {target_group_name}")
                 attributes = {
                     "id": target_group.get("TargetGroupArn"),
@@ -389,14 +392,14 @@ class Aurora:
                     "aws_db_proxy_default_target_group", target_group_name.replace("-", "_"), attributes)
 
     def aws_db_proxy_endpoint(self):
-        print("Processing DB Proxy Endpoints...")
+        logger.debug(f"Processing DB Proxy Endpoints...")
 
         paginator = self.aws_clients.rds_client.get_paginator(
             "describe_db_proxy_endpoints")
         for page in paginator.paginate():
             for db_proxy_endpoint in page.get("DBProxyEndpoints", []):
                 db_proxy_endpoint_name = db_proxy_endpoint["DBProxyEndpointName"]
-                print(
+                logger.debug(
                     f"Processing DB Proxy Endpoint: {db_proxy_endpoint_name}")
                 attributes = {
                     "id": db_proxy_endpoint["DBProxyEndpointArn"],
@@ -408,7 +411,7 @@ class Aurora:
                     "aws_db_proxy_endpoint", db_proxy_endpoint_name.replace("-", "_"), attributes)
 
     def aws_db_proxy_target(self):
-        print("Processing DB Proxy Targets...")
+        logger.debug(f"Processing DB Proxy Targets...")
 
         # Get all DB Proxies
         db_proxies_response = self.aws_clients.rds_client.describe_db_proxies()
@@ -424,7 +427,7 @@ class Aurora:
             for page in paginator.paginate(DBProxyName=db_proxy_name):
                 for db_proxy_target in page.get("Targets", []):
                     target_arn = db_proxy_target["TargetArn"]
-                    print(f"Processing DB Proxy Target: {target_arn}")
+                    logger.debug(f"Processing DB Proxy Target: {target_arn}")
                     attributes = {
                         "id": target_arn,
                         "db_proxy_name": db_proxy_target["DBProxyName"],
@@ -435,50 +438,29 @@ class Aurora:
                     self.hcl.process_resource("aws_db_proxy_target", target_arn.replace(
                         ":", "_").replace("-", "_"), attributes)
 
-    # def aws_db_security_group(self):
-    #     print("Processing DB Security Groups...")
-
-    #     paginator = self.aws_clients.rds_client.get_paginator(
-    #         "describe_db_security_groups")
-    #     for page in paginator.paginate():
-    #         for db_security_group in page.get("DBSecurityGroups", []):
-    #             db_security_group_name = db_security_group["DBSecurityGroupName"]
-    #             print(
-    #                 f"Processing DB Security Group: {db_security_group_name}")
-    #             attributes = {
-    #                 "id": db_security_group["DBSecurityGroupArn"],
-    #                 "name": db_security_group_name,
-    #                 "description": db_security_group["DBSecurityGroupDescription"],
-    #             }
-    #             self.hcl.process_resource(
-    #                 "aws_db_security_group", db_security_group_name.replace("-", "_"), attributes)
-
     def aws_db_snapshot(self):
-        print("Processing DB Snapshots...")
+        logger.debug(f"Processing DB Snapshots...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_snapshots")
         for page in paginator.paginate():
             for db_snapshot in page.get("DBSnapshots", []):
                 db_snapshot_id = db_snapshot["DBSnapshotIdentifier"]
-                print(f"Processing DB Snapshot: {db_snapshot_id}")
+                logger.debug(f"Processing DB Snapshot: {db_snapshot_id}")
                 attributes = {
                     "id": db_snapshot_id,
-                    # "snapshot_identifier": db_snapshot_id,
-                    # "db_instance_identifier": db_snapshot["DBInstanceIdentifier"],
-                    # "snapshot_type": db_snapshot["SnapshotType"],
                 }
                 self.hcl.process_resource(
                     "aws_db_snapshot", db_snapshot_id.replace("-", "_"), attributes)
 
     def aws_db_snapshot_copy(self):
-        print("Processing DB Snapshot Copies...")
+        logger.debug(f"Processing DB Snapshot Copies...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_snapshots")
         for page in paginator.paginate():
             for db_snapshot in page.get("DBSnapshots", []):
                 if "SourceRegion" in db_snapshot:
                     db_snapshot_id = db_snapshot["DBSnapshotIdentifier"]
-                    print(f"Processing DB Snapshot Copy: {db_snapshot_id}")
+                    logger.debug(f"Processing DB Snapshot Copy: {db_snapshot_id}")
                     attributes = {
                         "id": db_snapshot["DBSnapshotArn"],
                         "snapshot_identifier": db_snapshot_id,
@@ -490,7 +472,7 @@ class Aurora:
 
     def aws_db_subnet_group(self, db_subnet_group_name, ftstack):
         resource_type = "aws_db_subnet_group"
-        print(f"Processing DB Subnet Groups {db_subnet_group_name}")
+        logger.debug(f"Processing DB Subnet Groups {db_subnet_group_name}")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_subnet_groups")
         for page in paginator.paginate():
@@ -517,7 +499,7 @@ class Aurora:
                 if db_subnet_group_name.startswith("default"):
                     return
                 
-                print(f"Processing DB Subnet Group: {db_subnet_group_name}")
+                logger.debug(f"Processing DB Subnet Group: {db_subnet_group_name}")
                 attributes = {
                     "id": id,
                 }
@@ -527,7 +509,7 @@ class Aurora:
 
     def aws_rds_cluster(self):
         resource_type = "aws_rds_cluster"
-        print("Processing RDS Clusters...")
+        # logger.debug(f"Processing RDS Clusters...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_clusters")
         total = 0
@@ -543,7 +525,7 @@ class Aurora:
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rds_cluster_id}[/]")
                 if not engine.startswith("aurora"):
                     continue
-                print(f"Processing RDS Cluster: {rds_cluster_id}")
+                logger.debug(f"Processing RDS Cluster: {rds_cluster_id}")
                 cluster_arn = rds_cluster["DBClusterArn"]
 
                 ftstack = "aurora"
@@ -556,7 +538,7 @@ class Aurora:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": cluster_arn,
@@ -602,7 +584,7 @@ class Aurora:
                 self.aws_appautoscaling_policy(rds_cluster_id)
 
     def aws_rds_cluster_activity_stream(self):
-        print("Processing RDS Cluster Activity Streams...")
+        logger.debug(f"Processing RDS Cluster Activity Streams...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_clusters")
         for page in paginator.paginate():
@@ -615,7 +597,7 @@ class Aurora:
                 activity_stream_mode = rds_cluster.get(
                     "ActivityStreamMode", "disabled")
                 if activity_stream_mode != "disabled":
-                    print(
+                    logger.debug(
                         f"Processing RDS Cluster Activity Stream: {rds_cluster_id}")
                     attributes = {
                         "id": rds_cluster["DBClusterArn"],
@@ -627,7 +609,7 @@ class Aurora:
                         "aws_rds_cluster_activity_stream", rds_cluster_id.replace("-", "_"), attributes)
 
     def aws_rds_cluster_endpoint(self, cluster_id):
-        print("Processing RDS Cluster Endpoints...")
+        logger.debug(f"Processing RDS Cluster Endpoints...")
 
         paginator = self.aws_clients.rds_client.get_paginator(
             "describe_db_cluster_endpoints")
@@ -637,7 +619,7 @@ class Aurora:
                     continue
                 if "DBClusterEndpointIdentifier" in rds_cluster_endpoint:
                     endpoint_id = rds_cluster_endpoint["DBClusterEndpointIdentifier"]
-                    print(f"Processing RDS Cluster Endpoint: {endpoint_id}")
+                    logger.debug(f"Processing RDS Cluster Endpoint: {endpoint_id}")
                     attributes = {
                         "id": endpoint_id,
                         # "endpoint_identifier": endpoint_id,
@@ -649,7 +631,7 @@ class Aurora:
                         "aws_rds_cluster_endpoint", endpoint_id.replace("-", "_"), attributes)
 
     def aws_rds_cluster_instance(self, cluster_id, ftstack, rds_cluster_data):
-        print("Processing RDS Cluster Instances...")
+        logger.debug(f"Processing RDS Cluster Instances...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_instances")
         for page in paginator.paginate():
@@ -658,7 +640,7 @@ class Aurora:
                     continue
                 if "DBClusterIdentifier" in rds_instance and rds_instance["Engine"].startswith("aurora"):
                     instance_id = rds_instance["DBInstanceIdentifier"]
-                    print(f"Processing RDS Cluster Instance: {instance_id}")
+                    logger.debug(f"Processing RDS Cluster Instance: {instance_id}")
                     attributes = {
                         "id": rds_instance["DBInstanceArn"],
                     }
@@ -713,7 +695,7 @@ class Aurora:
     def aws_rds_cluster_parameter_group(self, parameter_group_name, ftstack):
         
         resource_type = "aws_rds_cluster_parameter_group"
-        print("Processing RDS Cluster Parameter Groups...")
+        logger.debug(f"Processing RDS Cluster Parameter Groups...")
 
         paginator = self.aws_clients.rds_client.get_paginator(
             "describe_db_cluster_parameter_groups")
@@ -722,7 +704,7 @@ class Aurora:
                 if rds_cluster_parameter_group["DBClusterParameterGroupName"] != parameter_group_name:
                     continue
                 parameter_group_id = rds_cluster_parameter_group["DBClusterParameterGroupName"]
-                print(
+                logger.debug(
                     f"Processing RDS Cluster Parameter Group: {parameter_group_id}")
                 id = parameter_group_id
                 attributes = {
@@ -736,7 +718,7 @@ class Aurora:
                 self.hcl.add_stack(resource_type, id, ftstack)
 
     def aws_rds_cluster_role_association(self, cluster_id):
-        print("Processing RDS Cluster Role Associations...")
+        logger.debug(f"Processing RDS Cluster Role Associations...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_db_clusters")
         for page in paginator.paginate():
@@ -752,7 +734,7 @@ class Aurora:
                     role_arn = associated_role["RoleArn"]
                     role_name = role_arn.split("/")[-1]
                     association_id = f"{cluster_id}-{role_name}"
-                    print(
+                    logger.debug(
                         f"Processing RDS Cluster Role Association: {association_id}")
                     attributes = {
                         "id": association_id,
@@ -763,13 +745,13 @@ class Aurora:
                         "aws_rds_cluster_role_association", association_id.replace("-", "_"), attributes)
 
     def aws_rds_export_task(self):
-        print("Processing RDS Export Tasks...")
+        logger.debug(f"Processing RDS Export Tasks...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_export_tasks")
         for page in paginator.paginate():
             for export_task in page.get("ExportTasks", []):
                 export_task_id = export_task["ExportTaskIdentifier"]
-                print(f"Processing RDS Export Task: {export_task_id}")
+                logger.debug(f"Processing RDS Export Task: {export_task_id}")
                 attributes = {
                     "id": export_task_id,
                     "source_arn": export_task["SourceArn"],
@@ -784,13 +766,13 @@ class Aurora:
                     "aws_rds_export_task", export_task_id.replace("-", "_"), attributes)
 
     def aws_rds_global_cluster(self):
-        print("Processing RDS Global Clusters...")
+        logger.debug(f"Processing RDS Global Clusters...")
 
         paginator = self.aws_clients.rds_client.get_paginator("describe_global_clusters")
         for page in paginator.paginate():
             for global_cluster in page.get("GlobalClusters", []):
                 global_cluster_id = global_cluster["GlobalClusterIdentifier"]
-                print(f"Processing RDS Global Cluster: {global_cluster_id}")
+                logger.debug(f"Processing RDS Global Cluster: {global_cluster_id}")
                 attributes = {
                     "id": global_cluster["GlobalClusterArn"],
                     "global_cluster_identifier": global_cluster_id,
@@ -802,14 +784,14 @@ class Aurora:
                     "aws_rds_global_cluster", global_cluster_id.replace("-", "_"), attributes)
 
     def aws_rds_reserved_instance(self):
-        print("Processing RDS Reserved Instances...")
+        logger.debug(f"Processing RDS Reserved Instances...")
 
         paginator = self.aws_clients.rds_client.get_paginator(
             "describe_reserved_db_instances")
         for page in paginator.paginate():
             for reserved_instance in page.get("ReservedDBInstances", []):
                 reserved_instance_id = reserved_instance["ReservedDBInstanceId"]
-                print(
+                logger.debug(
                     f"Processing RDS Reserved Instance: {reserved_instance_id}")
                 attributes = {
                     "id": reserved_instance_id,
@@ -826,134 +808,10 @@ class Aurora:
                 self.hcl.process_resource(
                     "aws_rds_reserved_instance", reserved_instance_id.replace("-", "_"), attributes)
 
-    def aws_security_group(self, security_group_ids):
-        print("Processing Security Groups...")
-
-        # Create a response dictionary to collect responses for all security groups
-        response = self.aws_clients.ec2_client.describe_security_groups(
-            GroupIds=security_group_ids
-        )
-
-        for security_group in response["SecurityGroups"]:
-            print(
-                f"Processing Security Group: {security_group['GroupName']}")
-
-            attributes = {
-                "id": security_group["GroupId"],
-                "name": security_group["GroupName"],
-                "description": security_group.get("Description", ""),
-                "vpc_id": security_group.get("VpcId", ""),
-                "owner_id": security_group.get("OwnerId", ""),
-            }
-
-            self.hcl.process_resource(
-                "aws_security_group", security_group["GroupName"].replace("-", "_"), attributes)
-
-            # Process egress rules
-            for rule in security_group.get('IpPermissionsEgress', []):
-                self.aws_security_group_rule(
-                    'egress', security_group, rule)
-
-            # Process ingress rules
-            for rule in security_group.get('IpPermissions', []):
-                self.aws_security_group_rule(
-                    'ingress', security_group, rule)
-
-    def aws_security_group_rule(self, rule_type, security_group, rule):
-        # Rule identifiers are often constructed by combining security group id, rule type, protocol, ports and security group references
-        rule_id = f"{security_group['GroupId']}_{rule_type}_{rule.get('IpProtocol', 'all')}"
-        print(f"Processing Security Groups Rule {rule_id}...")
-        if rule.get('FromPort'):
-            rule_id += f"_{rule['FromPort']}"
-        if rule.get('ToPort'):
-            rule_id += f"_{rule['ToPort']}"
-
-        attributes = {
-            "id": rule_id,
-            "type": rule_type,
-            "security_group_id": security_group['GroupId'],
-            "protocol": rule.get('IpProtocol', '-1'),  # '-1' stands for 'all'
-            "from_port": rule.get('FromPort', 0),
-            "to_port": rule.get('ToPort', 0),
-            "cidr_blocks": [ip_range['CidrIp'] for ip_range in rule.get('IpRanges', [])],
-            "source_security_group_ids": [sg['GroupId'] for sg in rule.get('UserIdGroupPairs', [])]
-        }
-
-        self.hcl.process_resource(
-            "aws_security_group_rule", rule_id.replace("-", "_"), attributes)
-
-    # def aws_iam_role(self, role_arn):
-    #     # the role name is the last part of the ARN
-    #     role_name = role_arn.split('/')[-1]
-
-    #     role = self.aws_clients.iam_client.get_role(RoleName=role_name)
-    #     print(f"Processing IAM Role: {role_name}")
-
-    #     attributes = {
-    #         "id": role_name,
-    #         # "name": role['Role']['RoleName'],
-    #         # "arn": role['Role']['Arn'],
-    #         # "description": role['Role']['Description'],
-    #         # "assume_role_policy": role['Role']['AssumeRolePolicyDocument'],
-    #     }
-    #     self.hcl.process_resource(
-    #         "aws_iam_role", role_name.replace("-", "_"), attributes)
-
-    #     # After processing the role, process the policies attached to it
-    #     self.aws_iam_role_policy_attachment(role_name)
-
-    # def aws_iam_role_policy_attachment(self, role_name):
-    #     attached_policies = self.aws_clients.iam_client.list_attached_role_policies(
-    #         RoleName=role_name)
-
-    #     for policy in attached_policies['AttachedPolicies']:
-    #         policy_name = policy['PolicyName']
-    #         print(
-    #             f"Processing IAM Role Policy Attachment: {policy_name} for Role: {role_name}")
-
-    #         resource_name = f"{role_name}/{policy_name}"
-
-    #         attributes = {
-    #             "id": f"{role_name}/{policy['PolicyArn']}",
-    #             "role": role_name,
-    #             "policy_arn": policy['PolicyArn']
-    #         }
-    #         self.hcl.process_resource(
-    #             "aws_iam_role_policy_attachment", resource_name.replace("-", "_"), attributes)
-
-    # def aws_cloudwatch_log_group(self, instance_id, log_export_name):
-    #     print(
-    #         f"Processing CloudWatch Log Group: {log_export_name} for DB Instance: {instance_id}")
-
-    #     # assuming the log group name has prefix /aws/rds/instance/{instance_id}/{log_export_name}
-    #     log_group_name_prefix = f"/aws/rds/instance/{instance_id}/{log_export_name}"
-
-    #     response = self.aws_clients.logs_client.describe_log_groups(
-    #         logGroupNamePrefix=log_group_name_prefix)
-
-    #     while True:
-    #         for log_group in response.get('logGroups', []):
-    #             log_group_name = log_group.get('logGroupName')
-    #             if log_group_name.startswith(log_group_name_prefix):
-    #                 print(f"Processing Log Group: {log_group_name}")
-    #                 attributes = {
-    #                     "id": log_group_name,
-    #                     "name": log_group_name,
-    #                     "retention_in_days": log_group.get('retentionInDays'),
-    #                     "arn": log_group.get('arn'),
-    #                 }
-    #                 self.hcl.process_resource(
-    #                     "aws_cloudwatch_log_group", log_group_name.replace("-", "_"), attributes)
-
-    #         if 'nextToken' in response:
-    #             response = self.aws_clients.logs_client.describe_log_groups(
-    #                 logGroupNamePrefix=log_group_name_prefix, nextToken=response['nextToken'])
-    #         else:
-    #             break
 
     def aws_appautoscaling_target(self, cluster_identifier):
         cluster_identifier = f"cluster:{cluster_identifier}"
-        print(
+        logger.debug(
             f"Processing AppAutoScaling Targets for Aurora Cluster ARN {cluster_identifier}...")
 
         paginator = self.aws_clients.appautoscaling_client.get_paginator(
@@ -966,7 +824,7 @@ class Aurora:
         for page in page_iterator:
             for target in page["ScalableTargets"]:
                 target_id = target["ResourceId"]
-                print(f"Processing AppAutoScaling Target: {target_id}")
+                logger.debug(f"Processing AppAutoScaling Target: {target_id}")
 
                 attributes = {
                     "id": target_id,
@@ -980,7 +838,7 @@ class Aurora:
 
     def aws_appautoscaling_policy(self, cluster_identifier):
         cluster_identifier = f"cluster:{cluster_identifier}"
-        print(
+        logger.debug(
             f"Processing AppAutoScaling Policies for Aurora Cluster ARN {cluster_identifier}...")
 
         paginator = self.aws_clients.appautoscaling_client.get_paginator(
@@ -993,7 +851,7 @@ class Aurora:
         for page in page_iterator:
             for policy in page["ScalingPolicies"]:
                 policy_name = policy["PolicyName"]
-                print(f"Processing AppAutoScaling Policy: {policy_name}")
+                logger.debug(f"Processing AppAutoScaling Policy: {policy_name}")
 
                 attributes = {
                     "id": policy_name,

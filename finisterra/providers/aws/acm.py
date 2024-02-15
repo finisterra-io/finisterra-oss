@@ -1,7 +1,9 @@
 import os
 from ...utils.hcl import HCL
 import datetime
+import logging
 
+logger = logging.getLogger('finisterra')
 
 class ACM:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -31,21 +33,20 @@ class ACM:
     def acm(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_acm_certificate()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
-
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            
     def aws_acm_certificate(self, acm_arn=None, ftstack=None):
         resource_name = "aws_acm_certificate"
-        print("Processing ACM Certificates...")
 
         if acm_arn and ftstack:
             if self.hcl.id_resource_processed(resource_name, acm_arn, ftstack):
-                print(f"  Skipping ACM Certificate: {acm_arn} already processed")
+                logger.debug(f"  Skipping ACM Certificate: {acm_arn} already processed")
                 return
             self.process_single_acm_certificate(acm_arn, ftstack)
             return
@@ -77,7 +78,7 @@ class ACM:
         if certificate_type == "IMPORTED" or status != "ISSUED" or (expiration_date and expiration_date < datetime.datetime.now(tz=datetime.timezone.utc)):
             return
 
-        print(f"Processing ACM Certificate: {cert_arn}")
+        logger.debug(f"Processing ACM Certificate: {cert_arn}")
 
         # Tag processing and other logic
         if not ftstack:
@@ -91,7 +92,7 @@ class ACM:
                             ftstack = "stack_" + tag['Value']
                         break
             except Exception as e:
-                print("Error occurred: ", e)
+                logger.error("Error occurred: ", e)
 
         id = cert_arn
         attributes = {
@@ -105,7 +106,7 @@ class ACM:
         # self.aws_acm_certificate_validation(cert_arn, cert_details)
 
     def aws_acm_certificate_validation(self, cert_arn, cert):
-        print(f"Processing ACM Certificate Validation: {cert_arn}")
+        logger.debug(f"Processing ACM Certificate Validation: {cert_arn}")
 
         attributes = {
             "id": cert_arn,

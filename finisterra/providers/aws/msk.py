@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class MSK:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -40,7 +43,7 @@ class MSK:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -54,7 +57,7 @@ class MSK:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
 
@@ -78,7 +81,7 @@ class MSK:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -86,7 +89,7 @@ class MSK:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
 
@@ -95,17 +98,17 @@ class MSK:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_msk_cluster()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
     def aws_msk_cluster(self):
         resource_type = "aws_msk_cluster"
-        print("Processing MSK Clusters...")
+        logger.debug("Processing MSK Clusters...")
 
         # Pagination for list_clusters, if applicable
         paginator = self.aws_clients.msk_client.get_paginator("list_clusters")
@@ -122,7 +125,7 @@ class MSK:
                 cluster_arn = cluster_info["ClusterArn"]
                 cluster_name = cluster_info["ClusterName"]
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
-                print(f"Processing MSK Cluster: {cluster_name}")
+                logger.debug(f"Processing MSK Cluster: {cluster_name}")
                 id = cluster_arn
 
                 ftstack = "msk"
@@ -132,7 +135,7 @@ class MSK:
                     if tags.get('ftstack', 'msk') != 'msk':
                         ftstack = "stack_"+tags.get('ftstack', 'msk')
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -172,7 +175,7 @@ class MSK:
                 self.aws_appautoscaling_policy(cluster_arn)
 
     def aws_msk_scram_secret_association(self, cluster_arn):
-        print(
+        logger.debug(
             f"Processing SCRAM Secret Associations for Cluster {cluster_arn}...")
 
         # Not all MSK methods might support pagination, so ensure this one does.
@@ -181,7 +184,7 @@ class MSK:
         )
 
         for secret in secrets.get("SecretArnList", []):
-            print(f"Processing SCRAM Secret: {secret}")
+            logger.debug(f"Processing SCRAM Secret: {secret}")
 
             attributes = {
                 "id": secret,
@@ -195,7 +198,7 @@ class MSK:
                 "aws_msk_scram_secret_association", secret, attributes)
 
     def aws_appautoscaling_target(self, cluster_arn):
-        print(
+        logger.debug(
             f"Processing AppAutoScaling Targets for MSK Cluster ARN {cluster_arn}...")
 
         paginator = self.aws_clients.appautoscaling_client.get_paginator(
@@ -211,7 +214,7 @@ class MSK:
                 service_namespace = target["ServiceNamespace"]
                 scalable_dimension = target["ScalableDimension"]
                 resource_id = target["ResourceId"]
-                print(f"Processing AppAutoScaling Target: {target_id}")
+                logger.debug(f"Processing AppAutoScaling Target: {target_id}")
 
                 id = f"{service_namespace}/{resource_id}/{scalable_dimension}"
 
@@ -226,7 +229,7 @@ class MSK:
                     "aws_appautoscaling_target", target_id, attributes)
 
     def aws_appautoscaling_policy(self, cluster_arn):
-        print(
+        logger.debug(
             f"Processing AppAutoScaling Policies for MSK Cluster ARN {cluster_arn}...")
 
         paginator = self.aws_clients.appautoscaling_client.get_paginator(
@@ -245,7 +248,7 @@ class MSK:
 
                 id = f"{service_namespace}/{resource_id}/{scalable_dimension}/{policy_name}"
 
-                print(f"Processing AppAutoScaling Policy: {policy_name}")
+                logger.debug(f"Processing AppAutoScaling Policy: {policy_name}")
 
                 attributes = {
                     "id": id,
@@ -259,7 +262,7 @@ class MSK:
                     "aws_appautoscaling_policy", id, attributes)
 
     def aws_msk_configuration(self, cluster_arn):
-        print(f"Processing MSK Configuration for Cluster {cluster_arn}...")
+        logger.debug(f"Processing MSK Configuration for Cluster {cluster_arn}...")
 
         cluster_details = self.aws_clients.msk_client.describe_cluster(
             ClusterArn=cluster_arn
@@ -278,7 +281,7 @@ class MSK:
 
         config_name = configuration["Name"]
 
-        print(f"Processing MSK Configuration: {config_name}")
+        logger.debug(f"Processing MSK Configuration: {config_name}")
 
         attributes = {
             "id": configuration_arn,
@@ -290,7 +293,7 @@ class MSK:
             "aws_msk_configuration", config_name, attributes)
 
     # def aws_security_group(self, security_group_ids):
-    #     print("Processing Security Groups...")
+    #     logger.debug("Processing Security Groups...")
 
     #     # Create a response dictionary to collect responses for all security groups
     #     response = self.aws_clients.ec2_client.describe_security_groups(
@@ -298,7 +301,7 @@ class MSK:
     #     )
 
     #     for security_group in response["SecurityGroups"]:
-    #         print(
+    #         logger.debug(
     #             f"Processing Security Group: {security_group['GroupName']}")
 
     #         attributes = {
@@ -325,7 +328,7 @@ class MSK:
     # def aws_security_group_rule(self, rule_type, security_group, rule):
     #     # Rule identifiers are often constructed by combining security group id, rule type, protocol, ports and security group references
     #     rule_id = f"{security_group['GroupId']}_{rule_type}_{rule.get('IpProtocol', 'all')}"
-    #     print(f"Processing Security Groups Rule {rule_id}...")
+    #     logger.debug(f"Processing Security Groups Rule {rule_id}...")
     #     if rule.get('FromPort'):
     #         rule_id += f"_{rule['FromPort']}"
     #     if rule.get('ToPort'):

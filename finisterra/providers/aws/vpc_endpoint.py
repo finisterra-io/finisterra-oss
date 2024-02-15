@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class VPCEndPoint:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -41,7 +44,7 @@ class VPCEndPoint:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -55,7 +58,7 @@ class VPCEndPoint:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
 
@@ -65,7 +68,7 @@ class VPCEndPoint:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -73,7 +76,7 @@ class VPCEndPoint:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
 
@@ -81,21 +84,21 @@ class VPCEndPoint:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_vpc_endpoint()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_vpc_endpoint(self, vpce_id=None, ftstack=None):
         resource_type = "aws_vpc_endpoint"
-        print(f"Processing VPC Endpoint: {vpce_id}...")
+        logger.debug(f"Processing VPC Endpoint: {vpce_id}...")
         try:
             if vpce_id:
                 if ftstack and self.hcl.id_resource_processed(resource_type, vpce_id, ftstack):
-                    print(f"  Skipping VPC Endpoint: {vpce_id} - already processed")
+                    logger.debug(f"  Skipping VPC Endpoint: {vpce_id} - already processed")
                     return
             if vpce_id is None:
                 endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()["VpcEndpoints"]
@@ -110,7 +113,7 @@ class VPCEndPoint:
 
                 vpc_id = endpoint["VpcId"]
                 service_name = endpoint["ServiceName"]
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint: {endpoint_id} for VPC: {vpc_id}")
                 attributes = {
                     "id": endpoint_id,
@@ -149,13 +152,13 @@ class VPCEndPoint:
                         self.hcl.add_additional_data(resource_type, endpoint_id, "subnet_names", subnet_names)
 
             if not endpoints:
-                print("No VPC Endpoints found.")
+                logger.debug("No VPC Endpoints found.")
         except Exception as e:
-            print(f"An error occurred: {str(e)}")
+            logger.error(f"An error occurred: {str(e)}")
             pass
 
     def aws_vpc_endpoint_connection_accepter(self):
-        print("Processing VPC Endpoint Connection Accepters...")
+        logger.debug("Processing VPC Endpoint Connection Accepters...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -164,7 +167,7 @@ class VPCEndPoint:
                 endpoint_id = endpoint["VpcEndpointId"]
                 vpc_id = endpoint["VpcId"]
                 service_name = endpoint["ServiceName"]
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Connection Accepter: {endpoint_id} for VPC: {vpc_id}")
 
                 accepter_id = f"{vpc_id}-{endpoint_id}"
@@ -178,7 +181,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_connection_accepter", accepter_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_connection_notification(self):
-        print("Processing VPC Endpoint Connection Notifications...")
+        logger.debug("Processing VPC Endpoint Connection Notifications...")
         connection_notifications = self.aws_clients.ec2_client.describe_vpc_endpoint_connection_notifications()[
             "ConnectionNotificationSet"]
 
@@ -187,7 +190,7 @@ class VPCEndPoint:
             vpc_endpoint_id = notification["VpcEndpointId"]
             service_id = notification["ServiceId"]
             sns_topic_arn = notification["ConnectionNotificationArn"]
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint Connection Notification: {notification_id}")
 
             attributes = {
@@ -202,7 +205,7 @@ class VPCEndPoint:
                 "aws_vpc_endpoint_connection_notification", notification_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_policy(self):
-        print("Processing VPC Endpoint Policies...")
+        logger.debug("Processing VPC Endpoint Policies...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -211,7 +214,7 @@ class VPCEndPoint:
             vpc_id = endpoint["VpcId"]
             service_name = endpoint["ServiceName"]
             policy_document = endpoint["PolicyDocument"]
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint Policy: {endpoint_id} for VPC: {vpc_id}")
 
             attributes = {
@@ -223,7 +226,7 @@ class VPCEndPoint:
                 "aws_vpc_endpoint_policy", endpoint_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_route_table_association(self):
-        print("Processing VPC Endpoint Route Table Associations...")
+        logger.debug("Processing VPC Endpoint Route Table Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -232,7 +235,7 @@ class VPCEndPoint:
             route_table_ids = endpoint.get("RouteTableIds", [])
 
             for route_table_id in route_table_ids:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Route Table Association: {endpoint_id} - {route_table_id}")
 
                 assoc_id = f"{endpoint_id}-{route_table_id}"
@@ -245,7 +248,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_route_table_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_security_group_association(self):
-        print("Processing VPC Endpoint Security Group Associations...")
+        logger.debug("Processing VPC Endpoint Security Group Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -255,7 +258,7 @@ class VPCEndPoint:
                                   for group in endpoint.get("Groups", [])]
 
             for security_group_id in security_group_ids:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Security Group Association: {endpoint_id} - {security_group_id}")
 
                 assoc_id = f"{endpoint_id}-{security_group_id}"
@@ -268,7 +271,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_security_group_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_service(self):
-        print("Processing VPC Endpoint Services...")
+        logger.debug("Processing VPC Endpoint Services...")
         vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_services()[
             "ServiceDetails"]
 
@@ -280,7 +283,7 @@ class VPCEndPoint:
             if service_name.startswith('com.amazonaws') or service_name.startswith('aws.'):
                 continue
 
-            print(
+            logger.debug(
                 f"Processing VPC Endpoint Service: {service_id} {service_name}")
 
             attributes = {
@@ -295,7 +298,7 @@ class VPCEndPoint:
                 "aws_vpc_endpoint_service", service_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_service_allowed_principal(self):
-        print("Processing VPC Endpoint Service Allowed Principals...")
+        logger.debug("Processing VPC Endpoint Service Allowed Principals...")
         vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_service_configurations()[
             "ServiceConfigurations"]
 
@@ -304,7 +307,7 @@ class VPCEndPoint:
             allowed_principals = service.get("AllowedPrincipals", [])
 
             for principal in allowed_principals:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Service Allowed Principal: {principal} for Service: {service_id}")
 
                 assoc_id = f"{service_id}-{principal}"
@@ -317,7 +320,7 @@ class VPCEndPoint:
                     "aws_vpc_endpoint_service_allowed_principal", assoc_id.replace("-", "_"), attributes)
 
     def aws_vpc_endpoint_subnet_association(self):
-        print("Processing VPC Endpoint Subnet Associations...")
+        logger.debug("Processing VPC Endpoint Subnet Associations...")
         vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
@@ -326,7 +329,7 @@ class VPCEndPoint:
             subnet_ids = endpoint["SubnetIds"]
 
             for subnet_id in subnet_ids:
-                print(
+                logger.debug(
                     f"Processing VPC Endpoint Subnet Association: {endpoint_id} - {subnet_id}")
 
                 assoc_id = f"{endpoint_id}-{subnet_id}"

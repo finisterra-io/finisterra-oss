@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 import json
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 class SQS:
@@ -33,17 +36,17 @@ class SQS:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_sqs_queue()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
     def aws_sqs_queue(self):
         resource_type = "aws_sqs_queue"
-        print("Processing SQS Queues...")
+        logger.debug("Processing SQS Queues...")
 
         paginator = self.aws_clients.sqs_client.get_paginator("list_queues")
         total = 0
@@ -60,7 +63,7 @@ class SQS:
                 # if queue_name != 'market-marketSubscriptionTenantIdentityActivationQueue':
                 #     continue
 
-                print(f"Processing SQS Queue: {queue_name}")
+                logger.debug(f"Processing SQS Queue: {queue_name}")
                 id = queue_url
 
                 fstack = "sqs"
@@ -70,7 +73,7 @@ class SQS:
                     if tags.get('ftstack', 'sqs') != 'sqs':
                         fstack = "stack_"+tags.get('ftstack', 'sqs')
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -104,7 +107,7 @@ class SQS:
                                 resource_type, dlq_url['QueueUrl'], "is_dlq", True)
                             self.dlq_list[dlq_url['QueueUrl']] = queue_url
                         except Exception as e:
-                            print("Error occurred: ", e)
+                            logger.error("Error occurred: ", e)
                             continue
 
                 # Call aws_sqs_queue_redrive_policy with the queue_url as an argument
@@ -112,7 +115,7 @@ class SQS:
                 self.aws_sqs_queue_redrive_allow_policy(queue_url)
 
     def aws_sqs_queue_policy(self, queue_url):
-        print("Processing SQS Queue Policies...")
+        logger.debug("Processing SQS Queue Policies...")
 
         queue_name = queue_url.split("/")[-1]
         response = self.aws_clients.sqs_client.get_queue_attributes(
@@ -121,7 +124,7 @@ class SQS:
         if "Attributes" in response and "Policy" in response["Attributes"]:
             policy = response["Attributes"]["Policy"]
 
-            print(f"Processing SQS Queue Policy: {queue_name}")
+            logger.debug(f"Processing SQS Queue Policy: {queue_name}")
 
             attributes = {
                 "id": queue_url,
@@ -130,10 +133,10 @@ class SQS:
             self.hcl.process_resource(
                 "aws_sqs_queue_policy", queue_name.replace("-", "_"), attributes)
         else:
-            print(f"  No policy found for SQS Queue: {queue_name}")
+            logger.debug(f"  No policy found for SQS Queue: {queue_name}")
 
     def aws_sqs_queue_redrive_policy(self, queue_url):
-        print("Processing SQS Queue Redrive Policies...")
+        logger.debug("Processing SQS Queue Redrive Policies...")
 
         queue_name = queue_url.split("/")[-1]
         response = self.aws_clients.sqs_client.get_queue_attributes(
@@ -144,7 +147,7 @@ class SQS:
         # If a RedrivePolicy exists, process it as a separate resource
         if 'Attributes' in response and 'RedrivePolicy' in response['Attributes']:
             redrive_policy = response['Attributes']['RedrivePolicy']
-            print(f"Processing SQS Queue Redrive Policy: {queue_name}")
+            logger.debug(f"Processing SQS Queue Redrive Policy: {queue_name}")
 
             # Process the redrive policy as a separate resource
             attributes = {
@@ -154,10 +157,10 @@ class SQS:
             self.hcl.process_resource(
                 "aws_sqs_queue_redrive_policy", queue_name.replace("-", "_"), attributes)
         else:
-            print(f"  No redrive policy found for SQS Queue: {queue_name}")
+            logger.debug(f"  No redrive policy found for SQS Queue: {queue_name}")
 
     def aws_sqs_queue_redrive_allow_policy(self, queue_url):
-        print("Processing SQS Queue Redrive Allow Policies...")
+        logger.debug("Processing SQS Queue Redrive Allow Policies...")
 
         queue_name = queue_url.split("/")[-1]
         response = self.aws_clients.sqs_client.get_queue_attributes(
@@ -168,7 +171,7 @@ class SQS:
         # If a Policy exists, process it as a separate resource
         if 'Attributes' in response and 'Policy' in response['Attributes']:
             redrive_allow_policy = response['Attributes']['RedriveAllowPolicy']
-            print(f"Processing SQS Queue Redrive Allow Policy: {queue_name}")
+            logger.debug(f"Processing SQS Queue Redrive Allow Policy: {queue_name}")
 
             # Process the allow policy as a separate resource
             attributes = {
@@ -178,4 +181,4 @@ class SQS:
             self.hcl.process_resource(
                 "aws_sqs_queue_redrive_allow_policy", queue_name.replace("-", "_"), attributes)
         else:
-            print(f"  No allow policy found for SQS Queue: {queue_name}")
+            logger.debug(f"  No allow policy found for SQS Queue: {queue_name}")

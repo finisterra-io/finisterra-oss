@@ -1,12 +1,13 @@
 import os
 from ...utils.hcl import HCL
-import json
-import re
 from ...providers.aws.iam_role import IAM_ROLE
 from ...providers.aws.logs import Logs
 from ...providers.aws.kms import KMS
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.target_group import TargetGroup
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class ECS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -48,7 +49,7 @@ class ECS:
 
                 # Check if 'Subnets' key exists and it's not empty
                 if not response or 'Subnets' not in response or not response['Subnets']:
-                    print(
+                    logger.debug(
                         f"No subnet information found for Subnet ID: {subnet_id}")
                     continue
 
@@ -62,7 +63,7 @@ class ECS:
                 if subnet_name:
                     subnet_names.append(subnet_name)
                 else:
-                    print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                    logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
             if subnet_names:
                 return subnet_names
@@ -83,7 +84,7 @@ class ECS:
                 response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
                 if not response or 'Vpcs' not in response or not response['Vpcs']:
                     # Handle this case as required, for example:
-                    print(f"No VPC information found for VPC ID: {vpc_id}")
+                    logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
                     return None
 
                 vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -96,19 +97,22 @@ class ECS:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_ecs_cluster()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+
     def aws_ecs_cluster(self):
         resource_type = "aws_ecs_cluster"
-        print("Processing ECS Clusters...")
+        logger.debug("Processing ECS Clusters...")
 
         clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
         clusters = self.aws_clients.ecs_client.describe_clusters(clusters=clusters_arns, include=["CONFIGURATIONS"])["clusters"]
+
+        self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=0)
 
         for cluster in clusters:
             cluster_name = cluster["clusterName"]
@@ -117,7 +121,7 @@ class ECS:
             # if cluster_name == "dev-ecs-cluster":
             #     continue
 
-            print(f"Processing ECS Cluster: {cluster_name}")
+            logger.debug(f"Processing ECS Cluster: {cluster_name}")
             id = cluster_name
 
             ftstack = "ecs"
@@ -130,7 +134,7 @@ class ECS:
                             ftstack = "stack_"+tag['value']
                         break
             except Exception as e:
-                print("Error occurred: ", e)
+                logger.error("Error occurred: ", e)
 
             attributes = {
                 "id": id,
@@ -141,42 +145,41 @@ class ECS:
             
             self.hcl.add_stack(resource_type, id, ftstack)
 
-            # Extract CloudWatch log group name from cluster configuration
-            cloudwatch_log_group_name = None
-            kmsKeyId = None
-            configuration = cluster.get('configuration', {})
-            if configuration:
-                execute_command_configuration = configuration.get('executeCommandConfiguration', {})
-                if execute_command_configuration:
-                    log_configuration = execute_command_configuration.get('logConfiguration', {})
-                    if log_configuration:
-                        cloudwatch_log_group_name = log_configuration.get('cloudWatchLogGroupName')
-                        if cloudwatch_log_group_name:
-                            self.logs_instance.aws_cloudwatch_log_group(cloudwatch_log_group_name, ftstack)
-                    kmsKeyId = execute_command_configuration.get('kmsKeyId')
-                
+            if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+                # Extract CloudWatch log group name from cluster configuration
+                cloudwatch_log_group_name = None
+                kmsKeyId = None
+                configuration = cluster.get('configuration', {})
+                if configuration:
+                    execute_command_configuration = configuration.get('executeCommandConfiguration', {})
+                    if execute_command_configuration:
+                        log_configuration = execute_command_configuration.get('logConfiguration', {})
+                        if log_configuration:
+                            cloudwatch_log_group_name = log_configuration.get('cloudWatchLogGroupName')
+                            if cloudwatch_log_group_name:
+                                self.logs_instance.aws_cloudwatch_log_group(cloudwatch_log_group_name, ftstack)
+                        kmsKeyId = execute_command_configuration.get('kmsKeyId')
+                    
 
-            if cloudwatch_log_group_name:
-                self.logs_instance.aws_cloudwatch_log_group(cloudwatch_log_group_name, ftstack)
+                if cloudwatch_log_group_name:
+                    self.logs_instance.aws_cloudwatch_log_group(cloudwatch_log_group_name, ftstack)
 
-            if kmsKeyId:
-                self.kms_instance.aws_kms_key(kmsKeyId, ftstack)
+                if kmsKeyId:
+                    self.kms_instance.aws_kms_key(kmsKeyId, ftstack)
 
-            # self.aws_cloudwatch_log_group(cluster_name)
             self.aws_ecs_cluster_capacity_providers(cluster_name)
             self.aws_ecs_capacity_provider(cluster_name)
-
             self.aws_ecs_service(cluster_name, ftstack)
 
     def aws_cloudwatch_log_group(self, log_group_name):
-        print(f"Processing CloudWatch Log Group...")
+        logger.debug(f"Processing CloudWatch Log Group...")
 
         paginator = self.aws_clients.logs_client.get_paginator('describe_log_groups')
 
         for page in paginator.paginate():
             for log_group in page['logGroups']:
                 if log_group['logGroupName'] == log_group_name:
-                    print(
+                    logger.debug(
                         f"Processing CloudWatch Log Group: {log_group_name}")
 
                     # Prepare the attributes
@@ -190,11 +193,11 @@ class ECS:
                         "aws_cloudwatch_log_group", log_group_name.replace("/", "_"), attributes)
                     return  # End the function once we've found the matching log group
 
-        print(
+        logger.debug(
             f"  Warning: No matching CloudWatch Log Group found: {log_group_name}")
 
     def aws_ecs_cluster_capacity_providers(self, cluster_name):
-        print("Processing ECS Cluster Capacity Providers for the specified cluster...")
+        logger.debug("Processing ECS Cluster Capacity Providers for the specified cluster...")
 
         cluster_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
         clusters = self.aws_clients.ecs_client.describe_clusters(
@@ -205,7 +208,7 @@ class ECS:
                 capacity_providers = cluster.get("capacityProviders", [])
 
                 for provider in capacity_providers:
-                    print(
+                    logger.debug(
                         f"Processing ECS Cluster Capacity Provider: {provider} for Cluster: {cluster_name}")
 
                     resource_name = f"{cluster_name}-{provider}"
@@ -216,10 +219,10 @@ class ECS:
                     self.hcl.process_resource(
                         "aws_ecs_cluster_capacity_providers", resource_name.replace("-", "_"), attributes)
             else:
-                print(f"Skipping aws_ecs_cluster_capacity_providers: {cluster['clusterName']}")
+                logger.debug(f"Skipping aws_ecs_cluster_capacity_providers: {cluster['clusterName']}")
 
     def aws_ecs_capacity_provider(self, cluster_name):
-        print(
+        logger.debug(
             f"Processing ECS Capacity Providers for cluster: {cluster_name}...")
 
         cluster_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
@@ -238,7 +241,7 @@ class ECS:
                         'autoScalingGroupProvider', None)
 
                     if auto_scaling_group_provider:
-                        print(
+                        logger.debug(
                             f"Processing ECS Capacity Provider: {provider_name}")
 
                         attributes = {
@@ -248,15 +251,15 @@ class ECS:
                         self.hcl.process_resource(
                             "aws_ecs_capacity_provider", provider_name.replace("-", "_"), attributes)
                     else:
-                        print(
+                        logger.debug(
                             f"Skipping provider: {provider_name} without auto scaling group")
 
             else:
-                print(f"Skipping aws_ecs_capacity_provider: {cluster['clusterName']}")
+                logger.debug(f"Skipping aws_ecs_capacity_provider: {cluster['clusterName']}")
 
     def aws_ecs_service(self, cluster_name, ftstack):
         resource_type = "aws_ecs_service"
-        print(f"Processing ECS Services for cluster: {cluster_name}...")
+        logger.debug(f"Processing ECS Services for cluster: {cluster_name}...")
 
         clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
         clusters = self.aws_clients.ecs_client.describe_clusters(
@@ -271,12 +274,12 @@ class ECS:
                     total += len(page["serviceArns"])
 
                 if total > 0:
-                    self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
+                    self.task = self.progress.update(self.task_id, desciption=f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
 
                 for page in paginator.paginate(cluster=cluster_arn):
                     services_arns = page["serviceArns"]
                     if not services_arns:
-                        print(f"  No services found for cluster. {cluster_name}")
+                        logger.debug(f"  No services found for cluster. {cluster_name}")
                         continue
                     services = self.aws_clients.ecs_client.describe_services(
                         cluster=cluster_arn, services=services_arns)["services"]
@@ -293,7 +296,7 @@ class ECS:
                         service_arn = service["serviceArn"]
                         id = cluster_arn.split("/")[1] + "/" + service_name
 
-                        print(f"Processing ECS Service: {service_name}")
+                        logger.debug(f"Processing ECS Service: {service_name}")
 
                         attributes = {
                             "id": id,
@@ -319,11 +322,10 @@ class ECS:
                         self.aws_appautoscaling_target(
                             cluster_name, service_name)
 
-                        # Call role for service
-                        if service.get('roleArn'):
-                            role_name = service['roleArn'].split('/')[-1]
-                            self.iam_role_instance.aws_iam_role(role_name, ftstack)
-                            # self.aws_iam_role(service['roleArn'], True)
+                        if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+                            if service.get('roleArn'):
+                                role_name = service['roleArn'].split('/')[-1]
+                                self.iam_role_instance.aws_iam_role(role_name, ftstack)
 
                         # Call task definition for this service's task definition
                         if service.get('taskDefinition'):
@@ -335,25 +337,26 @@ class ECS:
                         #     if lb.get('targetGroupArn'):
                         #         self.aws_lb_target_group(lb['targetGroupArn'])
 
-                        network_configuration = service.get(
-                            'networkConfiguration', {})
-                        if network_configuration:
-                            aws_vpc_configuration = network_configuration.get(
-                                'awsvpcConfiguration', {})
-                            if aws_vpc_configuration:
-                                security_groups = aws_vpc_configuration.get(
-                                    'securityGroups', [])
-                                for sg in security_groups:
-                                    self.security_group_instance.aws_security_group(sg, ftstack)
+                        if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+                            network_configuration = service.get(
+                                'networkConfiguration', {})
+                            if network_configuration:
+                                aws_vpc_configuration = network_configuration.get(
+                                    'awsvpcConfiguration', {})
+                                if aws_vpc_configuration:
+                                    security_groups = aws_vpc_configuration.get(
+                                        'securityGroups', [])
+                                    for sg in security_groups:
+                                        self.security_group_instance.aws_security_group(sg, ftstack)
 
-                        # Get the load balancer and the the target group arn
-                        load_balancers = service.get('loadBalancers', [])
-                        for lb in load_balancers:
-                            # lb_name = lb.get('loadBalancerName')
-                            target_group_arn = lb.get('targetGroupArn')
-                            if target_group_arn:
-                                print(f"Processing Target Group: {target_group_arn}...")
-                                self.target_group_instance.aws_lb_target_group(target_group_arn, ftstack)
+                            # Get the load balancer and the the target group arn
+                            load_balancers = service.get('loadBalancers', [])
+                            for lb in load_balancers:
+                                # lb_name = lb.get('loadBalancerName')
+                                target_group_arn = lb.get('targetGroupArn')
+                                if target_group_arn:
+                                    logger.debug(f"Processing Target Group: {target_group_arn}...")
+                                    self.target_group_instance.aws_lb_target_group(target_group_arn, ftstack)
 
                         #Cloudmap
                         serviceRegistries = service.get('serviceRegistries', [])
@@ -373,10 +376,10 @@ class ECS:
                                     if namespace_name:
                                          self.hcl.add_additional_data("aws_service_discovery_service", registry_arn, "namespace_name", namespace_name)
             # else:
-            #     print(f"Skipping aws_ecs_service: {cluster['clusterName']}")
+            #     logger.debug(f"Skipping aws_ecs_service: {cluster['clusterName']}")
 
     def aws_ecs_task_definition(self, task_definition_arn, ftstack):
-        print(f"Processing ECS Task Definition: {task_definition_arn}...")
+        logger.debug(f"Processing ECS Task Definition: {task_definition_arn}...")
 
         task_definition = self.aws_clients.ecs_client.describe_task_definition(
             taskDefinition=task_definition_arn)["taskDefinition"]
@@ -391,113 +394,20 @@ class ECS:
         self.hcl.process_resource(
             "aws_ecs_task_definition", family.replace("-", "_")+"_"+str(revision), attributes)
 
-        # Process IAM roles for the task
-        if task_definition.get('taskRoleArn'):
-            role_name = task_definition.get('taskRoleArn').split('/')[-1]
-            self.iam_role_instance.aws_iam_role(role_name, ftstack)
-            # self.aws_iam_role(task_definition.get('taskRoleArn'))
-        if task_definition.get('executionRoleArn'):
-            role_name = task_definition.get('executionRoleArn').split('/')[-1]
-            self.iam_role_instance.aws_iam_role(role_name, ftstack)
-            # self.aws_iam_role(task_definition.get('executionRoleArn'))
+        if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+            # Process IAM roles for the task
+            if task_definition.get('taskRoleArn'):
+                role_name = task_definition.get('taskRoleArn').split('/')[-1]
+                self.iam_role_instance.aws_iam_role(role_name, ftstack)
+            if task_definition.get('executionRoleArn'):
+                role_name = task_definition.get('executionRoleArn').split('/')[-1]
+                self.iam_role_instance.aws_iam_role(role_name, ftstack)
 
-    def aws_iam_role(self, role_arn, aws_iam_policy=False):
-        print(f"Processing IAM Role: {role_arn}...")
-
-        role_name = role_arn.split('/')[-1]  # Extract role name from ARN
-
-        # Ignore AWS service-linked roles
-        if '/aws-service-role/' in role_arn:
-            print(f"Ignoring service-linked role: {role_name}")
-            return
-
-        try:
-            role = self.aws_clients.iam_client.get_role(RoleName=role_name)['Role']
-            role_name = role["RoleName"]
-            role_path = role["Path"]
-
-
-            # Ignore roles managed or created by AWS
-            if role_path.startswith("/aws-service-role/") or "AWS-QuickSetup" in role_name:
-                print(f"  Skipping IAM Role: {role_name}")
-                return
-
-
-            print(f"Processing IAM Role: {role['Arn']}")
-
-            attributes = {
-                "id": role['RoleName'],
-            }
-            self.hcl.process_resource(
-                "aws_iam_role", role['RoleName'], attributes)
-            # Process IAM role policy attachments for the role
-            self.aws_iam_role_policy_attachment(
-                role['RoleName'], aws_iam_policy)
-        except Exception as e:
-            print(f"Error processing IAM role: {role_name}: {str(e)}")
-
-    def aws_iam_role_policy_attachment(self, role_name, aws_iam_policy=False):
-        print(
-            f"Processing IAM Role Policy Attachments for role: {role_name}...")
-
-        try:
-            paginator = self.aws_clients.iam_client.get_paginator(
-                'list_attached_role_policies')
-            for page in paginator.paginate(RoleName=role_name):
-                for policy in page['AttachedPolicies']:
-                    print(
-                        f"Processing IAM Role Policy Attachment: {policy['PolicyName']} for role: {role_name}")
-
-                    resource_name = f"{role_name}-{policy['PolicyName']}"
-                    attributes = {
-                        "id": f"{role_name}/{policy['PolicyArn']}",
-                        "role": role_name,
-                        "policy_arn": policy['PolicyArn']
-                    }
-                    self.hcl.process_resource(
-                        "aws_iam_role_policy_attachment", resource_name, attributes)
-
-                    if aws_iam_policy:
-                        self.aws_iam_policy(policy['PolicyArn'])
-
-        except Exception as e:
-            print(
-                f"Error processing IAM role policy attachments for role: {role_name}: {str(e)}")
-
-    def aws_iam_policy(self, policy_arn):
-        print(f"Processing IAM Policy: {policy_arn}...")
-
-        try:
-            response = self.aws_clients.iam_client.get_policy(PolicyArn=policy_arn)
-            policy = response.get('Policy', {})
-
-            if policy:
-
-                # Ignore AWS managed policies and policies with '/service-role/' in the ARN
-                if policy_arn.startswith('arn:aws:iam::aws:policy/') or '/service-role/' in policy_arn:
-                    return
-
-                print(f"Processing IAM Policy: {policy_arn}")
-
-                attributes = {
-                    "id": policy_arn,
-                    "arn": policy_arn,
-                    "name": policy['PolicyName'],
-                    "path": policy['Path'],
-                    "description": policy.get('Description', ''),
-                }
-                self.hcl.process_resource(
-                    "aws_iam_policy", policy['PolicyName'], attributes)
-            else:
-                print(f"No IAM Policy found with ARN: {policy_arn}")
-
-        except Exception as e:
-            print(f"Error processing IAM Policy: {policy_arn}: {str(e)}")
 
     def aws_appautoscaling_target(self, cluster_name, service_name):
         service_namespace = 'ecs'
         resource_id = f'service/{cluster_name}/{service_name}'
-        print(
+        logger.debug(
             f"Processing AppAutoScaling target for ECS service: {service_name} in cluster: {cluster_name}...")
 
         try:
@@ -510,7 +420,7 @@ class ECS:
             if scalable_targets:
                 # We expect only one target per service
                 target = scalable_targets[0]
-                print(f"Processing ECS AppAutoScaling Target: {resource_id}")
+                logger.debug(f"Processing ECS AppAutoScaling Target: {resource_id}")
 
                 resource_name = f"{service_namespace}-{resource_id.replace('/', '-')}"
                 attributes = {
@@ -530,15 +440,15 @@ class ECS:
                     service_namespace, resource_id, target['ScalableDimension'])
 
             else:
-                print(
+                logger.debug(
                     f"No AppAutoScaling target found for ECS service: {service_name} in cluster: {cluster_name}")
 
         except Exception as e:
-            print(
+            logger.debug(
                 f"Error processing AppAutoScaling target for ECS service: {service_name} in cluster: {cluster_name}: {str(e)}")
 
     def aws_appautoscaling_policy(self, service_namespace, resource_id, scalable_dimension):
-        print(
+        logger.debug(
             f"Processing AppAutoScaling policies for resource: {resource_id}...")
 
         try:
@@ -549,7 +459,7 @@ class ECS:
             scaling_policies = response.get('ScalingPolicies', [])
 
             for policy in scaling_policies:
-                print(
+                logger.debug(
                     f"Processing AppAutoScaling Policy: {policy['PolicyName']} for resource: {resource_id}")
 
                 resource_name = f"{service_namespace}-{resource_id.replace('/', '-')}-{policy['PolicyName']}"
@@ -563,11 +473,11 @@ class ECS:
                 self.hcl.process_resource(
                     "aws_appautoscaling_policy", resource_name, attributes)
         except Exception as e:
-            print(
+            logger.error(
                 f"Error processing AppAutoScaling policies for resource: {resource_id}: {str(e)}")
 
     def aws_appautoscaling_scheduled_action(self, service_namespace, resource_id, scalable_dimension):
-        print(
+        logger.debug(
             f"Processing AppAutoScaling scheduled actions for resource: {resource_id}...")
 
         try:
@@ -578,7 +488,7 @@ class ECS:
             scheduled_actions = response.get('ScheduledActions', [])
 
             for action in scheduled_actions:
-                print(
+                logger.debug(
                     f"Processing AppAutoScaling Scheduled Action: {action['ScheduledActionName']} for resource: {resource_id}")
 
                 resource_name = f"{service_namespace}-{resource_id.replace('/', '-')}-{action['ScheduledActionName']}"
@@ -592,18 +502,18 @@ class ECS:
                 self.hcl.process_resource(
                     "aws_appautoscaling_scheduled_action", resource_name, attributes)
         except Exception as e:
-            print(
+            logger.error(
                 f"Error processing AppAutoScaling scheduled actions for resource: {resource_id}: {str(e)}")
 
     def aws_ecs_account_setting_default(self):
-        print("Processing ECS Account Setting Defaults...")
+        logger.debug("Processing ECS Account Setting Defaults...")
 
         settings = self.aws_clients.ecs_client.list_account_settings()["settings"]
         for setting in settings:
             name = setting["name"]
             value = setting["value"]
 
-            print(f"Processing ECS Account Setting Default: {name}")
+            logger.debug(f"Processing ECS Account Setting Default: {name}")
 
             attributes = {
                 "id": name,
@@ -613,7 +523,7 @@ class ECS:
                 "aws_ecs_account_setting_default", name.replace("-", "_"), attributes)
 
     def aws_ecs_tag(self):
-        print("Processing ECS Tags...")
+        logger.debug("Processing ECS Tags...")
 
         # Process tags for ECS clusters
         clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
@@ -655,7 +565,7 @@ class ECS:
             key = tag["key"]
             value = tag["value"]
 
-            print(
+            logger.debug(
                 f"Processing ECS Tag: {key}={value} for {resource_type}: {resource_name}")
 
             hcl_resource_name = f"{resource_name}-tag-{key}"
@@ -670,7 +580,7 @@ class ECS:
                 resource_type, hcl_resource_name.replace("-", "_"), attributes)
 
     def aws_ecs_task_set(self):
-        print("Processing ECS Task Sets...")
+        logger.debug("Processing ECS Task Sets...")
 
         clusters_arns = self.aws_clients.ecs_client.list_clusters()["clusterArns"]
         for cluster_arn in clusters_arns:
@@ -689,7 +599,7 @@ class ECS:
                         cluster=cluster_arn, service=service_name, taskSets=[task_set_arn])["taskSets"][0]
                     task_set_id = task_set["id"]
 
-                    print(f"Processing ECS Task Set: {task_set_id}")
+                    logger.debug(f"Processing ECS Task Set: {task_set_id}")
 
                     attributes = {
                         "id": task_set_id,
@@ -701,7 +611,7 @@ class ECS:
                         "aws_ecs_task_set", task_set_id.replace("-", "_"), attributes)
 
     def aws_lb_target_group(self, target_group_arn):
-        print(
+        logger.debug(
             f"Processing Load Balancer Target Group with ARN: {target_group_arn}")
 
         # Describe the specific target group using the provided ARN
@@ -712,7 +622,7 @@ class ECS:
         for target_group in response["TargetGroups"]:
             tg_arn = target_group["TargetGroupArn"]
             tg_name = target_group["TargetGroupName"]
-            print(f"Processing Load Balancer Target Group: {tg_name}")
+            logger.debug(f"Processing Load Balancer Target Group: {tg_name}")
 
             attributes = {
                 "id": tg_arn,
@@ -727,7 +637,7 @@ class ECS:
             self.aws_lb_listener(target_group_arn)
 
     def aws_lb_listener_rule(self, target_group_arn):
-        print("Processing Load Balancer Listener Rules for Target Group ARN:",
+        logger.debug("Processing Load Balancer Listener Rules for Target Group ARN:",
               target_group_arn)
 
         load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
@@ -735,14 +645,14 @@ class ECS:
 
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]
-            # print(f"Processing Load Balancer: {lb_arn}")
+            # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
             listeners = self.aws_clients.elbv2_client.describe_listeners(
                 LoadBalancerArn=lb_arn)["Listeners"]
 
             for listener in listeners:
                 listener_arn = listener["ListenerArn"]
-                # print(f"Processing Load Balancer Listener: {listener_arn}")
+                # logger.debug(f"Processing Load Balancer Listener: {listener_arn}")
 
                 rules = self.aws_clients.elbv2_client.describe_rules(
                     ListenerArn=listener_arn)["Rules"]
@@ -756,7 +666,7 @@ class ECS:
                     rule_id = rule_arn.split("/")[-1]
                     if len(rule["Conditions"]) == 0:
                         continue
-                    print(
+                    logger.debug(
                         f"    Processing Load Balancer Listener Rule: {rule_id}")
 
                     attributes = {
@@ -768,7 +678,7 @@ class ECS:
                         "aws_lb_listener_rule", rule_id, attributes)
 
     def aws_lb_listener(self, target_group_arn):
-        print("Processing Load Balancer Listeners for Target Group ARN:",
+        logger.debug("Processing Load Balancer Listeners for Target Group ARN:",
               target_group_arn)
 
         # Get all Load Balancers
@@ -784,7 +694,7 @@ class ECS:
                     for action in listener['DefaultActions']:
                         if action['Type'] == 'forward' and any(tg['TargetGroupArn'] == target_group_arn for tg in action['ForwardConfig']['TargetGroups']):
                             listener_arn = listener["ListenerArn"]
-                            print(f"Processing Listener: {listener_arn}")
+                            logger.debug(f"Processing Listener: {listener_arn}")
 
                             attributes = {
                                 "id": listener_arn,

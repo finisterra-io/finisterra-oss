@@ -1,6 +1,8 @@
 import os
 from ...utils.hcl import HCL
-import sys
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 class SECURITY_GROUP:
@@ -50,13 +52,13 @@ class SECURITY_GROUP:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_security_group()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
 
     def aws_security_group(self, security_group_id=None, ftstack=None):
@@ -65,7 +67,7 @@ class SECURITY_GROUP:
         # If security_group_id is provided, process only that specific security group
         if security_group_id:
             if ftstack and self.hcl.id_resource_processed(resource_type, security_group_id, ftstack):
-                print(f"  Skipping Security Group: {security_group_id} - already processed")
+                logger.debug(f"  Skipping Security Group: {security_group_id} - already processed")
                 return
 
             try:
@@ -74,10 +76,10 @@ class SECURITY_GROUP:
                     self.process_security_group(security_group, ftstack)
                     return security_group["GroupName"]
             except Exception as e:
-                print(f"Error fetching Security Group {security_group_id}: {e}")
+                logger.error(f"Error fetching Security Group {security_group_id}: {e}")
             return
 
-        print("Processing Security Groups...")
+        logger.debug("Processing Security Groups...")
         response = self.aws_clients.ec2_client.describe_security_groups()
         if len(response["SecurityGroups"]) > 0:
             self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=len(response["SecurityGroups"]))
@@ -94,10 +96,10 @@ class SECURITY_GROUP:
         is_elasticbeanstalk = any(tag['Key'].startswith('elasticbeanstalk:') for tag in security_group.get('Tags', []))
         is_eks = any(tag['Key'].startswith('eks:') for tag in security_group.get('Tags', []))
         if is_elasticbeanstalk or is_eks:
-            print(f"  Skipping Elastic Beanstalk or EKS AutoScaling Group: {security_group['GroupName']}")
+            logger.debug(f"  Skipping Elastic Beanstalk or EKS AutoScaling Group: {security_group['GroupName']}")
             return
 
-        print(f"Processing Security Group: {security_group['GroupName']}")
+        logger.debug(f"Processing Security Group: {security_group['GroupName']}")
         vpc_id = security_group.get("VpcId", "")
         id = security_group["GroupId"]
 
@@ -133,7 +135,7 @@ class SECURITY_GROUP:
             # Filter for ingress rules
             if not rule.get('IsEgress', False):
                 rule_id = rule['SecurityGroupRuleId']
-                print(f"Processing VPC Security Group Ingress Rule {rule_id}...")
+                logger.debug(f"Processing VPC Security Group Ingress Rule {rule_id}...")
 
                 attributes = {
                     "id": rule_id,
@@ -158,7 +160,7 @@ class SECURITY_GROUP:
             # Filter for egress rules
             if rule.get('IsEgress', True):
                 rule_id = rule['SecurityGroupRuleId']
-                print(f"Processing VPC Security Group Egress Rule {rule_id}...")
+                logger.debug(f"Processing VPC Security Group Egress Rule {rule_id}...")
 
                 attributes = {
                     "id": rule_id,

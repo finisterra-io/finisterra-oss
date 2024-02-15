@@ -1,5 +1,8 @@
 import os
 from ...utils.hcl import HCL
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 class SNS:
@@ -25,30 +28,28 @@ class SNS:
         self.hcl.account_id = aws_account_id
 
 
-
-
     def sns(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_sns_topic()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
 
     def aws_sns_platform_application(self):
-        print("Processing SNS Platform Applications...")
+        logger.debug("Processing SNS Platform Applications...")
 
         paginator = self.aws_clients.sns_client.get_paginator("list_platform_applications")
         for page in paginator.paginate():
             for platform_application in page.get("PlatformApplications", []):
                 arn = platform_application["PlatformApplicationArn"]
                 name = arn.split(":")[-1]
-                print(f"Processing SNS Platform Application: {name}")
+                logger.debug(f"Processing SNS Platform Application: {name}")
 
                 attributes = {
                     "id": arn,
@@ -58,7 +59,7 @@ class SNS:
                     "aws_sns_platform_application", name.replace("-", "_"), attributes)
 
     def aws_sns_sms_preferences(self):
-        print("Processing SNS SMS Preferences...")
+        logger.debug("Processing SNS SMS Preferences...")
 
         try:
             preferences = self.aws_clients.sns_client.get_sms_attributes()["attributes"]
@@ -67,11 +68,11 @@ class SNS:
             self.hcl.process_resource(
                 "aws_sns_sms_preferences", "sns_sms_preferences", attributes)
         except Exception as e:
-            print(f"Error retrieving SNS SMS Preferences: {str(e)}")
+            logger.error(f"Error retrieving SNS SMS Preferences: {str(e)}")
 
     def aws_sns_topic(self):
         resource_type = "aws_sns_topic"
-        print("Processing SNS Topics...")
+        logger.debug("Processing SNS Topics...")
 
         paginator = self.aws_clients.sns_client.get_paginator("list_topics")
         total = 0
@@ -85,9 +86,10 @@ class SNS:
                 name = arn.split(":")[-1]
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{name}[/]")
 
-                # if name != 'learning-mediaAssetModified':
+                # if name != 'slack-devops-monitors-devqa':
                 #     continue
-                print(f"Processing SNS Topic: {name}")
+
+                logger.debug(f"Processing SNS Topic: {name}")
                 id = arn
 
                 ftstack = "sns"
@@ -100,7 +102,7 @@ class SNS:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -116,7 +118,7 @@ class SNS:
                 self.aws_sns_topic_subscription(arn)
 
     def aws_sns_topic_policy(self, arn):
-        print("Processing SNS Topic Policies...")
+        logger.debug("Processing SNS Topic Policies...")
 
         name = arn.split(":")[-1]
 
@@ -132,10 +134,10 @@ class SNS:
                 self.hcl.process_resource(
                     "aws_sns_topic_policy", f"{name}_policy".replace("-", "_"), attributes)
         except Exception as e:
-            print(f"Error retrieving SNS Topic Policy for {name}: {str(e)}")
+            logger.error(f"Error retrieving SNS Topic Policy for {name}: {str(e)}")
 
     def aws_sns_topic_data_protection_policy(self, arn):
-        print("Processing SNS Topic Data Protection Policies...")
+        logger.debug("Processing SNS Topic Data Protection Policies...")
 
         name = arn.split(":")[-1]
 
@@ -151,11 +153,11 @@ class SNS:
                 self.hcl.process_resource(
                     "aws_sns_topic_data_protection_policy", f"{name}_data_protection_policy".replace("-", "_"), attributes)
         except Exception as e:
-            print(
+            logger.error(
                 f"Error retrieving SNS Topic Data Protection Policy for {name}: {str(e)}")
 
     def aws_sns_topic_subscription(self, topic_arn):
-        print("Processing SNS Topic Subscriptions...")
+        logger.debug("Processing SNS Topic Subscriptions...")
 
         paginator = self.aws_clients.sns_client.get_paginator("list_subscriptions")
         for page in paginator.paginate():
@@ -166,7 +168,7 @@ class SNS:
                     if arn == "PendingConfirmation":
                         continue
                     name = arn.split(":")[-1]
-                    print(f"Processing SNS Topic Subscription: {name}")
+                    logger.debug(f"Processing SNS Topic Subscription: {name}")
 
                     attributes = {
                         "id": arn,

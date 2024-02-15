@@ -2,6 +2,9 @@ import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class DocDb:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -33,7 +36,7 @@ class DocDb:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -41,7 +44,7 @@ class DocDb:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
 
@@ -64,18 +67,18 @@ class DocDb:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_docdb_cluster()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
 
     def aws_docdb_cluster(self):
         resource_type = "aws_docdb_cluster"
-        print("Processing DocumentDB Clusters...")
+        # logger.debug(f"Processing DocumentDB Clusters...")
 
         paginator = self.aws_clients.docdb_client.get_paginator("describe_db_clusters")
         total = 0
@@ -90,7 +93,7 @@ class DocDb:
         for page in paginator.paginate():
             for db_cluster in page["DBClusters"]:
                 if db_cluster["Engine"] == "docdb":
-                    print(f"Processing DocumentDB Cluster: {db_cluster['DBClusterIdentifier']}")
+                    logger.debug(f"Processing DocumentDB Cluster: {db_cluster['DBClusterIdentifier']}")
 
                     id = db_cluster["DBClusterIdentifier"]
                     self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
@@ -105,7 +108,7 @@ class DocDb:
                                     ftstack = "docdb_"+tag['Value']
                                 break
                     except Exception as e:
-                        print("Error occurred: ", e)
+                        logger.error("Error occurred: ", e)
 
                     attributes = {
                         "id": db_cluster["DBClusterIdentifier"],
@@ -130,14 +133,13 @@ class DocDb:
                         self.kms_instance.aws_kms_key(KmsKeyId, ftstack)
 
     def aws_docdb_cluster_instance(self, db_cluster):
-        print("Processing DocumentDB Cluster Instances...")
+        logger.debug(f"Processing DocumentDB Cluster Instances...")
 
         paginator = self.aws_clients.docdb_client.get_paginator("describe_db_instances")
         for page in paginator.paginate():
             for db_instance in page["DBInstances"]:
                 if db_instance["Engine"] == "docdb" and db_instance["DBClusterIdentifier"] == db_cluster["DBClusterIdentifier"]:
-                    print(
-                        f"Processing DocumentDB Cluster Instance: {db_instance['DBInstanceIdentifier']}")
+                    logger.debug(f"Processing DocumentDB Cluster Instance: {db_instance['DBInstanceIdentifier']}")
 
                     attributes = {
                         "id": db_instance["DBInstanceIdentifier"],
@@ -166,7 +168,7 @@ class DocDb:
                             db_instance['DBSubnetGroup']['DBSubnetGroupName'])
 
     def aws_docdb_cluster_parameter_group(self, parameter_group_name):
-        print("Processing DocumentDB Cluster Parameter Groups...")
+        logger.debug(f"Processing DocumentDB Cluster Parameter Groups...")
 
         paginator = self.aws_clients.docdb_client.get_paginator(
             "describe_db_cluster_parameter_groups")
@@ -175,8 +177,7 @@ class DocDb:
                 if parameter_group['DBClusterParameterGroupName'] == parameter_group_name:
                     # Check if it's a DocumentDB parameter group
                     if "docdb" in parameter_group["DBParameterGroupFamily"]:
-                        print(
-                            f"Processing DocumentDB Cluster Parameter Group: {parameter_group['DBClusterParameterGroupName']}")
+                        logger.debug(f"Processing DocumentDB Cluster Parameter Group: {parameter_group['DBClusterParameterGroupName']}")
 
                         attributes = {
                             "id": parameter_group["DBClusterParameterGroupName"],
@@ -189,7 +190,7 @@ class DocDb:
 
     def aws_docdb_subnet_group(self, subnet_group_name):
         resource_type="aws_docdb_subnet_group"
-        print("Processing DocumentDB Subnet Groups...")
+        logger.debug(f"Processing DocumentDB Subnet Groups...")
 
         paginator = self.aws_clients.docdb_client.get_paginator(
             "describe_db_subnet_groups")
@@ -198,8 +199,7 @@ class DocDb:
                 if subnet_group['DBSubnetGroupName'] == subnet_group_name:
                     # Check if it's a DocumentDB subnet group
                     if "DocumentDB" in subnet_group.get("DBSubnetGroupDescription", ""):
-                        print(
-                            f"Processing DocumentDB Subnet Group: {subnet_group['DBSubnetGroupName']}")
+                        logger.debug(f"Processing DocumentDB Subnet Group: {subnet_group['DBSubnetGroupName']}")
                         
                         subnet_ids = [subnet['SubnetIdentifier'] for subnet in subnet_group.get("Subnets", [])]
                         id = subnet_group["DBSubnetGroupName"]
@@ -243,15 +243,14 @@ class DocDb:
 
 
     def aws_docdb_cluster_snapshot(self):
-        print("Processing DocumentDB Cluster Snapshots...")
+        logger.debug(f"Processing DocumentDB Cluster Snapshots...")
 
         paginator = self.aws_clients.docdb_client.get_paginator(
             "describe_db_cluster_snapshots")
         for page in paginator.paginate():
             for snapshot in page["DBClusterSnapshots"]:
                 if snapshot["Engine"] == "docdb":
-                    print(
-                        f"Processing DocumentDB Cluster Snapshot: {snapshot['DBClusterSnapshotIdentifier']}")
+                    logger.debug(f"Processing DocumentDB Cluster Snapshot: {snapshot['DBClusterSnapshotIdentifier']}")
 
                     attributes = {
                         "id": snapshot["DBClusterSnapshotIdentifier"],
@@ -268,14 +267,13 @@ class DocDb:
                         "aws_docdb_cluster_snapshot", snapshot["DBClusterSnapshotIdentifier"].replace("-", "_"), attributes)
 
     def aws_docdb_event_subscription(self):
-        print("Processing DocumentDB Event Subscriptions...")
+        logger.debug(f"Processing DocumentDB Event Subscriptions...")
 
         paginator = self.aws_clients.docdb_client.get_paginator(
             "describe_event_subscriptions")
         for page in paginator.paginate():
             for subscription in page["EventSubscriptionsList"]:
-                print(
-                    f"Processing DocumentDB Event Subscription: {subscription['CustSubscriptionId']}")
+                logger.debug(f"Processing DocumentDB Event Subscription: {subscription['CustSubscriptionId']}")
 
                 attributes = {
                     "id": subscription["CustSubscriptionId"],
@@ -289,14 +287,13 @@ class DocDb:
                     "aws_docdb_event_subscription", subscription["CustSubscriptionId"].replace("-", "_"), attributes)
 
     def aws_docdb_global_cluster(self):
-        print("Processing DocumentDB Global Clusters...")
+        logger.debug(f"Processing DocumentDB Global Clusters...")
 
         paginator = self.aws_clients.docdb_client.get_paginator("describe_db_clusters")
         for page in paginator.paginate():
             for cluster in page["DBClusters"]:
                 if "GlobalClusterIdentifier" in cluster and cluster["Engine"] == "docdb":
-                    print(
-                        f"Processing DocumentDB Global Cluster: {cluster['GlobalClusterIdentifier']}")
+                    logger.debug(f"Processing DocumentDB Global Cluster: {cluster['GlobalClusterIdentifier']}")
 
                     attributes = {
                         "id": cluster["GlobalClusterIdentifier"],

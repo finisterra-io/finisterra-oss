@@ -2,6 +2,9 @@ import os
 from ...utils.hcl import HCL
 import botocore
 from ...providers.aws.kms import KMS
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class CodeArtifact:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -54,16 +57,16 @@ class CodeArtifact:
     def codeartifact(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_codeartifact_domain()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_codeartifact_domain(self, domain_name=None, ftstack=None):
-        print("Processing CodeArtifact Domains")
+        # logger.debug(f"Processing CodeArtifact Domains")
 
         if domain_name:
             self.process_single_codeartifact_domain(domain_name, ftstack)
@@ -96,7 +99,7 @@ class CodeArtifact:
         resource_type = "aws_codeartifact_domain"
         domain_info = self.aws_clients.codeartifact_client.describe_domain(domain=domain_name)
         domain_arn = domain_info["domain"]["arn"]
-        print(f"Processing CodeArtifact Domain: {domain_name}")
+        logger.debug(f"Processing CodeArtifact Domain: {domain_name}")
 
         id = domain_arn
         attributes = {
@@ -136,7 +139,7 @@ class CodeArtifact:
     
     def aws_codeartifact_repository(self, domain_name, repository_arn, repository_name):
         resource_type = "aws_codeartifact_repository"
-        print(f"Processing CodeArtifact Repository: {repository_arn}")
+        logger.debug(f"Processing CodeArtifact Repository: {repository_arn}")
 
         id = repository_arn
         attributes = {
@@ -157,7 +160,7 @@ class CodeArtifact:
         
             
     def aws_codeartifact_repository_permissions_policy(self, repository_arn):
-        print(f"Processing CodeArtifact Repository Permissions Policy {repository_arn}")
+        logger.debug(f"Processing CodeArtifact Repository Permissions Policy {repository_arn}")
         resource_type = "aws_codeartifact_repository_permissions_policy"
         id = repository_arn
         attributes = {
@@ -166,7 +169,7 @@ class CodeArtifact:
         self.hcl.process_resource(resource_type, id, attributes)
 
     def aws_codeartifact_domain_permissions_policy(self, domain_name_arn):
-        print(f"Processing CodeArtifact Domain Permissions Policy {domain_name_arn}")
+        logger.debug(f"Processing CodeArtifact Domain Permissions Policy {domain_name_arn}")
         resource_type = "aws_codeartifact_domain_permissions_policy"
         id = domain_name_arn
         attributes = {

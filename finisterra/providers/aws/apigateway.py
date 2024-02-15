@@ -5,6 +5,10 @@ from ...providers.aws.elbv2 import ELBV2
 from ...providers.aws.logs import Logs
 from ...providers.aws.acm import ACM
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
+
+logger = logging.getLogger('finisterra')
+
 
 class Apigateway:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -42,16 +46,16 @@ class Apigateway:
     def apigateway(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_api_gateway_rest_api()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
-
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
+            
     def aws_api_gateway_account(self):
-        print("Processing API Gateway Account...")
+        logger.debug(f"Processing API Gateway Account...")
 
         account = self.aws_clients.apigateway_client.get_account()
 
@@ -73,7 +77,7 @@ class Apigateway:
 
     def aws_api_gateway_rest_api(self):
         resource_type = "aws_api_gateway_rest_api"
-        # print("Processing API Gateway REST APIs...")
+        # logger.debug(f"Processing API Gateway REST APIs...")
 
         rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
 
@@ -86,7 +90,7 @@ class Apigateway:
         for rest_api in rest_apis:
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rest_api['name']}[/]")
 
-            # if rest_api["name"] != "staging-aws-service":
+            # if rest_api["name"] != "crm-dev-green-household":
             #     continue
 
             api_id = rest_api["id"]
@@ -104,7 +108,7 @@ class Apigateway:
                             ftstack = "stack_"+tag_value
                         break
             except Exception as e:
-                print("Error occurred: ", e)
+                logger.error("Error occurred: ", e)
 
             attributes = {
                 "id": api_id,
@@ -132,7 +136,7 @@ class Apigateway:
             self.aws_api_gateway_base_path_mapping(rest_api["id"], ftstack)
 
     def aws_api_gateway_deployment(self, rest_api_id, deployment_id, ftstack):
-        print(f"Processing API Gateway Deployment: {deployment_id}")
+        logger.debug(f"Processing API Gateway Deployment: {deployment_id}")
         attributes = {
             "id": deployment_id,
             "rest_api_id": rest_api_id
@@ -151,10 +155,10 @@ class Apigateway:
         
 
     def aws_api_gateway_stage(self, rest_api_id, stages, ftstack):
-        print("Processing API Gateway Stages...")
+        logger.debug(f"Processing API Gateway Stages...")
 
         for stage in stages:
-            print(f"Processing API Gateway Stage: {stage['stageName']}")
+            logger.debug(f"Processing API Gateway Stage: {stage['stageName']}")
 
             attributes = {
                 "id": rest_api_id + "/" + stage["stageName"],
@@ -189,18 +193,18 @@ class Apigateway:
             # api_file_name = os.path.join(folder, f"{rest_api_id}-{stage['stageName']}-api_definition.yaml")
             # with open(api_file_name, 'wb') as file:
             #     file.write(open_api_definition)
-            # print("Exported API definition to api_definition.yaml")
+            # logger.debug(f"Exported API definition to api_definition.yaml")
 
     def aws_api_gateway_method(self, rest_api_id, resource_id, ftstack):
         try:
-            print(f"Processing API Gateway Methods for resource: {resource_id}...")
+            logger.debug(f"Processing API Gateway Methods for resource: {resource_id}...")
 
             # Attempt to retrieve the resource methods, default to an empty dict if not found
             response = self.aws_clients.apigateway_client.get_resource(restApiId=rest_api_id, resourceId=resource_id)
             methods = response.get("resourceMethods", {})
 
             for method, details in methods.items():
-                # print(f"Processing API Gateway Method: {resource_id} {method}")
+                # logger.debug(f"Processing API Gateway Method: {resource_id} {method}")
 
                 attributes = {
                     "id": rest_api_id + "/" + resource_id + "/" + method,
@@ -215,17 +219,17 @@ class Apigateway:
                 self.aws_api_gateway_method_response(rest_api_id, resource_id, method)
 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.error(f"An error occurred: {e}")
             # Handle the exception or re-raise it depending on your needs
 
     def aws_api_gateway_method_settings(self, rest_api_id, stages):
-        print("Processing API Gateway Method Settings...")
+        logger.debug(f"Processing API Gateway Method Settings...")
 
         for stage in stages:
             settings = stage["methodSettings"]
 
             for key, setting in settings.items():
-                print(f"Processing API Gateway Method Setting: {key}")
+                logger.debug(f"Processing API Gateway Method Setting: {key}")
 
                 attributes = {
                     "id": rest_api_id + "/" + stage["stageName"] + "/" + key,
@@ -240,7 +244,7 @@ class Apigateway:
                     "aws_api_gateway_method_settings", resource_name, attributes)
 
     def aws_api_gateway_rest_api_policy(self, rest_api_id):
-        print("Processing API Gateway REST API Policies...")
+        logger.debug(f"Processing API Gateway REST API Policies...")
 
         rest_api = self.aws_clients.apigateway_client.get_rest_api(
             restApiId=rest_api_id)
@@ -248,7 +252,7 @@ class Apigateway:
         policy = rest_api.get("policy", None)
 
         if policy:
-            print(
+            logger.debug(
                 f"Processing API Gateway REST API Policy for {rest_api['name']}")
 
             attributes = {
@@ -266,10 +270,10 @@ class Apigateway:
         resource_type = "aws_api_gateway_vpc_link"
         if vpc_link_id:
             if ftstack and self.hcl.id_resource_processed(resource_type, vpc_link_id, ftstack):
-                    # print(f"  Skipping VPC Link: {vpc_link_id} - already processed")
+                    # logger.debug(f"  Skipping VPC Link: {vpc_link_id} - already processed")
                     return
             
-        print(f"Processing API Gateway VPC Link: {vpc_link_id}")
+        logger.debug(f"Processing API Gateway VPC Link: {vpc_link_id}")
 
         vpc_link = self.aws_clients.apigateway_client.get_vpc_link(
             vpcLinkId=vpc_link_id
@@ -290,14 +294,14 @@ class Apigateway:
                 self.elbv2_instance.aws_lb(target_arn, ftstack)
 
     # def aws_api_gateway_api_key(self):
-    #     print("Processing API Gateway API Keys...")
+    #     logger.debug(f"Processing API Gateway API Keys...")
 
     #     paginator = self.aws_clients.apigateway_client.get_paginator("get_api_keys")
     #     page_iterator = paginator.paginate()
 
     #     for page in page_iterator:
     #         for api_key in page["items"]:
-    #             print(f"Processing API Gateway API Key: {api_key['id']}")
+    #             logger.debug(f"Processing API Gateway API Key: {api_key['id']}")
 
     #             attributes = {
     #                 "id": api_key["id"],
@@ -314,7 +318,7 @@ class Apigateway:
     #                 "aws_api_gateway_api_key", api_key["id"], attributes)
 
     # def aws_api_gateway_authorizer(self):
-    #     print("Processing API Gateway Authorizers...")
+    #     logger.debug(f"Processing API Gateway Authorizers...")
 
     #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
 
@@ -324,7 +328,7 @@ class Apigateway:
 
     #         for authorizer in authorizers:
     #             authorizer_id = authorizer['id']
-    #             print(f"Processing API Gateway Authorizer: {authorizer_id}")
+    #             logger.debug(f"Processing API Gateway Authorizer: {authorizer_id}")
 
     #             attributes = {
     #                 "id": authorizer_id,
@@ -346,7 +350,7 @@ class Apigateway:
     #                 "aws_api_gateway_authorizer", authorizer_id, attributes)
 
     def aws_api_gateway_base_path_mapping(self, api_id, ftstack):
-        print("Processing API Gateway Base Path Mappings...")
+        logger.debug(f"Processing API Gateway Base Path Mappings...")
 
         domains = self.aws_clients.apigateway_client.get_domain_names()["items"]
         process_domain = False
@@ -356,7 +360,7 @@ class Apigateway:
 
             for base_path_mapping in base_path_mappings:
                 if base_path_mapping["restApiId"] == api_id:
-                    print(
+                    logger.debug(
                         f"Processing API Gateway Base Path Mapping: {base_path_mapping['basePath']}")
 
                     attributes = {
@@ -376,13 +380,13 @@ class Apigateway:
                 self.aws_api_gateway_domain_name(domain, ftstack)
 
     # def aws_api_gateway_client_certificate(self):
-    #     print("Processing API Gateway Client Certificates...")
+    #     logger.debug(f"Processing API Gateway Client Certificates...")
 
     #     client_certificates = self.aws_clients.apigateway_client.get_client_certificates()[
     #         "items"]
 
     #     for client_certificate in client_certificates:
-    #         print(
+    #         logger.debug(
     #             f"Processing API Gateway Client Certificate: {client_certificate['clientCertificateId']}")
 
     #         attributes = {
@@ -394,7 +398,7 @@ class Apigateway:
     #                                   client_certificate["clientCertificateId"], attributes)
 
     # def aws_api_gateway_documentation_part(self):
-    #     print("Processing API Gateway Documentation Parts...")
+    #     logger.debug(f"Processing API Gateway Documentation Parts...")
 
     #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
 
@@ -403,7 +407,7 @@ class Apigateway:
     #             restApiId=rest_api["id"])["items"]
 
     #         for documentation_part in documentation_parts:
-    #             print(
+    #             logger.debug(
     #                 f"Processing API Gateway Documentation Part: {documentation_part['id']}")
 
     #             attributes = {
@@ -416,7 +420,7 @@ class Apigateway:
     #                 "aws_api_gateway_documentation_part", documentation_part["id"], attributes)
 
     # def aws_api_gateway_documentation_version(self):
-    #     print("Processing API Gateway Documentation Versions...")
+    #     logger.debug(f"Processing API Gateway Documentation Versions...")
 
     #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
 
@@ -425,7 +429,7 @@ class Apigateway:
     #             restApiId=rest_api["id"])["items"]
 
     #         for documentation_version in documentation_versions:
-    #             print(
+    #             logger.debug(
     #                 f"Processing API Gateway Documentation Version: {documentation_version['version']}")
 
     #             attributes = {
@@ -444,7 +448,7 @@ class Apigateway:
 
         for domain in domains:
             if domain["domainName"] == filter_domain["domainName"]:
-                print(f"Processing API Gateway Domain Name: {domain['domainName']}")
+                logger.debug(f"Processing API Gateway Domain Name: {domain['domainName']}")
 
                 id = domain["domainName"]
                 attributes = {
@@ -471,13 +475,13 @@ class Apigateway:
                 
 
     def aws_api_gateway_gateway_response(self, rest_api_id):
-        print(f"Processing API Gateway Gateway Responses for Rest API: {rest_api_id}")
+        logger.debug(f"Processing API Gateway Gateway Responses for Rest API: {rest_api_id}")
 
         gateway_responses = self.aws_clients.apigateway_client.get_gateway_responses(
             restApiId=rest_api_id)["items"]
 
         for gateway_response in gateway_responses:
-            print(
+            logger.debug(
                 f"Processing API Gateway Gateway Response: {gateway_response['responseType']}")
 
             attributes = {
@@ -491,7 +495,7 @@ class Apigateway:
                 "aws_api_gateway_gateway_response", resource_name, attributes)
 
     def aws_api_gateway_integration(self, api_id, resource_id, method, ftstack):
-        print("Processing API Gateway Integrations...")
+        logger.debug(f"Processing API Gateway Integrations...")
         try:
             # Retrieve the integration for the specified method
             integration = self.aws_clients.apigateway_client.get_integration(
@@ -499,7 +503,7 @@ class Apigateway:
             
             path = self.api_gateway_resource_list[api_id][resource_id]
 
-            # print(f"Processing API Gateway Integration: {path} {method}")
+            # logger.debug(f"Processing API Gateway Integration: {path} {method}")
 
             # Prepare the attributes for the integration
             attributes = {
@@ -525,14 +529,14 @@ class Apigateway:
             self.aws_api_gateway_integration_response(api_id, resource_id, method, integration["integrationResponses"])
 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.error(f"An error occurred: {e}")
             # Handle the exception or re-raise it depending on your needs
             pass
 
     def aws_api_gateway_integration_response(self, rest_api_id, resource_id, method, integration_responses):
-        print("Processing API Gateway Integration Responses...")
+        logger.debug(f"Processing API Gateway Integration Responses...")
         for status_code in integration_responses:
-            # print(f"Processing API Gateway Integration Response: {resource_id} {method} {status_code}")
+            # logger.debug(f"Processing API Gateway Integration Response: {resource_id} {method} {status_code}")
 
             attributes = {
                 "id": rest_api_id+"/"+resource_id+"/"+method+"/"+status_code,
@@ -547,13 +551,13 @@ class Apigateway:
                 "aws_api_gateway_integration_response", resource_name, attributes)
 
     def aws_api_gateway_method_response(self, rest_api_id, resource_id, method):
-        print("Processing API Gateway Method Responses...")
+        logger.debug(f"Processing API Gateway Method Responses...")
 
         method_details = self.aws_clients.apigateway_client.get_method(
             restApiId=rest_api_id, resourceId=resource_id, httpMethod=method)
         
         for status_code in method_details["methodResponses"].keys():
-            # print(f"Processing API Gateway Method Response: {resource_id} {method} {status_code}")
+            # logger.debug(f"Processing API Gateway Method Response: {resource_id} {method} {status_code}")
 
             attributes = {
                 "id": rest_api_id + "/" + resource_id + "/" + method + "/" + status_code,
@@ -568,12 +572,12 @@ class Apigateway:
                 "aws_api_gateway_method_response", resource_name, attributes)
 
     def aws_api_gateway_model(self, rest_api_id):
-        print(f"Processing API Gateway Models for Rest API: {rest_api_id}")
+        logger.debug(f"Processing API Gateway Models for Rest API: {rest_api_id}")
 
         models = self.aws_clients.apigateway_client.get_models(restApiId=rest_api_id)["items"]
 
         for model in models:
-            print(f"Processing API Gateway Model: {model['name']}")
+            logger.debug(f"Processing API Gateway Model: {model['name']}")
 
             attributes = {
                 "id": rest_api_id + "/" + model["name"],
@@ -585,7 +589,7 @@ class Apigateway:
             self.hcl.process_resource("aws_api_gateway_model", resource_name, attributes)
 
     # def aws_api_gateway_request_validator(self):
-    #     print("Processing API Gateway Request Validators...")
+    #     logger.debug(f"Processing API Gateway Request Validators...")
 
     #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
 
@@ -594,7 +598,7 @@ class Apigateway:
     #             restApiId=rest_api["id"])["items"]
 
     #         for validator in validators:
-    #             print(
+    #             logger.debug(
     #                 f"Processing API Gateway Request Validator: {validator['name']}")
 
     #             attributes = {
@@ -610,7 +614,7 @@ class Apigateway:
     #                 "aws_api_gateway_request_validator", resource_name, attributes)
 
     def aws_api_gateway_resource(self, api_id, ftstack):
-        print(f"Processing API Gateway Resources for API: {api_id}")
+        logger.debug(f"Processing API Gateway Resources for API: {api_id}")
 
         paginator = self.aws_clients.apigateway_client.get_paginator("get_resources")
 
@@ -633,7 +637,7 @@ class Apigateway:
 
     def single_aws_api_gateway_resource(self, resource, api_id, ftstack):
         resource_type="aws_api_gateway_resource"
-        print(f"Processing API Gateway Resource: {resource['path']}")
+        logger.debug(f"Processing API Gateway Resource: {resource['path']}")
         resource_id = resource["id"]
         attributes = {
             "id": resource_id,
@@ -659,7 +663,7 @@ class Apigateway:
         self.aws_api_gateway_method(api_id, resource_id, ftstack)
 
     # def aws_api_gateway_usage_plan_key(self):
-    #     print("Processing API Gateway Usage Plans and Usage Plan Keys...")
+    #     logger.debug(f"Processing API Gateway Usage Plans and Usage Plan Keys...")
 
     #     paginator = self.aws_clients.apigateway_client.get_paginator("get_usage_plans")
     #     page_iterator = paginator.paginate()
@@ -679,7 +683,7 @@ class Apigateway:
     #                     key_id = usage_plan_key["id"]
     #                     key_type = usage_plan_key["type"]
 
-    #                     print(
+    #                     logger.debug(
     #                         f"    Processing API Gateway Usage Plan Key: {key_id}")
 
     #                     attributes_key = {
@@ -692,7 +696,7 @@ class Apigateway:
     #                         "aws_api_gateway_usage_plan_key", f"{usage_plan_id}-{key_id}", attributes_key)
 
     # def aws_api_gateway_usage_plan(self):
-    #     print("Processing API Gateway Usage Plans...")
+    #     logger.debug(f"Processing API Gateway Usage Plans...")
 
     #     paginator = self.aws_clients.apigateway_client.get_paginator("get_usage_plans")
     #     page_iterator = paginator.paginate()
@@ -700,7 +704,7 @@ class Apigateway:
     #     for page in page_iterator:
     #         for usage_plan in page["items"]:
     #             usage_plan_id = usage_plan["id"]
-    #             print(f"Processing API Gateway Usage Plan: {usage_plan_id}")
+    #             logger.debug(f"Processing API Gateway Usage Plan: {usage_plan_id}")
 
     #             attributes = {
     #                 "id": usage_plan_id,
@@ -714,7 +718,7 @@ class Apigateway:
     #                 "aws_api_gateway_usage_plan", usage_plan_id, attributes)
 
     # def aws_api_gateway_usage_plan_key(self):
-    #     print("Processing API Gateway Usage Plan Keys...")
+    #     logger.debug(f"Processing API Gateway Usage Plan Keys...")
 
     #     paginator = self.aws_clients.apigateway_client.get_paginator("get_usage_plans")
     #     page_iterator = paginator.paginate()
@@ -734,7 +738,7 @@ class Apigateway:
     #                     key_id = usage_plan_key["id"]
     #                     key_type = usage_plan_key["type"]
 
-    #                     print(
+    #                     logger.debug(
     #                         f"Processing API Gateway Usage Plan Key: {key_id}")
 
     #                     attributes_key = {

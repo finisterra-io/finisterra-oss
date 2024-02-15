@@ -1,12 +1,16 @@
 import os
 import http
 import json
+import logging
+
+logger = logging.getLogger('finisterra')
+
 
 def auth(payload):
     api_token = os.environ.get('FT_API_TOKEN')
     if not api_token:
         # Do the redirect here to open an account and get a new token
-        print("FT_API_TOKEN environment variable is not defined.")
+        logger.error("FT_API_TOKEN environment variable is not defined.")
         exit()
     api_host = os.environ.get('API_HOST', 'api.finisterra.io')
     api_port = os.environ.get('API_PORT', 443)
@@ -24,6 +28,6 @@ def auth(payload):
     if response.status == 200:
         return True
     else:
-        print(f"Error: {response.status} - {response.reason}")
+        logger.error(f"Error: {response.status} - {response.reason}")
         exit()
 

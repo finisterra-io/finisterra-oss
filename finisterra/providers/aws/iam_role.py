@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 import json
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 class IAM_ROLE:
@@ -34,22 +37,22 @@ class IAM_ROLE:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_iam_role()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_iam_role(self, role_name=None, ftstack=None):
         resource_type = "aws_iam_role"
-        print("Processing IAM Roles...")
+        logger.debug("Processing IAM Roles...")
         
         # If role_name is provided, process only that specific role
         if role_name:
             if ftstack and self.hcl.id_resource_processed(resource_type, role_name, ftstack):
-                print(f"  Skipping IAM Role: {role_name} - already processed")
+                logger.debug(f"  Skipping IAM Role: {role_name} - already processed")
                 return
 
             # Fetch and process the specific role
@@ -57,7 +60,7 @@ class IAM_ROLE:
                 role = self.aws_clients.iam_client.get_role(RoleName=role_name)["Role"]
                 self.process_iam_role(role, ftstack)
             except Exception as e:
-                print(f"Error fetching IAM Role {role_name}: {e}")
+                logger.debug(f"Error fetching IAM Role {role_name}: {e}")
             return
 
         # Code to process all roles if no specific role_name is provided
@@ -81,7 +84,7 @@ class IAM_ROLE:
         if role_path.startswith("/aws-service-role/") or "AWS-QuickSetup" in current_role_name:
             return
 
-        print(f"Processing IAM Role: {current_role_name}")
+        logger.debug(f"Processing IAM Role: {current_role_name}")
         id = current_role_name
         attributes = {
             "id": id,
@@ -103,7 +106,7 @@ class IAM_ROLE:
 
 
     def aws_iam_instance_profile(self, role_name):
-        print("Processing IAM Instance Profiles...")
+        logger.debug("Processing IAM Instance Profiles...")
         paginator = self.aws_clients.iam_client.get_paginator("list_instance_profiles")
 
         for page in paginator.paginate():
@@ -116,7 +119,7 @@ class IAM_ROLE:
                     continue
 
                 instance_profile_name = instance_profile["InstanceProfileName"]
-                print(
+                logger.debug(
                     f"Processing IAM Instance Profile: {instance_profile_name} for role {role_name}")
 
                 attributes = {
@@ -129,7 +132,7 @@ class IAM_ROLE:
                     "aws_iam_instance_profile", instance_profile_name, attributes)
 
     def aws_iam_role_policy_attachment(self, role_name, ftstack):
-        print(f"Processing IAM Role Policy Attachments for {role_name}...")
+        logger.debug(f"Processing IAM Role Policy Attachments for {role_name}...")
 
         policy_paginator = self.aws_clients.iam_client.get_paginator(
             "list_attached_role_policies")
@@ -137,7 +140,7 @@ class IAM_ROLE:
         for policy_page in policy_paginator.paginate(RoleName=role_name):
             for policy in policy_page["AttachedPolicies"]:
                 policy_arn = policy["PolicyArn"]
-                print(
+                logger.debug(
                     f"Processing IAM Role Policy Attachment: {role_name} - {policy_arn}")
 
                 attributes = {
@@ -161,7 +164,7 @@ class IAM_ROLE:
         # if policy_name != "DenyCannedPublicACL":
         #     continue
 
-        print(f"Processing IAM Policy: {policy_name}")
+        logger.debug(f"Processing IAM Policy: {policy_name}")
         id = policy_arn
         attributes = {
             "id": id,

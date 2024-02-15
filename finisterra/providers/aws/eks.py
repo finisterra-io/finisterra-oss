@@ -5,6 +5,9 @@ from ...providers.aws.kms import KMS
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.logs import Logs
 from ...providers.aws.launchtemplate import LaunchTemplate
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class EKS:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -44,7 +47,7 @@ class EKS:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -58,7 +61,7 @@ class EKS:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")      
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")      
         return subnet_names
     
     def get_vpc_name(self, vpc_id):
@@ -66,7 +69,7 @@ class EKS:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -74,7 +77,7 @@ class EKS:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name    
 
@@ -82,17 +85,17 @@ class EKS:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_eks_cluster()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_eks_cluster(self):
         resource_type = 'aws_eks_cluster'
-        print("Processing EKS Clusters...")
+        logger.debug("Processing EKS Clusters...")
 
         clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
         if len(clusters):
@@ -111,7 +114,7 @@ class EKS:
             # if cluster_name != "dev":
             #     continue
 
-            print(f"Processing EKS Cluster: {cluster_name}")
+            logger.debug(f"Processing EKS Cluster: {cluster_name}")
             id = cluster_name
 
             attributes = {
@@ -167,7 +170,7 @@ class EKS:
 
     def aws_eks_addon(self, cluster_name, ftstack=None):
         resource_type = 'aws_eks_addon'
-        print(f"Processing EKS Add-ons for Cluster: {cluster_name}...")
+        logger.debug(f"Processing EKS Add-ons for Cluster: {cluster_name}...")
 
         addons = self.aws_clients.eks_client.list_addons(
             clusterName=cluster_name)["addons"]
@@ -175,7 +178,7 @@ class EKS:
         for addon_name in addons:
             addon = self.aws_clients.eks_client.describe_addon(
                 clusterName=cluster_name, addonName=addon_name)["addon"]
-            print(
+            logger.debug(
                 f"Processing EKS Add-on: {addon_name} for Cluster: {cluster_name}")
 
             id = cluster_name + ":" + addon_name
@@ -192,7 +195,7 @@ class EKS:
                 self.iam_role_instance.aws_iam_role(service_account_role_arn.split('/')[-1], ftstack)
 
     def aws_iam_openid_connect_provider(self, cluster_name):
-        print(
+        logger.debug(
             f"Processing IAM OpenID Connect Providers for Cluster: {cluster_name}...")
 
         # Get cluster details to retrieve OIDC issuer URL
@@ -205,7 +208,7 @@ class EKS:
 
         # Ensure OIDC URL exists for the cluster
         if not expected_oidc_url:
-            print(
+            logger.debug(
                 f"  Warning: No OIDC issuer URL found for Cluster: {cluster_name}")
             return
 
@@ -228,7 +231,7 @@ class EKS:
             if provider_url != expected_oidc_url:
                 continue  # Skip if it doesn't match
 
-            print(
+            logger.debug(
                 f"Processing IAM OpenID Connect Provider: {provider_url} for Cluster: {cluster_name}")
 
             attributes = {
@@ -245,7 +248,7 @@ class EKS:
             )
 
     def aws_eks_fargate_profile(self):
-        print("Processing EKS Fargate Profiles...")
+        logger.debug("Processing EKS Fargate Profiles...")
 
         clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
 
@@ -256,7 +259,7 @@ class EKS:
             for profile_name in fargate_profiles:
                 fargate_profile = self.aws_clients.eks_client.describe_fargate_profile(
                     clusterName=cluster_name, fargateProfileName=profile_name)["fargateProfile"]
-                print(
+                logger.debug(
                     f"Processing EKS Fargate Profile: {profile_name} for Cluster: {cluster_name}")
 
                 attributes = {
@@ -268,7 +271,7 @@ class EKS:
                     "aws_eks_fargate_profile", f"{cluster_name}-{profile_name}".replace("-", "_"), attributes)
 
     def aws_eks_identity_provider_config(self, cluster_name):
-        print(
+        logger.debug(
             f"Processing EKS Identity Provider Configs for Cluster: {cluster_name}...")
 
         identity_provider_configs = self.aws_clients.eks_client.list_identity_provider_configs(
@@ -277,7 +280,7 @@ class EKS:
         for config in identity_provider_configs:
             config_name = config["name"]
             config_type = config["type"]
-            print(
+            logger.debug(
                 f"Processing EKS Identity Provider Config: {config_name} for Cluster: {cluster_name}")
 
             attributes = {
@@ -289,7 +292,7 @@ class EKS:
                                       f"{cluster_name}-{config_name}".replace("-", "_"), attributes)
 
     def aws_ec2_tag(self, resource_id):
-        print(f"Processing EC2 Tags for Resource ID: {resource_id}")
+        logger.debug(f"Processing EC2 Tags for Resource ID: {resource_id}")
 
         # Fetch the tags for the specified resource
         response = self.aws_clients.ec2_client.describe_tags(
@@ -324,17 +327,17 @@ class EKS:
                                       f"{resource_id}-{key}".replace("-", "_"),
                                       attributes)
 
-            print(
+            logger.debug(
                 f"  Prepared tag for Resource {resource_id} with {key} = {value}")
 
     def aws_eks_node_group(self, cluster_name, ftstack):
-        print("Processing EKS Node Groups...")
+        logger.debug("Processing EKS Node Groups...")
 
         # clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
 
         # # Check if the provided cluster_name is in the list of clusters
         # if cluster_name not in clusters:
-        #     print(f"Cluster '{cluster_name}' not found!")
+        #     logger.debug(f"Cluster '{cluster_name}' not found!")
         #     return
 
         node_groups = self.aws_clients.eks_client.list_nodegroups(
@@ -343,7 +346,7 @@ class EKS:
         for node_group_name in node_groups:
             node_group = self.aws_clients.eks_client.describe_nodegroup(
                 clusterName=cluster_name, nodegroupName=node_group_name)["nodegroup"]
-            print(
+            logger.debug(
                 f"Processing EKS Node Group: {node_group_name} for Cluster: {cluster_name}")
 
             id = cluster_name + ":" + node_group_name
@@ -375,53 +378,9 @@ class EKS:
             for asg in node_group.get('resources', {}).get('autoScalingGroups', []):
                 self.aws_autoscaling_schedule(node_group_name, asg['name'])
 
-    # def aws_launch_template(self, launch_template_id, ftstack):
-    #     print("Processing AWS Launch Template...")
-
-    #     # Describe the latest version of the launch template using the provided ID
-    #     response = self.aws_clients.ec2_client.describe_launch_template_versions(
-    #         LaunchTemplateId=launch_template_id,
-    #         Versions=['$Latest']
-    #     )
-
-    #     # Check if we have the launch template versions in the response
-    #     if 'LaunchTemplateVersions' not in response or not response['LaunchTemplateVersions']:
-    #         print(f"Launch template with ID '{launch_template_id}' not found!")
-    #         return
-
-    #     latest_version = response['LaunchTemplateVersions'][0]
-    #     launch_template_data = latest_version['LaunchTemplateData']
-
-    #     print(f"Processing Launch Template: {latest_version['LaunchTemplateName']} with ID: {launch_template_id}")
-
-    #     attributes = {
-    #         "id": launch_template_id,
-    #         "name": latest_version['LaunchTemplateName'],
-    #         "version": latest_version['VersionNumber'],
-    #         # You can add other attributes from the launch_template as needed
-    #     }
-
-    #     self.hcl.process_resource(
-    #         "aws_launch_template", f"{latest_version['LaunchTemplateName']}".replace("-", "_"), attributes)
-        
-    #     #security_groups
-    #     security_group_ids = launch_template_data.get("SecurityGroupIds", [])
-    #     for security_group_id in security_group_ids:
-    #         self.security_group_instance.aws_security_group(security_group_id, ftstack)
-        
-    #     # Process KMS Key for EBS Volume
-    #     if 'BlockDeviceMappings' in launch_template_data:
-    #         for mapping in launch_template_data['BlockDeviceMappings']:
-    #             if 'Ebs' in mapping and 'KmsKeyId' in mapping['Ebs']:
-    #                 kms_key_id = mapping['Ebs']['KmsKeyId']
-    #                 print(f"Found KMS Key ID for EBS: {kms_key_id}")
-    #                 self.kms_instance.aws_kms_key(kms_key_id, ftstack)
-    #                 break  # Assuming we need the first KMS Key ID found
-    #     else:
-    #         print("No Block Device Mappings with EBS found in the Launch Template.")
 
     def aws_autoscaling_schedule(self, node_group_name, autoscaling_group_name):
-        print(
+        logger.debug(
             f"Processing Auto Scaling Schedules for Group: {autoscaling_group_name}...")
 
         try:
@@ -431,7 +390,7 @@ class EKS:
             
             for action in scheduled_actions:
                 id = action['ScheduledActionName']
-                print(
+                logger.debug(
                     f"Processing Auto Scaling Schedule: {id} for Group: {autoscaling_group_name}")
 
                 attributes = {
@@ -445,5 +404,5 @@ class EKS:
                 
                 self.hcl.add_additional_data("aws_autoscaling_schedule", id, "node_group_name", node_group_name)
         except Exception as e:
-            print(
+            logger.error(
                 f"Error processing Auto Scaling schedule for group {autoscaling_group_name}: {str(e)}")

@@ -4,6 +4,9 @@ import base64
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
 from ...providers.aws.iam_role import IAM_ROLE
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class EC2:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -61,8 +64,7 @@ class EC2:
 
         # Check if 'Subnets' key exists and it's not empty
         if not response or 'Subnets' not in response or not response['Subnets']:
-            print(
-                f"No subnet information found for Subnet ID: {subnet_id}")
+            logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
             return ""
 
         # Extract the 'Tags' key safely using get
@@ -103,22 +105,22 @@ class EC2:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_instance()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
     def aws_ami(self):
-        print("Processing AMIs...")
+        logger.debug(f"Processing AMIs...")
 
         images = self.aws_clients.ec2_client.describe_images(Owners=["self"])["Images"]
 
         for image in images:
             image_id = image["ImageId"]
-            print(f"Processing AMI: {image_id}")
+            logger.debug(f"Processing AMI: {image_id}")
 
             attributes = {
                 "id": image_id,
@@ -132,7 +134,7 @@ class EC2:
             )
 
     def aws_ami_launch_permission(self):
-        print("Processing AMI Launch Permissions...")
+        logger.debug(f"Processing AMI Launch Permissions...")
 
         images = self.aws_clients.ec2_client.describe_images(Owners=["self"])["Images"]
 
@@ -144,8 +146,7 @@ class EC2:
 
             for permission in launch_permissions:
                 user_id = permission["UserId"]
-                print(
-                    f"Processing Launch Permission for AMI: {image_id}, User: {user_id}")
+                logger.debug(f"Processing Launch Permission for AMI: {image_id}, User: {user_id}")
 
                 attributes = {
                     "id": f"{image_id}-{user_id}",
@@ -158,14 +159,14 @@ class EC2:
                 )
 
     def aws_ec2_capacity_reservation(self):
-        print("Processing EC2 Capacity Reservations...")
+        logger.debug(f"Processing EC2 Capacity Reservations...")
 
         capacity_reservations = self.aws_clients.ec2_client.describe_capacity_reservations()[
             "CapacityReservations"]
 
         for reservation in capacity_reservations:
             reservation_id = reservation["CapacityReservationId"]
-            print(f"Processing EC2 Capacity Reservation: {reservation_id}")
+            logger.debug(f"Processing EC2 Capacity Reservation: {reservation_id}")
 
             attributes = {
                 "id": reservation_id,
@@ -183,13 +184,13 @@ class EC2:
                 attributes["end_date"] = reservation["EndDate"].isoformat
 
     def aws_ec2_host(self):
-        print("Processing EC2 Dedicated Hosts...")
+        logger.debug(f"Processing EC2 Dedicated Hosts...")
 
         hosts = self.aws_clients.ec2_client.describe_hosts()["Hosts"]
 
         for host in hosts:
             host_id = host["HostId"]
-            print(f"Processing EC2 Dedicated Host: {host_id}")
+            logger.debug(f"Processing EC2 Dedicated Host: {host_id}")
 
             attributes = {
                 "id": host_id,
@@ -205,22 +206,8 @@ class EC2:
                 "aws_ec2_host", host_id.replace("-", "_"), attributes
             )
 
-    # def aws_ec2_serial_console_access(self):
-    #     print("Processing EC2 Serial Console Access...")
-
-    #     serial_console_access = self.aws_clients.ec2_client.describe_serial_console_access()
-    #     status = serial_console_access["SerialConsoleAccess"]["Status"]
-
-    #     attributes = {
-    #         "status": status,
-    #     }
-
-    #     self.hcl.process_resource(
-    #         "aws_ec2_serial_console_access", "serial_console_access", attributes
-    #     )
-
     def aws_ec2_tag(self):
-        print("Processing EC2 Tags...")
+        logger.debug(f"Processing EC2 Tags...")
 
         resources = self.aws_clients.ec2_client.describe_tags()
         for resource in resources["Tags"]:
@@ -230,7 +217,7 @@ class EC2:
             value = resource["Value"]
 
             tag_id = f"{resource_id},{key}"
-            print(f"Processing EC2 Tag: {tag_id}")
+            logger.debug(f"Processing EC2 Tag: {tag_id}")
 
             attributes = {
                 "id": tag_id,
@@ -242,12 +229,12 @@ class EC2:
                 "aws_ec2_tag", tag_id.replace("-", "_"), attributes)
 
     def aws_eip(self, allocation_id):
-        print(f"Processing Elastic IP: {allocation_id}")
+        logger.debug(f"Processing Elastic IP: {allocation_id}")
 
         eips = self.aws_clients.ec2_client.describe_addresses(
             AllocationIds=[allocation_id])
         if not eips["Addresses"]:
-            print(f"  No Elastic IP found for Allocation ID: {allocation_id}")
+            logger.debug(f"  No Elastic IP found for Allocation ID: {allocation_id}")
             return
 
         eip = eips["Addresses"][0]
@@ -270,13 +257,13 @@ class EC2:
             "aws_eip", allocation_id.replace("-", "_"), attributes)
 
     def aws_eip_association(self):
-        print("Processing Elastic IP Associations...")
+        logger.debug(f"Processing Elastic IP Associations...")
 
         eips = self.aws_clients.ec2_client.describe_addresses()
         for eip in eips["Addresses"]:
             if "AssociationId" in eip:
                 association_id = eip["AssociationId"]
-                print(f"Processing Elastic IP Association: {association_id}")
+                logger.debug(f"Processing Elastic IP Association: {association_id}")
 
                 attributes = {
                     "id": association_id,
@@ -302,7 +289,7 @@ class EC2:
 
     def aws_instance(self):
         resource_type = "aws_instance"
-        print("Processing EC2 Instances...")
+        # logger.debug(f"Processing EC2 Instances...")
 
         instances = self.aws_clients.ec2_client.describe_instances()
         total = 0
@@ -316,22 +303,20 @@ class EC2:
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
 
                 if self.is_managed_by_auto_scaling_group(instance_id):
-                    print(
-                        f"  Skipping EC2 Instance (managed by Auto Scaling group): {instance_id}")
+                    logger.debug(f"  Skipping EC2 Instance (managed by Auto Scaling group): {instance_id}")
                     continue
 
                 # Check if the instance has EKS related tags and skip if it does
                 eks_tags = [tag for tag in instance.get(
                     "Tags", []) if tag["Key"].startswith("kubernetes.io/cluster/")]
                 if eks_tags:
-                    print(
-                        f"  Skipping EC2 Instance (managed by EKS): {instance_id}")
+                    logger.debug(f"  Skipping EC2 Instance (managed by EKS): {instance_id}")
                     continue
 
                 # if instance_id != "i-0a8f69f50619306c3":
                 #     continue
 
-                print(f"Processing EC2 Instance: {instance_id}")
+                logger.debug(f"Processing EC2 Instance: {instance_id}")
                 id = instance_id
 
                 ftstack = "ec2"
@@ -346,7 +331,7 @@ class EC2:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)                
+                    logger.error("Error occurred: ", e)                
 
                 attributes = {
                     "id": id,
@@ -354,7 +339,7 @@ class EC2:
 
                 # Call root_block_device.kms_key_id
                 if "RootDeviceName" in instance:
-                    print("RootDeviceName: ", instance["RootDeviceName"])
+                    logger.debug(f" RootDeviceName: instance['RootDeviceName']")
                     
                     # Get the KMS key for the root device
                     response = self.aws_clients.ec2_client.describe_volumes(Filters=[{
@@ -444,33 +429,14 @@ class EC2:
 
     def aws_iam_instance_profile(self, iam_instance_profile_id, ftstack=None):
         resource_type = "aws_iam_instance_profile"
-        print(f"Processing IAM Instance Profile: {iam_instance_profile_id}")
+        logger.debug(f"Processing IAM Instance Profile: {iam_instance_profile_id}")
 
         # Fetch the details of IAM Instance Profile using the IAM client
         response = self.aws_clients.iam_client.get_instance_profile(
             InstanceProfileName=iam_instance_profile_id)
 
         profile = response["InstanceProfile"]
-        # id = profile["InstanceProfileName"]        
-        # attributes = {
-        #     "id": id,
-        # }
 
-        # self.hcl.process_resource(
-        #     resource_type, iam_instance_profile_id.replace("-", "_"), attributes)
-        
-        # if not ftstack:
-        #     ftstack = "ec2"
-        #     try:
-        #         tags = profile.get('Tags', [])
-        #         for tag in tags:
-        #             if tag['Key'] == 'ftstack':
-        #                 ftstack = "stack_"+tag['Value']
-        #                 break
-        #     except Exception as e:
-        #         print("Error occurred: ", e)
-        
-        # self.hcl.add_stack(resource_type, id, ftstack)
 
         # Process only the first associated role
         for role in profile["Roles"]:
@@ -482,27 +448,14 @@ class EC2:
         # if profile["Roles"]:
         #     self.aws_iam_role(profile["Roles"][0]["Arn"])
 
-    def aws_iam_role(self, role_arn):
-        # the role name is the last part of the ARN
-        role_name = role_arn.split('/')[-1]
-
-        role = self.aws_clients.iam_client.get_role(RoleName=role_name)
-        print(f"Processing IAM Role: {role_name}")
-
-        attributes = {
-            "id": role_name,
-        }
-        self.hcl.process_resource(
-            "aws_iam_role", role_name.replace("-", "_"), attributes)
-
     def aws_ebs_volume(self, volume_id):
         resource_type ="aws_ebs_volume"
-        print(f"Processing EBS Volume: {volume_id}")
+        logger.debug(f"Processing EBS Volume: {volume_id}")
 
         volume = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[volume_id])
 
         if not volume["Volumes"]:
-            print(f"  No EBS Volume found for Volume ID: {volume_id}")
+            logger.debug(f"  No EBS Volume found for Volume ID: {volume_id}")
             return
 
         vol = volume["Volumes"][0]
@@ -536,8 +489,7 @@ class EC2:
         device_name = block_device["DeviceName"]
         volume_id = block_device["Ebs"]["VolumeId"]
 
-        print(
-            f"Processing EBS Volume Attachment for Volume: {volume_id} on Instance: {instance_id}")
+        logger.debug(f"Processing EBS Volume Attachment for Volume: {volume_id} on Instance: {instance_id}")
 
         attributes = {
             'id': f"{device_name}:{volume_id}:{instance_id}",
@@ -550,26 +502,23 @@ class EC2:
             "aws_volume_attachment", volume_id.replace("-", "_"), attributes)
 
     def aws_network_interface(self, network_interface_id):
-        print(f"Processing Network Interface: {network_interface_id}")
+        logger.debug(f"Processing Network Interface: {network_interface_id}")
 
         network_interface = self.aws_clients.ec2_client.describe_network_interfaces(
             NetworkInterfaceIds=[network_interface_id])
 
         if not network_interface["NetworkInterfaces"]:
-            print(
-                f"  No Network Interface found for ID: {network_interface_id}")
+            logger.debug(f"  No Network Interface found for ID: {network_interface_id}")
             return
 
         ni = network_interface["NetworkInterfaces"][0]
 
         attachment = ni.get("Attachment")
         if not attachment:
-            print(
-                f"  Skipping Detached Network Interface: {network_interface_id}")
+            logger.debug(f"  Skipping Detached Network Interface: {network_interface_id}")
             return
         if attachment["DeviceIndex"] == 0:
-            print(
-                f"  Skipping Primary Network Interface: {network_interface_id}")
+            logger.debug(f"  Skipping Primary Network Interface: {network_interface_id}")
             return
 
         attributes = {
@@ -587,12 +536,10 @@ class EC2:
             "aws_network_interface", network_interface_id.replace("-", "_"), attributes)
 
     def aws_network_interface_attachment(self, instance_id, network_interface):        
-        print(
-            f"Processing Network Interface Attachment for Network Interface: {network_interface['NetworkInterfaceId']} on Instance: {instance_id}")
+        logger.debug(f"Processing Network Interface Attachment for Network Interface: {network_interface['NetworkInterfaceId']} on Instance: {instance_id}")
 
         if network_interface["Attachment"]["DeviceIndex"] == 0:
-            print(
-                f"  Skipping Primary Network Interface: {network_interface['NetworkInterfaceId']}")
+            logger.debug(f"  Skipping Primary Network Interface: {network_interface['NetworkInterfaceId']}")
             return
 
         attributes = {
@@ -606,13 +553,13 @@ class EC2:
             "aws_network_interface_attachment", network_interface["NetworkInterfaceId"].replace("-", "_"), attributes)
 
     def aws_key_pair(self):
-        print("Processing EC2 Key Pairs...")
+        logger.debug(f"Processing EC2 Key Pairs...")
 
         key_pairs = self.aws_clients.ec2_client.describe_key_pairs(
             IncludePublicKey=True)["KeyPairs"]
         for key_pair in key_pairs:
             key_pair_name = key_pair["KeyName"]
-            print(f"Processing Key Pair: {key_pair_name}")
+            logger.debug(f"Processing Key Pair: {key_pair_name}")
 
             attributes = {
                 "id": key_pair_name,
@@ -624,13 +571,13 @@ class EC2:
                 "aws_key_pair", key_pair_name.replace("-", "_"), attributes)
 
     def aws_launch_template(self):
-        print("Processing EC2 Launch Templates...")
+        logger.debug(f"Processing EC2 Launch Templates...")
 
         launch_templates = self.aws_clients.ec2_client.describe_launch_templates()[
             "LaunchTemplates"]
         for launch_template in launch_templates:
             launch_template_id = launch_template["LaunchTemplateId"]
-            print(f"Processing Launch Template: {launch_template_id}")
+            logger.debug(f"Processing Launch Template: {launch_template_id}")
 
             attributes = {
                 "id": launch_template_id,
@@ -643,13 +590,13 @@ class EC2:
                 "aws_launch_template", launch_template_id.replace("-", "_"), attributes)
 
     def aws_placement_group(self):
-        print("Processing EC2 Placement Groups...")
+        logger.debug(f"Processing EC2 Placement Groups...")
 
         placement_groups = self.aws_clients.ec2_client.describe_placement_groups()[
             "PlacementGroups"]
         for placement_group in placement_groups:
             placement_group_name = placement_group["GroupName"]
-            print(f"Processing Placement Group: {placement_group_name}")
+            logger.debug(f"Processing Placement Group: {placement_group_name}")
 
             attributes = {
                 "id": placement_group_name,
@@ -660,14 +607,14 @@ class EC2:
                 "aws_placement_group", placement_group_name.replace("-", "_"), attributes)
 
     def aws_spot_datafeed_subscription(self):
-        print("Processing EC2 Spot Datafeed Subscriptions...")
+        logger.debug(f"Processing EC2 Spot Datafeed Subscriptions...")
 
         try:
             spot_datafeed_subscription = self.aws_clients.ec2_client.describe_spot_datafeed_subscription()
             subscription = spot_datafeed_subscription["SpotDatafeedSubscription"]
 
             bucket_id = subscription["Bucket"]
-            print(f"Processing Spot Datafeed Subscription: {bucket_id}")
+            logger.debug(f"Processing Spot Datafeed Subscription: {bucket_id}")
 
             attributes = {
                 "id": subscription["OwnerId"],
@@ -678,18 +625,18 @@ class EC2:
                 "aws_spot_datafeed_subscription", bucket_id.replace("-", "_"), attributes)
         except self.aws_clients.ec2_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "InvalidSpotDatafeed.NotFound":
-                print("  No Spot Datafeed Subscriptions found")
+                logger.debug(f"  No Spot Datafeed Subscriptions found")
             else:
                 raise
 
     def aws_spot_fleet_request(self):
-        print("Processing EC2 Spot Fleet Requests...")
+        logger.debug(f"Processing EC2 Spot Fleet Requests...")
 
         spot_fleet_requests = self.aws_clients.ec2_client.describe_spot_fleet_requests()[
             "SpotFleetRequestConfigs"]
         for spot_fleet_request in spot_fleet_requests:
             request_id = spot_fleet_request["SpotFleetRequestId"]
-            print(f"Processing Spot Fleet Request: {request_id}")
+            logger.debug(f"Processing Spot Fleet Request: {request_id}")
 
             attributes = {
                 "id": request_id,
@@ -701,13 +648,13 @@ class EC2:
                 "aws_spot_fleet_request", request_id.replace("-", "_"), attributes)
 
     def aws_spot_instance_request(self):
-        print("Processing EC2 Spot Instance Requests...")
+        logger.debug(f"Processing EC2 Spot Instance Requests...")
 
         spot_instance_requests = self.aws_clients.ec2_client.describe_spot_instance_requests()[
             "SpotInstanceRequests"]
         for spot_instance_request in spot_instance_requests:
             request_id = spot_instance_request["SpotInstanceRequestId"]
-            print(f"Processing Spot Instance Request: {request_id}")
+            logger.debug(f"Processing Spot Instance Request: {request_id}")
 
             attributes = {
                 "id": request_id,

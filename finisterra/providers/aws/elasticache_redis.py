@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class ElasticacheRedis:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -24,10 +27,6 @@ class ElasticacheRedis:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
-        # self.processed_subnet_groups = set()
-        # self.processed_parameter_groups = set()
-
         self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
 
@@ -38,7 +37,7 @@ class ElasticacheRedis:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -52,7 +51,7 @@ class ElasticacheRedis:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
 
@@ -61,7 +60,7 @@ class ElasticacheRedis:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -69,7 +68,7 @@ class ElasticacheRedis:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
         
@@ -82,7 +81,7 @@ class ElasticacheRedis:
             response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
-                print(f"No subnet information found for Subnet ID: {subnet_id}")
+                logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
                 return None
             vpc_id = response['Subnets'][0].get('VpcId', None)
 
@@ -94,28 +93,31 @@ class ElasticacheRedis:
     def elasticache_redis(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_elasticache_replication_group()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_elasticache_replication_group(self):
         resource_type = "aws_elasticache_replication_group"
-        print("Processing ElastiCache Replication Groups...")
+        logger.debug("Processing ElastiCache Replication Groups...")
 
         paginator = self.aws_clients.elasticache_client.get_paginator("describe_replication_groups")
         total = 0
         for page in paginator.paginate():
-            total += len(page["ReplicationGroups"])
+            for replication_group in page["ReplicationGroups"]:
+                total += 1
+
         if total > 0:
             self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
+
         for page in paginator.paginate():
             for replication_group in page["ReplicationGroups"]:                
-                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
                 id = replication_group["ReplicationGroupId"]
+                self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
                 # Skip the groups that are not Redis
                 if "Engine" in replication_group and replication_group["Engine"] != "redis":
                     continue
@@ -123,7 +125,7 @@ class ElasticacheRedis:
                 # if replication_group['ReplicationGroupId'] != "bpu-replication-group":
                 #     continue
 
-                print(f"Processing ElastiCache Replication Group: {replication_group['ReplicationGroupId']}")
+                logger.debug(f"Processing ElastiCache Replication Group: {replication_group['ReplicationGroupId']}")
 
                 ftstack = "elasticache_redis"
                 try:
@@ -135,7 +137,7 @@ class ElasticacheRedis:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": id,
@@ -183,10 +185,10 @@ class ElasticacheRedis:
 
         resource_type = "aws_elasticache_parameter_group"
         if ftstack and self.hcl.id_resource_processed(resource_type, group_name, ftstack):
-            print(f"  Skipping Subnet Group: {group_name} - already processed")
+            logger.debug(f"  Skipping Subnet Group: {group_name} - already processed")
             return
 
-        print(f"    Processing ElastiCache Parameter Group: {group_name}...")
+        logger.debug(f"    Processing ElastiCache Parameter Group: {group_name}...")
 
         response = self.aws_clients.elasticache_client.describe_cache_parameter_groups(
             CacheParameterGroupName=group_name)
@@ -207,10 +209,10 @@ class ElasticacheRedis:
     def aws_elasticache_subnet_group(self, group_name, ftstack):
         resource_type = "aws_elasticache_subnet_group"
         if ftstack and self.hcl.id_resource_processed(resource_type, group_name, ftstack):
-            print(f"  Skipping Subnet Group: {group_name} - already processed")
+            logger.debug(f"  Skipping Subnet Group: {group_name} - already processed")
             return
 
-        print(f"    Processing ElastiCache Subnet Group: {group_name}...")
+        logger.debug(f"    Processing ElastiCache Subnet Group: {group_name}...")
 
         response = self.aws_clients.elasticache_client.describe_cache_subnet_groups(
             CacheSubnetGroupName=group_name)

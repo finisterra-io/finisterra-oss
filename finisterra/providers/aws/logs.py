@@ -1,6 +1,9 @@
 import os
 from ...utils.hcl import HCL
 from ...providers.aws.kms import KMS
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class Logs:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -36,23 +39,23 @@ class Logs:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_cloudwatch_log_group()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_cloudwatch_log_data_protection_policy(self):
-        print("Processing CloudWatch Log Data Protection Policies...")
+        logger.debug("Processing CloudWatch Log Data Protection Policies...")
 
         paginator = self.aws_clients.logs_client.get_paginator(
             "describe_resource_policies")
         for page in paginator.paginate():
             for policy in page["resourcePolicies"]:
                 policy_name = policy["policyName"]
-                print(
+                logger.debug(
                     f"Processing CloudWatch Log Data Protection Policy: {policy_name}")
 
                 attributes = {
@@ -65,13 +68,13 @@ class Logs:
                     "aws_cloudwatch_log_data_protection_policy", policy_name.replace("-", "_"), attributes)
 
     def aws_cloudwatch_log_destination(self):
-        print("Processing CloudWatch Log Destinations...")
+        logger.debug("Processing CloudWatch Log Destinations...")
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_destinations")
         for page in paginator.paginate():
             for destination in page["destinations"]:
                 destination_name = destination["destinationName"]
-                print(
+                logger.debug(
                     f"Processing CloudWatch Log Destination: {destination_name}")
 
                 attributes = {
@@ -86,7 +89,7 @@ class Logs:
                     "aws_cloudwatch_log_destination", destination_name.replace("-", "_"), attributes)
 
     def aws_cloudwatch_log_destination_policy(self):
-        print("Processing CloudWatch Log Destination Policies...")
+        logger.debug("Processing CloudWatch Log Destination Policies...")
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_destinations")
         for page in paginator.paginate():
@@ -96,7 +99,7 @@ class Logs:
                 try:
                     destination_policy = self.aws_clients.logs_client.get_destination_policy(
                         destinationName=destination_name)
-                    print(
+                    logger.debug(
                         f"Processing CloudWatch Log Destination Policy: {destination_name}")
 
                     attributes = {
@@ -108,11 +111,11 @@ class Logs:
                     self.hcl.process_resource(
                         "aws_cloudwatch_log_destination_policy", destination_name.replace("-", "_"), attributes)
                 except self.aws_clients.logs_client.exceptions.ResourceNotFoundException:
-                    print(
+                    logger.debug(
                         f"  No Destination Policy found for Log Destination: {destination_name}")
 
     def aws_cloudwatch_log_group(self, specific_log_group_name=None, ftstack=None):
-        print("Processing CloudWatch Log Groups...")
+        logger.debug("Processing CloudWatch Log Groups...")
 
         if specific_log_group_name:
             self.process_single_log_group(specific_log_group_name, ftstack)
@@ -139,7 +142,7 @@ class Logs:
         if not log_group:
             return
         log_group= log_group[0]
-        print(f"Processing CloudWatch Log Group: {log_group_name}")
+        logger.debug(f"Processing CloudWatch Log Group: {log_group_name}")
         id = log_group_name
         attributes = {
             "id": id,
@@ -159,7 +162,7 @@ class Logs:
 
 
     def aws_cloudwatch_log_metric_filter(self):
-        print("Processing CloudWatch Log Metric Filters...")
+        logger.debug("Processing CloudWatch Log Metric Filters...")
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
         for page in paginator.paginate():
@@ -171,7 +174,7 @@ class Logs:
                 for filter_page in paginator_filters.paginate(logGroupName=log_group_name):
                     for metric_filter in filter_page["metricFilters"]:
                         filter_name = metric_filter["filterName"]
-                        print(
+                        logger.debug(
                             f"Processing CloudWatch Log Metric Filter: {filter_name}")
 
                         attributes = {
@@ -186,14 +189,14 @@ class Logs:
                             "aws_cloudwatch_log_metric_filter", filter_name.replace("-", "_"), attributes)
 
     def aws_cloudwatch_log_resource_policy(self):
-        print("Processing CloudWatch Log Resource Policies...")
+        logger.debug("Processing CloudWatch Log Resource Policies...")
 
         paginator = self.aws_clients.logs_client.get_paginator(
             "describe_resource_policies")
         for page in paginator.paginate():
             for resource_policy in page["resourcePolicies"]:
                 policy_name = resource_policy["policyName"]
-                print(
+                logger.debug(
                     f"Processing CloudWatch Log Resource Policy: {policy_name}")
 
                 attributes = {
@@ -206,7 +209,7 @@ class Logs:
                     "aws_cloudwatch_log_resource_policy", policy_name.replace("-", "_"), attributes)
 
     def aws_cloudwatch_log_stream(self):
-        print("Processing CloudWatch Log Streams...")
+        logger.debug("Processing CloudWatch Log Streams...")
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
         for page in paginator.paginate():
@@ -218,7 +221,7 @@ class Logs:
                 for stream_page in paginator_streams.paginate(logGroupName=log_group_name):
                     for log_stream in stream_page["logStreams"]:
                         stream_name = log_stream["logStreamName"]
-                        print(
+                        logger.debug(
                             f"Processing CloudWatch Log Stream: {stream_name}")
 
                         attributes = {
@@ -231,7 +234,7 @@ class Logs:
                             "aws_cloudwatch_log_stream", stream_name.replace("-", "_"), attributes)
 
     def aws_cloudwatch_log_subscription_filter(self):
-        print("Processing CloudWatch Log Subscription Filters...")
+        logger.debug("Processing CloudWatch Log Subscription Filters...")
 
         paginator = self.aws_clients.logs_client.get_paginator("describe_log_groups")
         for page in paginator.paginate():
@@ -243,7 +246,7 @@ class Logs:
                 for filter_page in paginator_filters.paginate(logGroupName=log_group_name):
                     for subscription_filter in filter_page["subscriptionFilters"]:
                         filter_name = subscription_filter["filterName"]
-                        print(
+                        logger.debug(
                             f"Processing CloudWatch Log Subscription Filter: {filter_name}")
 
                         attributes = {
@@ -259,13 +262,13 @@ class Logs:
                             "aws_cloudwatch_log_subscription_filter", filter_name.replace("-", "_"), attributes)
 
     def aws_cloudwatch_query_definition(self):
-        print("Processing CloudWatch Query Definitions...")
+        logger.debug("Processing CloudWatch Query Definitions...")
 
         query_definitions_response = self.aws_clients.logs_client.describe_query_definitions()
 
         for query_definition in query_definitions_response["queryDefinitions"]:
             query_definition_id = query_definition["queryDefinitionId"]
-            print(
+            logger.debug(
                 f"Processing CloudWatch Query Definition: {query_definition_id}")
 
             attributes = {

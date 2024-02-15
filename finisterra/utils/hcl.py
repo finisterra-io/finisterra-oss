@@ -6,6 +6,10 @@ import tempfile
 import json
 import http.client
 import zipfile
+import logging
+
+logger = logging.getLogger('finisterra')
+
 
 from ..utils.filesystem import create_version_file
 
@@ -135,17 +139,17 @@ class HCL:
         prev_resources_count = self.count_state()
 
         if not prev_resources_count:
-            print("No state file found.")
+            logger.debug("No state file found.")
             return 0
         
         with open(self.terraform_state_file, 'w') as state_file:
             json.dump(self.state_data, state_file, indent=2)        
         
-        print("Initializing Terraform...")
-        subprocess.run(["terraform", "init"], cwd=self.script_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        logger.debug("Initializing Terraform...")
+        subprocess.run(["terraform", "init"], cwd=self.script_dir, check=True, stdout=subprocess.DEVNULL)
 
-        print("Refreshing state...")
-        subprocess.run(["terraform", "refresh"], cwd=self.script_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        logger.debug("Refreshing state...")
+        subprocess.run(["terraform", "refresh"], cwd=self.script_dir, check=True, stdout=subprocess.DEVNULL)
 
         try:
             subprocess.run(
@@ -153,22 +157,22 @@ class HCL:
         except:
             pass
 
-        print("Counting resources in state file...")
+        logger.debug("Counting resources in state file...")
         resources_count = self.count_state_file()
         for resource in prev_resources_count:
             if resource not in resources_count:
-                print(
+                logger.error(
                     f'ERROR: {resource} number of resources in state file has changed {prev_resources_count[resource]} -> 0')
             elif prev_resources_count[resource] != resources_count[resource]:
-                print(
+                logger.error(
                     f'ERROR: {resource} number of resources in state file has changed {prev_resources_count[resource]} -> {resources_count[resource]}')
             else:
-                print(
+                logger.debug(
                     f'{resource} State count {prev_resources_count[resource]} -> {resources_count[resource]}')
 
     def create_folder(self, folder):
         if os.path.exists(folder):
-            print(f"Folder '{folder}' already exists removing it.")
+            logger.debug(f"Folder '{folder}' already exists removing it.")
             [shutil.rmtree(os.path.join(folder, f)) if os.path.isdir(os.path.join(folder, f)) else os.remove(os.path.join(folder, f)) for f in os.listdir(folder)]
             # shutil.rmtree(folder)
         os.makedirs(folder, exist_ok=True)
@@ -177,7 +181,7 @@ class HCL:
         try:
             create_version_file(self.script_dir)
         except Exception as e:
-            print(e)
+            logger.error(e)
             exit()
 
     def add_stack(self, resource_name, id, ftstack, files=None):
@@ -219,7 +223,7 @@ class HCL:
         # Check if self.terraform_state_file is file bigger than 0
         if not os.path.isfile(self.terraform_state_file):
             return
-        print("Requesting Terraform code...")
+        logger.debug("Requesting Terraform code...")
         with open(self.terraform_state_file, 'r') as f:
             tfstate = json.load(f)
 
@@ -253,7 +257,7 @@ class HCL:
         }
 
         if not tfstate_json:
-            print('No resources found')
+            logger.debug('No resources found')
             return
 
         # Convert the payload to JSON string
@@ -285,34 +289,17 @@ class HCL:
             # Unzip the file to the current directory
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 zip_ref.extractall(self.output_dir)
-                print('Terraform code created at:', self.output_dir)
 
             # Save additional files
             for ftstack, zip_files in self.ftstacks_files.items():
                 for zip_file in zip_files:
-                    print("zip_file", zip_file)
-                    base_dir = zip_file["base_dir"]
                     filename = zip_file["filename"]
-                    target_dir = os.path.join(self.output_dir, "tf_code", ftstack, filename)
-                    print('source', os.path.join(base_dir,filename))
-                    print('target_dir', target_dir)
+                    target_dir = os.path.join(self.output_dir, "tf_code", ftstack)
                     os.makedirs(os.path.dirname(target_dir), exist_ok=True)
-                    shutil.copyfile(os.path.join(base_dir,filename), target_dir)
-
+                    target_file = os.path.join(target_dir, os.path.basename(filename))
+                    shutil.copyfile(filename, target_file)
             
-            if False: #TO-DO Change to a flag
-                # plan the terragrunt
-                print("Planning Terraform...")
-                os.chdir(os.path.join(self.output_dir,"tf_code"))
-                shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.remote-state")
-                shutil.copyfile("./terragrunt.hcl.local-state", "./terragrunt.hcl")
-                for stack in self.unique_ftstacks:
-                    subprocess.run(["terragrunt", "run-all", "init", "--terragrunt-include-dir", stack], check=True)
-                    subprocess.run(["terragrunt", "run-all", "plan", "--terragrunt-include-dir", stack], check=True)
-                shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.local-state")
-                shutil.copyfile("./terragrunt.hcl.remote-state", "./terragrunt.hcl")
-
         else:
-            print(response.status, response.reason)
+            logger.error(response.status, response.reason)
 
         conn.close()

@@ -3,6 +3,9 @@ import botocore
 from ...utils.hcl import HCL
 import json
 from ...providers.aws.kms import KMS
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class ECR:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -60,17 +63,17 @@ class ECR:
             self.aws_ecr_registry_policy()
             self.aws_ecr_pull_through_cache_rule()
             self.aws_ecr_replication_configuration()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_ecr_repository(self):
         resource_type = "aws_ecr_repository"
-        print("Processing ECR Repositories...")
+        # logger.debug(f"Processing ECR Repositories...")
 
         repositories = self.aws_clients.ecr_client.describe_repositories()["repositories"]
         if len(repositories) > 0:
@@ -80,7 +83,7 @@ class ECR:
             repository_arn = repo["repositoryArn"]
             self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{repository_name}[/]")
 
-            print(f"Processing ECR Repository: {repository_name}")
+            logger.debug(f"Processing ECR Repository: {repository_name}")
             id = repository_name
 
             ftstack = "ecr"
@@ -93,7 +96,7 @@ class ECR:
                             ftstack = "stack_"+tag['Value']
                         break
             except Exception as e:
-                print("Error occurred: ", e)
+                logger.error("Error occurred: ", e)
 
             attributes = {
                 "id": id,
@@ -126,7 +129,7 @@ class ECR:
                 self.aws_ecr_registry_scanning_configuration(repo)
 
     def aws_ecr_repository_policy(self, repository_name):
-        print(f"Processing ECR Repository Policy for: {repository_name}")
+        logger.debug(f"Processing ECR Repository Policy for: {repository_name}")
 
         try:
             policy = self.aws_clients.ecr_client.get_repository_policy(
@@ -144,7 +147,7 @@ class ECR:
             "aws_ecr_repository_policy", f"{repository_name}_policy".replace("-", "_"), attributes)
 
     def aws_ecr_lifecycle_policy(self, repository_name):
-        print(f"Processing ECR Lifecycle Policy for: {repository_name}")
+        logger.debug(f"Processing ECR Lifecycle Policy for: {repository_name}")
 
         try:
             lifecycle_policy = self.aws_clients.ecr_client.get_lifecycle_policy(repositoryName=repository_name)[
@@ -152,8 +155,7 @@ class ECR:
         except self.aws_clients.ecr_client.exceptions.LifecyclePolicyNotFoundException:
             return
 
-        print(
-            f"Processing ECR Lifecycle Policy for repository: {repository_name}")
+        logger.debug(f"Processing ECR Lifecycle Policy for repository: {repository_name}")
 
         attributes = {
             "id": repository_name,
@@ -163,7 +165,7 @@ class ECR:
             "aws_ecr_lifecycle_policy", repository_name.replace("-", "_"), attributes)
 
     def aws_ecr_registry_policy(self):
-        print("Processing ECR Registry Policies...")
+        logger.debug(f"Processing ECR Registry Policies...")
         resource_type = "aws_ecr_registry_policy"
 
         try:
@@ -174,7 +176,7 @@ class ECR:
         except self.aws_clients.ecr_client.exceptions.RegistryPolicyNotFoundException:
             return
 
-        print(f"Processing ECR Registry Policy")
+        logger.debug(f"Processing ECR Registry Policy")
         id = self.aws_clients.ecr_client.describe_registries()["registries"][0]["registryId"],
 
         attributes = {
@@ -188,7 +190,7 @@ class ECR:
 
 
     def aws_ecr_pull_through_cache_rule(self):
-        print("Processing ECR Pull Through Cache Rules...")
+        logger.debug(f"Processing ECR Pull Through Cache Rules...")
         resource_type = "aws_ecr_pull_through_cache_rule"
 
         repositories = self.aws_clients.ecr_client.describe_repositories()["repositories"]
@@ -205,8 +207,7 @@ class ECR:
 
             for rule in cache_settings_data.get("rules", []):
                 if rule["repositoryName"] == repository_name:
-                    print(
-                        f"Processing ECR Pull Through Cache Rule for repository: {repository_name}")
+                    logger.debug(f"Processing ECR Pull Through Cache Rule for repository: {repository_name}")
                     id = repository_name
                     attributes = {
                         "id": id,
@@ -223,8 +224,7 @@ class ECR:
         repository_name = repo["repositoryName"]
         image_scanning_config = repo["imageScanningConfiguration"]
 
-        print(
-            f"Processing ECR Registry Scanning Configuration for repository: {repository_name}")
+        logger.debug(f"Processing ECR Registry Scanning Configuration for repository: {repository_name}")
 
         attributes = {
             "id": repository_name,
@@ -234,7 +234,7 @@ class ECR:
             "aws_ecr_registry_scanning_configuration", repository_name.replace("-", "_"), attributes)
 
     def aws_ecr_replication_configuration(self):
-        print("Processing ECR Replication Configurations...")
+        logger.debug(f"Processing ECR Replication Configurations...")
         resource_type = "aws_ecr_replication_configuration"
 
         try:
@@ -248,10 +248,10 @@ class ECR:
 
         # Skip the resource if the rules are empty
         if len(rules) == 0:
-            print("  No rules for ECR Replication Configuration. Skipping...")
+            logger.debug(f"  No rules for ECR Replication Configuration. Skipping...")
             return
 
-        print(f"Processing ECR Replication Configuration")
+        logger.debug(f"Processing ECR Replication Configuration")
 
         # formatted_rules = []
         # for rule in rules:

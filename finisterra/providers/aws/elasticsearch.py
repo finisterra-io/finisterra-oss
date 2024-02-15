@@ -5,6 +5,9 @@ from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
 from ...providers.aws.acm import ACM
 from ...providers.aws.logs import Logs
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class Elasticsearch:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -47,7 +50,7 @@ class Elasticsearch:
             response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
             if not response or 'Vpcs' not in response or not response['Vpcs']:
                 # Handle this case as required, for example:
-                print(f"No VPC information found for VPC ID: {vpc_id}")
+                logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
                 return None
 
             vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -62,7 +65,7 @@ class Elasticsearch:
 
             # Check if 'Subnets' key exists and it's not empty
             if not response or 'Subnets' not in response or not response['Subnets']:
-                print(
+                logger.debug(
                     f"No subnet information found for Subnet ID: {subnet_id}")
                 continue
 
@@ -76,7 +79,7 @@ class Elasticsearch:
             if subnet_name:
                 subnet_names.append(subnet_name)
             else:
-                print(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
         return subnet_names
         
@@ -103,17 +106,17 @@ class Elasticsearch:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_elasticsearch_domain()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
         
     def aws_elasticsearch_domain(self):
         resource_type = "aws_elasticsearch_domain"
-        print("Processing OpenSearch Domain...")
+        logger.debug("Processing OpenSearch Domain...")
 
         domains = self.aws_clients.elasticsearch_client.list_domain_names()["DomainNames"]
         if len(domains) > 0:
@@ -125,7 +128,7 @@ class Elasticsearch:
             domain_info = self.aws_clients.elasticsearch_client.describe_elasticsearch_domain(DomainName=domain_name)[
                 "DomainStatus"]
             arn = domain_info["ARN"]
-            print(f"Processing OpenSearch Domain: {domain_name}")
+            logger.debug(f"Processing OpenSearch Domain: {domain_name}")
 
             id = arn
 
@@ -209,14 +212,14 @@ class Elasticsearch:
 
     # Updated function signature
     def aws_elasticsearch_domain_policy(self, domain_name):
-        print("Processing OpenSearch Domain Policy...")
+        logger.debug("Processing OpenSearch Domain Policy...")
 
         # Since the domain is already known, we don't need to retrieve all domains
         domain_info = self.aws_clients.elasticsearch_client.describe_elasticsearch_domain(DomainName=domain_name)[
             "DomainStatus"]
         arn = domain_info["ARN"]
         # access_policy = domain_info["AccessPolicies"]
-        print(f"Processing OpenSearch Domain Policy: {domain_name}")
+        logger.debug(f"Processing OpenSearch Domain Policy: {domain_name}")
 
         id = domain_name
 

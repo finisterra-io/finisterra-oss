@@ -1,5 +1,8 @@
 import os
 from ...utils.hcl import HCL
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 class Cloudmap:
@@ -34,7 +37,7 @@ class Cloudmap:
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
-            print(f"No VPC information found for VPC ID: {vpc_id}")
+            logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
             return None
 
         vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -42,7 +45,7 @@ class Cloudmap:
                         for tag in vpc_tags if tag['Key'] == 'Name'), None)
 
         if vpc_name is None:
-            print(f"No 'Name' tag found for VPC ID: {vpc_id}")
+            logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
 
@@ -51,16 +54,17 @@ class Cloudmap:
 
         self.aws_service_discovery_private_dns_namespace()
         # self.aws_service_discovery_public_dns_namespace()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.task = self.progress.add_task(f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
+            self.progress.update(self.task, advance=1)
 
     def aws_service_discovery_http_namespace(self):
-        print("Processing AWS Service Discovery HTTP Namespaces...")
+        # logger.debug(f"Processing AWS Service Discovery HTTP Namespaces...")
 
         paginator = self.aws_clients.cloudmap_client.get_paginator("list_namespaces")
         for page in paginator.paginate():
@@ -69,8 +73,7 @@ class Cloudmap:
                     namespace_id = namespace["Id"]
                     http_namespace = self.aws_clients.cloudmap_client.get_namespace(Id=namespace_id)[
                         "Namespace"]
-                    print(
-                        f"Processing AWS Service Discovery HTTP Namespace: {namespace_id}")
+                    logger.debug(f"Processing AWS Service Discovery HTTP Namespace: {namespace_id}")
 
                     attributes = {
                         "id": namespace_id,
@@ -82,7 +85,7 @@ class Cloudmap:
                         "aws_service_discovery_http_namespace", namespace_id.replace("-", "_"), attributes)
 
     def aws_service_discovery_instance(self):
-        print("Processing AWS Service Discovery Instances...")
+        logger.debug(f"Processing AWS Service Discovery Instances...")
 
         paginator = self.aws_clients.cloudmap_client.get_paginator("list_services")
         for page in paginator.paginate():
@@ -93,8 +96,7 @@ class Cloudmap:
                 for instance_page in instance_paginator.paginate(ServiceId=service_id):
                     for instance in instance_page["Instances"]:
                         instance_id = instance["Id"]
-                        print(
-                            f"Processing AWS Service Discovery Instance: {instance_id}")
+                        logger.debug(f"Processing AWS Service Discovery Instance: {instance_id}")
 
                         attributes = {
                             "id": instance_id,
@@ -110,7 +112,7 @@ class Cloudmap:
 
     def aws_service_discovery_private_dns_namespace(self):
         resource_type = "aws_service_discovery_private_dns_namespace"
-        print("Processing AWS Service Discovery Private DNS Namespaces...")
+        # logger.debug(f"Processing AWS Service Discovery Private DNS Namespaces...")
 
         paginator = self.aws_clients.cloudmap_client.get_paginator("list_namespaces")
         total = 0
@@ -125,7 +127,7 @@ class Cloudmap:
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{namespace_id}[/]")
                 if namespace["Type"] == "DNS_PRIVATE":
                     private_dns_namespace = self.aws_clients.cloudmap_client.get_namespace(Id=namespace_id)["Namespace"]
-                    print(f"Processing AWS Service Discovery Private DNS Namespace: {namespace_id}")
+                    logger.debug(f"Processing AWS Service Discovery Private DNS Namespace: {namespace_id}")
 
                     # Get the hosted zone ID of the namespace
                     hosted_zone_id = private_dns_namespace["Properties"]["DnsProperties"]["HostedZoneId"]
@@ -146,7 +148,7 @@ class Cloudmap:
                                     ftstack = "stack_"+tag['Value']
                                 break
                     except Exception as e:
-                        print("Error occurred: ", e)
+                        logger.error("Error occurred: ", e)
 
                     attributes = {
                         "id": namespace_id,
@@ -170,7 +172,7 @@ class Cloudmap:
                         self.hcl.additional_data[resource_type][id]["vpc_name"] = vpc_name
 
     def aws_service_discovery_public_dns_namespace(self):
-        print("Processing AWS Service Discovery Public DNS Namespaces...")
+        logger.debug(f"Processing AWS Service Discovery Public DNS Namespaces...")
 
         paginator = self.aws_clients.cloudmap_client.get_paginator("list_namespaces")
         for page in paginator.paginate():
@@ -179,8 +181,7 @@ class Cloudmap:
                     namespace_id = namespace["Id"]
                     public_dns_namespace = self.aws_clients.cloudmap_client.get_namespace(Id=namespace_id)[
                         "Namespace"]
-                    print(
-                        f"Processing AWS Service Discovery Public DNS Namespace: {namespace_id}")
+                    logger.debug(f"Processing AWS Service Discovery Public DNS Namespace: {namespace_id}")
 
                     attributes = {
                         "id": namespace_id,
@@ -192,7 +193,7 @@ class Cloudmap:
                         "aws_service_discovery_public_dns_namespace", namespace_id.replace("-", "_"), attributes)
 
     def aws_service_discovery_service(self, namespace_id):
-        print("Processing AWS Service Discovery Services...")
+        logger.debug(f"Processing AWS Service Discovery Services...")
 
         paginator = self.aws_clients.cloudmap_client.get_paginator("list_services")
         for page in paginator.paginate(
@@ -210,8 +211,7 @@ class Cloudmap:
                 service_id = service["Id"]
                 sd_service = self.aws_clients.cloudmap_client.get_service(Id=service_id)[
                     "Service"]
-                print(
-                    f"Processing AWS Service Discovery Service: {service_id}")
+                logger.debug(f"Processing AWS Service Discovery Service: {service_id}")
 
                 attributes = {
                     "id": service_id,

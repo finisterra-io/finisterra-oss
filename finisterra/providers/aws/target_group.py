@@ -2,6 +2,9 @@ import os
 from ...utils.hcl import HCL
 from ...providers.aws.acm import ACM
 from ...providers.aws.elbv2 import ELBV2
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class TargetGroup:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -40,7 +43,7 @@ class TargetGroup:
             response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
             if not response or 'Vpcs' not in response or not response['Vpcs']:
                 # Handle this case as required, for example:
-                print(f"No VPC information found for VPC ID: {vpc_id}")
+                logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
                 return None
 
             vpc_tags = response['Vpcs'][0].get('Tags', [])
@@ -48,24 +51,24 @@ class TargetGroup:
                             for tag in vpc_tags if tag['Key'] == 'Name'), None)
             return vpc_name
         except Exception as e:
-            print(f"Error in get_vpc_name: {e}")
+            logger.error(f"Error in get_vpc_name: {e}")
             return None
 
     def target_group(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_lb_target_group()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
 
     def aws_lb_target_group(self, target_group_arn=None, ftstack=None):
-        print("Processing Load Balancer Target Groups")
+        logger.debug("Processing Load Balancer Target Groups")
         resource_type = "aws_lb_target_group"
 
         paginator = self.aws_clients.elbv2_client.get_paginator('describe_target_groups')
@@ -89,7 +92,7 @@ class TargetGroup:
                 # if tg_name != "platform-int":
                 #     continue
                 
-                print(f"Processing Load Balancer Target Group: {tg_name}")
+                logger.debug(f"Processing Load Balancer Target Group: {tg_name}")
 
                 id = tg_arn
                 attributes = {
@@ -127,7 +130,7 @@ class TargetGroup:
                     "LoadBalancers"]
                 for lb in self.load_balancers:
                     lb_arn = lb["LoadBalancerArn"]
-                    # print(f"Processing Load Balancer: {lb_arn}")
+                    # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
                     if lb_arn not in self.listeners:
                         self.listeners[lb_arn] = self.aws_clients.elbv2_client.describe_listeners(
@@ -142,7 +145,7 @@ class TargetGroup:
 
 
     def aws_lb_listener_rule(self, target_group_arn, ftstack):
-        print("Processing Load Balancer Listener Rules")
+        logger.debug("Processing Load Balancer Listener Rules")
 
         if not self.load_balancers:     
             self.load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
@@ -150,7 +153,7 @@ class TargetGroup:
 
         for lb in self.load_balancers:
             lb_arn = lb["LoadBalancerArn"]
-            # print(f"Processing Load Balancer: {lb_arn}")
+            # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
             if lb_arn not in self.listeners:
                 self.listeners[lb_arn] = self.aws_clients.elbv2_client.describe_listeners(
@@ -158,7 +161,7 @@ class TargetGroup:
 
             for listener in self.listeners[lb_arn]:
                 listener_arn = listener["ListenerArn"]
-                # print(f"Processing Load Balancer Listener: {listener_arn}")
+                # logger.debug(f"Processing Load Balancer Listener: {listener_arn}")
 
                 rules = self.aws_clients.elbv2_client.describe_rules(
                     ListenerArn=listener_arn)["Rules"]
@@ -172,7 +175,7 @@ class TargetGroup:
                     rule_id = rule_arn.split("/")[-1]
                     if len(rule["Conditions"]) == 0:
                         continue
-                    print(
+                    logger.debug(
                         f"    Processing Load Balancer Listener Rule: {rule_id}")
 
                     attributes = {
@@ -191,7 +194,7 @@ class TargetGroup:
                     # self.aws_lb_listener(listener_arn, ftstack)
 
     def aws_lb_listener(self, listener_arn, ftstack):
-        print(f"Processing Load Balancer Listener: {listener_arn}")
+        logger.debug(f"Processing Load Balancer Listener: {listener_arn}")
 
         attributes = {
             "id": listener_arn,

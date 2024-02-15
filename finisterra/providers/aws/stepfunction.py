@@ -2,6 +2,9 @@ import os
 from ...utils.hcl import HCL
 from ...providers.aws.iam_role import IAM_ROLE
 from ...providers.aws.logs import Logs
+import logging
+
+logger = logging.getLogger('finisterra')
 
 class StepFunction:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
@@ -36,17 +39,17 @@ class StepFunction:
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_sfn_state_machine()
-        self.task = self.progress.add_task(f"[cyan]{self.__class__.__name__} [bold]Generating code[/]", total=1)
         if self.hcl.count_state():
-            self.hcl.refresh_state()
+            self.progress.update(self.task, description=f"[green]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.hcl.refresh_state()            
             self.hcl.request_tf_code()
             self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:
-            self.progress.update(self.task, advance=1, description=f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")        
+            self.progress.console.print(f"[yellow]{self.__class__.__name__} [bold]No resources found[/]")
 
     def aws_sfn_state_machine(self):
         resource_type = "aws_sfn_state_machine"
-        print("Processing State Machines...")
+        logger.debug("Processing State Machines...")
 
         paginator = self.aws_clients.sfn_client.get_paginator("list_state_machines")
         total =0
@@ -57,7 +60,7 @@ class StepFunction:
             self.task = self.progress.add_task(f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for state_machine_summary in page["stateMachines"]:
-                print(f"Processing State Machine: {state_machine_summary['name']}")
+                logger.debug(f"Processing State Machine: {state_machine_summary['name']}")
                 self.progress.update(self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{state_machine_summary['name']}[/]")
 
                 # if state_machine_summary['name'] != 'dev-fpm-3431_backfill-email-verified':
@@ -81,7 +84,7 @@ class StepFunction:
                                 ftstack = "stack_"+tag['value']
                             break
                 except Exception as e:
-                    print("Error occurred: ", e)
+                    logger.error("Error occurred: ", e)
 
                 attributes = {
                     "id": state_machine_arn,
@@ -102,7 +105,7 @@ class StepFunction:
                     role_name = role_arn.split('/')[-1]
                     self.iam_role_instance.aws_iam_role(role_name, ftstack)
                 else:
-                    print(
+                    logger.debug(
                         f"No IAM role associated with State Machine: {state_machine['name']}")
 
                 # Process CloudWatch Log Group
