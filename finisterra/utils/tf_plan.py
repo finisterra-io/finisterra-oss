@@ -54,6 +54,15 @@ def print_detailed_changes(updates):
                 console.print(
                     f"    ~ [orange3]{json.dumps(old_value, indent=4)} => {json.dumps(new_value, indent=4)}[/orange3]")
 
+        if 'values_changed' in changes:
+            for change_detail in changes['values_changed']:
+                item_path = change_detail.split('root')[1]
+                old_value = changes['values_changed'][change_detail]['old_value']
+                new_value = changes['values_changed'][change_detail]['new_value']
+                console.print(f"  [orange3]{item_path}[/orange3]")
+                console.print(
+                    f"    ~ [orange3]{json.dumps(old_value, indent=4)} => {json.dumps(new_value, indent=4)}[/orange3]")
+
         # Handle added items
         if 'dictionary_item_added' in changes or 'iterable_item_added' in changes:
             added_key = 'dictionary_item_added' if 'dictionary_item_added' in changes else 'iterable_item_added'
@@ -92,7 +101,7 @@ def print_summary(counts, module):
 
 # Example usage:
 if __name__ == "__main__":
-    with open('/tmp/ae_dev/tf_code/apigateway/apigateway_plan.json', 'r') as file:
+    with open('/tmp/ncm/tf_code/eks/eks_plan.json', 'r') as file:
         terraform_plan = file.read()
 
     counts, updates = count_resources_by_action_and_collect_changes(
