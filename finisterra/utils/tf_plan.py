@@ -1,24 +1,7 @@
 import json
+from deepdiff import DeepDiff  # Make sure to install deepdiff first
 from rich.console import Console
 from rich.table import Table
-
-# Function identify and return detailed changes for updated resources
-
-
-def identify_detailed_changes(before, after):
-    detailed_changes = {}
-    all_keys = set(before.keys()) | set(after.keys())
-    for key in all_keys:
-        before_value = before.get(key, "N/A (new field)")
-        after_value = after.get(key, "N/A (removed field)")
-        if before_value != after_value:
-            detailed_changes[key] = {
-                "from": before_value,
-                "to": after_value
-            }
-    return detailed_changes
-
-# Function count resources by action and collect detailed changes for updates
 
 
 def count_resources_by_action_and_collect_changes(plan):
@@ -44,9 +27,11 @@ def count_resources_by_action_and_collect_changes(plan):
                 actions_count["add"] += 1
             elif action == "update":
                 actions_count["update"] += 1
-                detailed_changes = identify_detailed_changes(
-                    change.get("before", {}), change.get("after", {}))
-                updates_details[resource.get('address')] = detailed_changes
+                before = change.get("before", {})
+                after = change.get("after", {})
+                if before and after:  # Only if there are changes
+                    updates_details[resource.get('address')] = DeepDiff(
+                        before, after, ignore_order=True, verbose_level=2).to_dict()
             elif action == "delete":
                 actions_count["destroy"] += 1
 
@@ -55,39 +40,39 @@ def count_resources_by_action_and_collect_changes(plan):
 
 def print_detailed_changes(updates):
     console = Console()
-    console.print("\n")
-    # console.print("[bold magenta]Detailed updates[/bold magenta]")
 
     for address, changes in updates.items():
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Field",  width=50)
-        table.add_column("From", justify="left")
-        table.add_column("To", justify="left")
+        console.print(
+            f"\n[white]{address} will be updated in-place:[/white]")
+        # Handle changes in values
+        if 'type_changes' in changes:
+            for change_detail in changes['type_changes']:
+                item_path = change_detail.split('root')[1]
+                old_value = changes['type_changes'][change_detail]['old_value']
+                new_value = changes['type_changes'][change_detail]['new_value']
+                console.print(f"  [orange3]{item_path}[/orange3]")
+                console.print(
+                    f"    ~ [orange3]{json.dumps(old_value, indent=4)} => {json.dumps(new_value, indent=4)}[/orange3]")
 
-        for field, change in changes.items():
-            # Format the 'from' value
-            from_value = change['from']
-            if isinstance(from_value, (dict, list)):
-                from_value = json.dumps(from_value, indent=2)
-            else:
-                from_value = str(from_value)
+        # Handle added items
+        if 'dictionary_item_added' in changes or 'iterable_item_added' in changes:
+            added_key = 'dictionary_item_added' if 'dictionary_item_added' in changes else 'iterable_item_added'
+            for change_detail in changes[added_key]:
+                item_path = change_detail.split('root')[1]
+                value_added = changes[added_key][change_detail]
+                console.print(f"[green]  + {item_path}[/green]")
 
-            # Format the 'to' value
-            to_value = change['to']
-            if isinstance(to_value, (dict, list)):
-                to_value = json.dumps(to_value, indent=2)
-            else:
-                to_value = str(to_value)
-
-            table.add_row(field, from_value, to_value)
-
-        console.print(f"Resource [bold cyan]{address}[/bold cyan]:")
-        console.print(table)
+        # Handle removed items
+        if 'dictionary_item_removed' in changes or 'iterable_item_removed' in changes:
+            removed_key = 'dictionary_item_removed' if 'dictionary_item_removed' in changes else 'iterable_item_removed'
+            for change_detail in changes[removed_key]:
+                item_path = change_detail.split('root')[1]
+                value_removed = changes[removed_key][change_detail]
+                console.print(f"[red]  - {item_path}[/red]")
 
 
 def print_summary(counts, module):
     console = Console()
-    console.print(f"[bold]{module} Plan: [/bold]", end="")
     action_colors = {
         "import": "green",
         "add": "green",
@@ -99,18 +84,19 @@ def print_summary(counts, module):
     for action, count in counts.items():
         if count > 0:
             console.print(
-                f"[{action_colors[action]}]{count} to {action.title()},[/{action_colors[action]}]", end=" ")
+                f"[{action_colors[action]}]{count} to {action.title()}, ", end="")
         else:
-            console.print(
-                f"[white]{count} to {action.title()},[/white]", end=" ")
-    console.print("\n")
+            console.print(f"[white]{count} to {action.title()}, ", end="")
+    console.print()  # For newline at the end
 
-# if __name__ == "__main__":
-#     with open('s3_plan.json', 'r') as file:
-#         terraform_plan = file.read()
 
-#     counts, updates = count_resources_by_action_and_collect_changes(terraform_plan)
+# Example usage:
+if __name__ == "__main__":
+    with open('/tmp/ae_dev/tf_code/apigateway/apigateway_plan.json', 'r') as file:
+        terraform_plan = file.read()
 
-#     print_summary(counts, "s3")
+    counts, updates = count_resources_by_action_and_collect_changes(
+        terraform_plan)
 
-#     print_detailed_changes(updates)
+    print_summary(counts, "Module")
+    print_detailed_changes(updates)

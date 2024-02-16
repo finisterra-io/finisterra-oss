@@ -127,6 +127,8 @@ class ELBV2:
             load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
                 "LoadBalancers"]
 
+        self.task = None
+
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]
 

@@ -145,9 +145,20 @@ class HCL:
         with open(self.terraform_state_file, 'w') as state_file:
             json.dump(self.state_data, state_file, indent=2)
 
+        # Initializing Terraform with a retry mechanism
         logger.debug("Initializing Terraform...")
-        subprocess.run(["terraform", "init"], cwd=self.script_dir,
-                       check=True, stdout=subprocess.DEVNULL)
+        try:
+            subprocess.run(["terraform", "init"], cwd=self.script_dir,
+                           check=True, stdout=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            logger.debug("Terraform init failed, retrying in 5 seconds...")
+            time.sleep(5)
+            try:
+                subprocess.run(["terraform", "init"], cwd=self.script_dir,
+                               check=True, stdout=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                logger.error("Terraform init failed on retry.")
+                return
 
         logger.debug("Refreshing state...")
         try:
@@ -155,7 +166,7 @@ class HCL:
                            check=True, stdout=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             logger.debug("Terraform refresh failed, retrying in 5 seconds...")
-            time.sleep(5)  # Wait for 5 seconds before retrying
+            time.sleep(5)
             try:
                 subprocess.run(["terraform", "refresh"], cwd=self.script_dir,
                                check=True, stdout=subprocess.DEVNULL)
@@ -237,6 +248,7 @@ class HCL:
         if not os.path.isfile(self.terraform_state_file):
             return
         logger.debug("Requesting Terraform code...")
+        logger.debug(f"State file: {self.terraform_state_file}")
         with open(self.terraform_state_file, 'r') as f:
             tfstate = json.load(f)
 

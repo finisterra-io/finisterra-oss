@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import logging
 from rich.logging import RichHandler
+import time
 
 
 from rich.console import Console
@@ -48,6 +49,48 @@ def execute_provider_method(provider, method_name):
             f"[bold red]Error executing {method_name}[/bold red]: {str(e)}", style="bold red")
         console.print(Traceback())
         return set()
+
+
+def execute_terraform_plan(output_dir, ftstack):
+    # Define the working directory for this ftstack
+    cwd = os.path.join(output_dir, "tf_code", ftstack)
+
+    max_retries = 1  # Maximum number of retries
+    retry_count = 0  # Initial retry count
+
+    while retry_count <= max_retries:
+        try:
+            console.print(
+                f"[cyan]Running Terraform init and plan for {ftstack}...[/cyan]")
+            # Run terraform init with the specified working directory
+            subprocess.run(["terragrunt", "init"], cwd=cwd, check=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Run terraform plan with the specified working directory
+            plan_file_name = os.path.join(cwd, f"{ftstack}_plan")
+            subprocess.run(["terragrunt", "plan", "-out", plan_file_name],
+                           cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Run terraform show with the specified working directory
+            json_file_name = os.path.join(cwd, f"{ftstack}_plan.json")
+            subprocess.run(f"terragrunt show -json {plan_file_name} > {json_file_name}",
+                           shell=True, cwd=cwd, check=True, stderr=subprocess.PIPE)
+            # Read and process the Terraform plan JSON
+            with open(json_file_name) as f:
+                counts, updates = count_resources_by_action_and_collect_changes(
+                    f.read())
+            # Optionally, clean up the plan file
+            os.remove(plan_file_name)
+            # os.remove(json_file_name)
+            return (counts, updates, ftstack)
+        except subprocess.CalledProcessError as e:
+            console.print(
+                f"[red]Error in Terraform operation for {ftstack}: {e.stderr.decode('utf-8')}[/red]")
+            if retry_count < max_retries:
+                retry_count += 1
+                console.print(
+                    f"[yellow]Retrying Terraform init and plan for {ftstack} in 10 seconds...[/yellow]")
+                time.sleep(10)  # Wait for 10 seconds before retrying
+            else:
+                return None
 
 
 @click.command()
@@ -119,7 +162,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
             all_provider_methods = [
                 'vpc',
                 'acm',
-                # 'apigateway', too long
+                'apigateway',
                 'autoscaling',
                 'cloudmap',
                 'cloudfront',
@@ -182,33 +225,34 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
                 ftstacks = ftstacks.union(result)
 
         if run_plan:
-            # logger.info(("Planning Terraform...")
             os.chdir(os.path.join(output_dir, "tf_code"))
             shutil.copyfile("./terragrunt.hcl",
                             "./terragrunt.hcl.remote-state")
-            shutil.copyfile("./terragrunt.hcl.local-state",
-                            "./terragrunt.hcl")
-            for ftstack in ftstacks:
-                with console.status(f"[cyan]Running Terraform plan for {ftstack}...", spinner="dots"):
-                    os.chdir(os.path.join(output_dir, "tf_code", ftstack))
-                    subprocess.run(["terragrunt", "init"],
-                                   check=True, stdout=subprocess.DEVNULL)
-                    plan_file_name = f"{ftstack}_plan"
-                    subprocess.run(
-                        ["terragrunt", "plan", "-out", plan_file_name], check=True, stdout=subprocess.DEVNULL)
-                    json_file_name = f"{ftstack}_plan.json"
-                    subprocess.run(
-                        f"terragrunt show -json {plan_file_name} > {json_file_name}", shell=True, check=True)
-                    os.remove(plan_file_name)
-                    counts, updates = count_resources_by_action_and_collect_changes(
-                        open(json_file_name).read())
-                    print_detailed_changes(updates)
-                    print_summary(counts, ftstack)
+            shutil.copyfile("./terragrunt.hcl.local-state", "./terragrunt.hcl")
+
+            results = []  # Initialize a list to store results
+            with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+                future_to_ftstack = {executor.submit(
+                    execute_terraform_plan, output_dir, ftstack): ftstack for ftstack in ftstacks}
+                for future in as_completed(future_to_ftstack):
+                    result = future.result()
+                    if result:
+                        # Collect results for later processing
+                        results.append(result)
+
+            # Restore original terragrunt.hcl files after all plans have been executed
             os.chdir(os.path.join(output_dir, "tf_code"))
-            shutil.copyfile("./terragrunt.hcl",
-                            "./terragrunt.hcl.local-state")
+            shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.local-state")
             shutil.copyfile("./terragrunt.hcl.remote-state",
                             "./terragrunt.hcl")
+
+            # Process the results after all plans are done
+            for counts, updates, ftstack in results:
+                console.print(
+                    f"\n[bold]Terraform Plan for {ftstack}[/bold]")
+                print_detailed_changes(updates)
+                print_summary(counts, ftstack)
+                console.print('-' * 50)
 
         for ftstack in ftstacks:
             generated_path = os.path.join(output_dir, "tf_code", ftstack)

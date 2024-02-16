@@ -92,8 +92,8 @@ class SNS:
                 self.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{name}[/]")
 
-                # if name != 'slack-devops-monitors-devqa':
-                #     continue
+                if name != 'LBS-Theatrical-Monthly-Transfer-Trigger':
+                    continue
 
                 logger.debug(f"Processing SNS Topic: {name}")
                 id = arn

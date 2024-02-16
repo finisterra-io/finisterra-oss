@@ -549,8 +549,9 @@ class Apigateway:
                 vpc_link_id = integration["connectionId"]
                 self.aws_api_gateway_vpc_link(vpc_link_id, ftstack)
 
-            self.aws_api_gateway_integration_response(
-                api_id, resource_id, method, integration["integrationResponses"])
+            if 'integrationResponses' in integration:
+                self.aws_api_gateway_integration_response(
+                    api_id, resource_id, method, integration["integrationResponses"])
 
         except Exception as e:
             logger.error(f"An error occurred: {e}")
@@ -580,7 +581,7 @@ class Apigateway:
         method_details = self.aws_clients.apigateway_client.get_method(
             restApiId=rest_api_id, resourceId=resource_id, httpMethod=method)
 
-        for status_code in method_details["methodResponses"].keys():
+        for status_code in method_details.get("methodResponses", {}).keys():
             # logger.debug(f"Processing API Gateway Method Response: {resource_id} {method} {status_code}")
 
             attributes = {

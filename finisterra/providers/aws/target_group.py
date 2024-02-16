@@ -83,7 +83,7 @@ class TargetGroup:
         for response in response_iterator:
             total += len(response.get("TargetGroups", []))
 
-        if total > 0:
+        if total > 0 and not target_group_arn:
             self.task = self.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
@@ -91,11 +91,13 @@ class TargetGroup:
             for target_group in response["TargetGroups"]:
                 tg_arn = target_group["TargetGroupArn"]
                 tg_name = target_group["TargetGroupName"]
-                self.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{tg_name}[/]")
 
                 if target_group_arn and tg_arn != target_group_arn:
                     continue
+
+                if not target_group_arn:
+                    self.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{tg_name}[/]")
 
                 # if tg_name != "platform-int":
                 #     continue
