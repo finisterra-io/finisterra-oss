@@ -333,7 +333,7 @@ class EC2:
                         f"  Skipping EC2 Instance (managed by EKS): {instance_id}")
                     continue
 
-                # if instance_id != "i-0a8f69f50619306c3":
+                # if instance_id != "xxxx``":
                 #     continue
 
                 logger.debug(f"Processing EC2 Instance: {instance_id}")

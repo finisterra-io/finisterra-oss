@@ -297,18 +297,19 @@ class ECS:
         clusters = self.aws_clients.ecs_client.describe_clusters(
             clusters=clusters_arns)["clusters"]
 
+        total = 0
+        for cluster in clusters:
+            total += 1
+
+        if total > 0:
+            self.progress.update(
+                self.task, desciption=f"[cyan]Processing {self.__class__.__name__}...", total=total)
+
         for cluster in clusters:
             if cluster['clusterName'] == cluster_name:
                 cluster_arn = cluster['clusterArn']
                 paginator = self.aws_clients.ecs_client.get_paginator(
                     'list_services')
-                total = 0
-                for page in paginator.paginate(cluster=cluster_arn):
-                    total += len(page["serviceArns"])
-
-                if total > 0:
-                    self.progress.update(
-                        self.task, desciption=f"[cyan]Processing {self.__class__.__name__} - {cluster_name}...", total=total)
 
                 for page in paginator.paginate(cluster=cluster_arn):
                     services_arns = page["serviceArns"]
@@ -319,10 +320,11 @@ class ECS:
                     services = self.aws_clients.ecs_client.describe_services(
                         cluster=cluster_arn, services=services_arns)["services"]
 
+                    self.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
+
                     for service in services:
                         service_name = service["serviceName"]
-                        self.progress.update(
-                            self.task, advance=1, description=f"[cyan]{self.__class__.__name__} - {cluster_name} [bold]{service_name}[/]")
 
                         # if service_name != "eureka-discovery-service":
                         # if service_name != "eureka-discovery-service" and service_name != "spring-config-server":
@@ -420,6 +422,7 @@ class ECS:
                                     if namespace_name:
                                         self.hcl.add_additional_data(
                                             "aws_service_discovery_service", registry_arn, "namespace_name", namespace_name)
+
             # else:
             #     logger.debug(f"Skipping aws_ecs_service: {cluster['clusterName']}")
 

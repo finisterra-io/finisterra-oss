@@ -129,18 +129,33 @@ class ELBV2:
 
         self.task = None
 
-        total = len(load_balancers)
-
+        total = 0
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]
+            lb_name = lb["LoadBalancerName"]
 
+            # Check tags of the load balancer
+            tags_response = self.aws_clients.elbv2_client.describe_tags(ResourceArns=[
+                                                                        lb_arn])
+            tags = tags_response["TagDescriptions"][0]["Tags"]
+
+            # Filter out load balancers created by Elastic Beanstalk or Kubernetes Ingress
+            is_ebs_created = any(
+                tag["Key"] == "elasticbeanstalk:environment-name" for tag in tags)
+            is_k8s_created = any(tag["Key"] in ["kubernetes.io/ingress-name",
+                                                "kubernetes.io/ingress.class", "elbv2.k8s.aws/cluster"] for tag in tags)
+
+            if is_ebs_created:
+                continue
+            elif is_k8s_created:
+                logger.debug(f"  Skipping Kubernetes Load Balancer: {lb_name}")
+                continue
+
+            total = total + 1
+
+        for lb in load_balancers:
             resource_type = "aws_lb"
-            lb_response = self.aws_clients.elbv2_client.describe_load_balancers(
-                LoadBalancerArns=[lb_arn])
-            if not lb_response["LoadBalancers"]:
-                return
-
-            lb = lb_response["LoadBalancers"][0]
+            lb_arn = lb["LoadBalancerArn"]
             lb_name = lb["LoadBalancerName"]
 
             # Check tags of the load balancer
@@ -157,12 +172,10 @@ class ELBV2:
             if is_ebs_created:
                 logger.debug(
                     f"  Skipping Elastic Beanstalk Load Balancer: {lb_name}")
-                total -= 1
-                return
+                continue
             elif is_k8s_created:
                 logger.debug(f"  Skipping Kubernetes Load Balancer: {lb_name}")
-                total -= 1
-                return
+                continue
 
             logger.debug(f"Processing Load Balancer: {lb_name}")
 

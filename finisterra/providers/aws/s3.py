@@ -74,6 +74,12 @@ class S3:
 
         response = self.aws_clients.s3_client.list_buckets()
         all_buckets = response["Buckets"]
+        while response.get('NextContinuationToken'):
+            response = self.aws_clients.s3_client.list_buckets(
+                ContinuationToken=response['NextContinuationToken']
+            )
+            all_buckets.extend(response["Buckets"])
+
         if len(all_buckets) > 0:
             self.task = self.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets))
