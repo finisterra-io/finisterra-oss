@@ -100,7 +100,7 @@ class S3:
         logger.debug(f"Processing S3 Bucket: {bucket_name}")
         resource_type = "aws_s3_bucket"
 
-        # if bucket_name != "xxxxx":
+        # if bucket_name != "xxxx":
         #     return
 
         # Retrieve the region of the bucket

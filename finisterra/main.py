@@ -63,11 +63,11 @@ def execute_terraform_plan(output_dir, ftstack):
             console.print(
                 f"[cyan]Running Terraform plan on the generated code for {ftstack}...[/cyan]")
             # Run terraform init with the specified working directory
-            subprocess.run(["terragrunt", "init"], cwd=cwd, check=True,
+            subprocess.run(["terragrunt", "init", "-no-color"], cwd=cwd, check=True,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             # Run terraform plan with the specified working directory
             plan_file_name = os.path.join(cwd, f"{ftstack}_plan")
-            subprocess.run(["terragrunt", "plan", "-out", plan_file_name],
+            subprocess.run(["terragrunt", "plan", "-no-color", "-out", plan_file_name],
                            cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             # Run terraform show with the specified working directory
             json_file_name = os.path.join(cwd, f"{ftstack}_plan.json")

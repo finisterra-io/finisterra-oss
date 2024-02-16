@@ -148,7 +148,7 @@ class HCL:
         # Initializing Terraform with a retry mechanism
         logger.debug("Initializing Terraform...")
         try:
-            subprocess.run(["terraform", "init"], cwd=self.script_dir,
+            subprocess.run(["terraform", "init", "-no-color"], cwd=self.script_dir,
                            check=True, stdout=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             logger.debug("Terraform init failed, retrying in 5 seconds...")
@@ -162,13 +162,13 @@ class HCL:
 
         logger.debug("Refreshing state...")
         try:
-            subprocess.run(["terraform", "refresh"], cwd=self.script_dir,
+            subprocess.run(["terraform", "refresh", "-no-color"], cwd=self.script_dir,
                            check=True, stdout=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             logger.debug("Terraform refresh failed, retrying in 5 seconds...")
             time.sleep(5)
             try:
-                subprocess.run(["terraform", "refresh"], cwd=self.script_dir,
+                subprocess.run(["terraform", "refresh", "-no-color"], cwd=self.script_dir,
                                check=True, stdout=subprocess.DEVNULL)
             except subprocess.CalledProcessError:
                 logger.error("Terraform refresh failed on retry.")

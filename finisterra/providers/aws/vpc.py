@@ -100,7 +100,7 @@ class VPC:
             is_default = vpc.get("IsDefault", False)
             if not is_default:
                 vpc_id = vpc["VpcId"]
-                # if vpc_id != "vpc-0d4f801cafb8943b1":
+                # if vpc_id != "xxxx":
                 #     continue
                 logger.debug(f"Processing VPC: {vpc_id}")
                 id = vpc_id
@@ -117,7 +117,7 @@ class VPC:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    logger.debug("Error occurred: ", e)
+                    logger.debug(f"Error occurred: {e}")
 
                 attributes = {
                     "id": id,
@@ -711,7 +711,7 @@ class VPC:
                         "aws_main_route_table_association", assoc_id.replace("-", "_"), attributes)
 
     def aws_nat_gateway(self, vpc_id):
-        logger.debug("Processing NAT Gateways for VPC: ", vpc_id)
+        logger.debug(f"Processing NAT Gateways for VPC: {vpc_id}")
 
         # Describe all subnets for the given VPC
         subnets = self.aws_clients.ec2_client.describe_subnets(
@@ -768,7 +768,7 @@ class VPC:
 
     def aws_eip(self, allocation_id):
         logger.debug(
-            "Processing Elastic IPs associated with NAT Gateway: ", allocation_id)
+            f"Processing Elastic IPs associated with NAT Gateway: {allocation_id}")
 
         eip = self.aws_clients.ec2_client.describe_addresses(
             AllocationIds=[allocation_id])["Addresses"][0]
@@ -887,7 +887,7 @@ class VPC:
                         "aws_network_acl_rule", f"{network_acl_id.replace('-', '_')}-{rule_number}-{type}", attributes)
 
     def aws_network_interface(self, network_interface_id):
-        logger.debug("Processing Network Interface: ", network_interface_id)
+        logger.debug(f"Processing Network Interface: {network_interface_id}")
         network_interfaces = self.aws_clients.ec2_client.describe_network_interfaces(NetworkInterfaceIds=[network_interface_id])[
             "NetworkInterfaces"]
 

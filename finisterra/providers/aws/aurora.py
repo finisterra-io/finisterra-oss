@@ -592,6 +592,19 @@ class Aurora:
                 vpc_security_groups = rds_cluster.get("VpcSecurityGroups", [])
                 security_group_ids = []
                 for sg in vpc_security_groups:
+                    sg_details = self.aws_clients.ec2_client.describe_security_groups(
+                        GroupIds=[sg['VpcSecurityGroupId']])
+
+                    if sg_details and sg_details['SecurityGroups']:
+                        vpc_id = sg_details['SecurityGroups'][0].get('VpcId')
+                        vpc_name = self.get_vpc_name(vpc_id)
+                        if vpc_name:
+                            self.hcl.add_additional_data(
+                                resource_type, cluster_arn, "vpc_name",  vpc_name)
+                        self.hcl.add_additional_data(
+                            resource_type, cluster_arn, "vpc_id",  vpc_id)
+
+                    # using boto3 get the vpc id for the security group
                     sg_name = self.security_group_instance.aws_security_group(
                         sg['VpcSecurityGroupId'], ftstack)
                     if sg_name == "default":

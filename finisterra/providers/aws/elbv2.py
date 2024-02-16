@@ -129,6 +129,8 @@ class ELBV2:
 
         self.task = None
 
+        total = len(load_balancers)
+
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]
 
@@ -155,9 +157,11 @@ class ELBV2:
             if is_ebs_created:
                 logger.debug(
                     f"  Skipping Elastic Beanstalk Load Balancer: {lb_name}")
+                total -= 1
                 return
             elif is_k8s_created:
                 logger.debug(f"  Skipping Kubernetes Load Balancer: {lb_name}")
+                total -= 1
                 return
 
             logger.debug(f"Processing Load Balancer: {lb_name}")
@@ -165,7 +169,7 @@ class ELBV2:
             if not selected_lb_arn:
                 if not self.task:
                     self.task = self.progress.add_task(
-                        f"[cyan]Processing {self.__class__.__name__}...", total=len(load_balancers))
+                        f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
                 self.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{lb['LoadBalancerName']}[/]")
