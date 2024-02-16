@@ -61,7 +61,7 @@ def execute_terraform_plan(output_dir, ftstack):
     while retry_count <= max_retries:
         try:
             console.print(
-                f"[cyan]Running Terraform init and plan on the generated code for {ftstack}...[/cyan]")
+                f"[cyan]Running Terraform plan on the generated code for {ftstack}...[/cyan]")
             # Run terraform init with the specified working directory
             subprocess.run(["terragrunt", "init"], cwd=cwd, check=True,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)

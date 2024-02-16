@@ -92,7 +92,7 @@ class SNS:
                 self.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{name}[/]")
 
-                # if name != 'LBS-Theatrical-Monthly-Transfer-Trigger':
+                # if name != 'xxxxx':
                 #     continue
 
                 logger.debug(f"Processing SNS Topic: {name}")
