@@ -70,23 +70,24 @@ def print_detailed_changes(counts, updates, known_okay_changes=None):
                     old_value = changes[change_key][change_detail]['old_value']
                     new_value = changes[change_key][change_detail]['new_value']
 
-                    # Normalize values if they are strings (potentially configuration settings)
-                    old_value_normalized = normalize_text(old_value)
-                    new_value_normalized = normalize_text(new_value)
+                    # Normalize values to ignore whitespace and newline differences only if they are strings
+                    old_value_normalized = normalize_text(old_value).replace(' ', '').replace(
+                        '\n', '') if isinstance(old_value, str) else old_value
+                    new_value_normalized = normalize_text(new_value).replace(' ', '').replace(
+                        '\n', '') if isinstance(new_value, str) else new_value
 
-                    # Attempt to parse JSON if the values are strings
+                    # Attempt to parse JSON if the values are normalized strings
+                    old_value_obj, new_value_obj = None, None
                     if isinstance(old_value_normalized, str):
                         try:
                             old_value_obj = json.loads(old_value_normalized)
                         except json.JSONDecodeError:
-                            # Use normalized text if JSON parsing fails
                             old_value_obj = old_value_normalized
 
                     if isinstance(new_value_normalized, str):
                         try:
                             new_value_obj = json.loads(new_value_normalized)
                         except json.JSONDecodeError:
-                            # Use normalized text if JSON parsing fails
                             new_value_obj = new_value_normalized
 
                     # Compare the Python objects or normalized text directly
@@ -99,7 +100,9 @@ def print_detailed_changes(counts, updates, known_okay_changes=None):
                         real_update = True
                     console.print(f"  [orange3]{item_path}[/orange3]")
                     console.print(
-                        f"    ~ [orange3]{json.dumps(old_value, indent=4, default=str)} => {json.dumps(new_value, indent=4, default=str)}[/orange3]")
+                        f"    ~ [white]From: [/white][orange3]{json.dumps(old_value, indent=4, default=str)}[/orange3]")
+                    console.print(
+                        f"    ~ [white]To: [/white][orange3]{json.dumps(new_value, indent=4, default=str)}[/orange3]")
 
         # Handle added items
         if 'dictionary_item_added' in changes or 'iterable_item_added' in changes:
