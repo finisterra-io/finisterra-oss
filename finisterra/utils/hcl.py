@@ -7,8 +7,8 @@ import tempfile
 import json
 import http.client
 import zipfile
-import logging
 import time
+import logging
 
 logger = logging.getLogger('finisterra')
 

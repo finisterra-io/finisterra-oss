@@ -15,7 +15,7 @@ from rich.traceback import Traceback
 
 from .providers.aws.Aws import Aws
 from .utils.auth import auth
-from .utils.tf_plan import count_resources_by_action_and_collect_changes, print_summary, print_detailed_changes
+from .utils.tf_plan import count_resources_by_action_and_collect_changes, print_tf_plan
 
 from rich.progress import Progress
 from rich.progress import TimeElapsedColumn
@@ -77,9 +77,9 @@ def execute_terraform_plan(output_dir, ftstack):
             with open(json_file_name) as f:
                 counts, updates = count_resources_by_action_and_collect_changes(
                     f.read())
-            # Optionally, clean up the plan file
+            # clean up the plan files
             os.remove(plan_file_name)
-            # os.remove(json_file_name)
+            os.remove(json_file_name)
             return (counts, updates, ftstack)
         except subprocess.CalledProcessError as e:
             console.print(
@@ -183,7 +183,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
                 's3',
                 'sns',
                 'sqs',
-                'wafv2',
+                # 'wafv2',
                 'stepfunction',
                 'msk',
                 'aurora',
@@ -250,8 +250,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
             for counts, updates, ftstack in results:
                 console.print(
                     f"\n[bold]Terraform Plan for {ftstack}[/bold]")
-                print_detailed_changes(updates)
-                print_summary(counts, ftstack)
+                print_tf_plan(counts, updates, ftstack)
                 console.print('-' * 50)
 
         for ftstack in ftstacks:

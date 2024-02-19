@@ -1,7 +1,9 @@
 import json
 from deepdiff import DeepDiff  # Make sure to install deepdiff first
 from rich.console import Console
-from rich.table import Table
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 def count_resources_by_action_and_collect_changes(plan):
@@ -38,46 +40,102 @@ def count_resources_by_action_and_collect_changes(plan):
     return actions_count, updates_details
 
 
-def print_detailed_changes(updates):
+def print_title(title):
+    console = Console()
+    console.print(f"[bold][white]{title}[/white][/bold]")
+
+
+def normalize_text(value):
+    # Example normalization for configuration strings:
+    # Ensures consistent spacing around '=' for key-value pairs
+    if isinstance(value, str) and '=' in value:
+        return '\n'.join([line.strip().replace(" = ", "=").replace("= ", "=").replace(" =", "=") for line in value.split('\n')])
+    return value
+
+
+def print_detailed_changes(counts, updates, known_okay_changes=None):
+    known_okay_changes = [
+        "['default_action'][0]['target_group_arn']", "['action'][0]['target_group_arn']"]
     console = Console()
 
     for address, changes in updates.items():
-        console.print(
-            f"\n[white]{address} will be updated in-place:[/white]")
-        # Handle changes in values
-        if 'type_changes' in changes:
-            for change_detail in changes['type_changes']:
-                item_path = change_detail.split('root')[1]
-                old_value = changes['type_changes'][change_detail]['old_value']
-                new_value = changes['type_changes'][change_detail]['new_value']
-                console.print(f"  [orange3]{item_path}[/orange3]")
-                console.print(
-                    f"    ~ [orange3]{json.dumps(old_value, indent=4)} => {json.dumps(new_value, indent=4)}[/orange3]")
+        real_update = False
+        for change_key in ["type_changes", "values_changed"]:
+            if change_key in changes:
+                for change_detail in changes[change_key]:
+                    item_path = change_detail.split('root')[1]
+                    if item_path in known_okay_changes:
+                        continue
 
-        if 'values_changed' in changes:
-            for change_detail in changes['values_changed']:
-                item_path = change_detail.split('root')[1]
-                old_value = changes['values_changed'][change_detail]['old_value']
-                new_value = changes['values_changed'][change_detail]['new_value']
-                console.print(f"  [orange3]{item_path}[/orange3]")
-                console.print(
-                    f"    ~ [orange3]{json.dumps(old_value, indent=4)} => {json.dumps(new_value, indent=4)}[/orange3]")
+                    old_value = changes[change_key][change_detail]['old_value']
+                    new_value = changes[change_key][change_detail]['new_value']
+
+                    # Normalize values if they are strings (potentially configuration settings)
+                    old_value_normalized = normalize_text(old_value)
+                    new_value_normalized = normalize_text(new_value)
+
+                    # Attempt to parse JSON if the values are strings
+                    if isinstance(old_value_normalized, str):
+                        try:
+                            old_value_obj = json.loads(old_value_normalized)
+                        except json.JSONDecodeError:
+                            # Use normalized text if JSON parsing fails
+                            old_value_obj = old_value_normalized
+
+                    if isinstance(new_value_normalized, str):
+                        try:
+                            new_value_obj = json.loads(new_value_normalized)
+                        except json.JSONDecodeError:
+                            # Use normalized text if JSON parsing fails
+                            new_value_obj = new_value_normalized
+
+                    # Compare the Python objects or normalized text directly
+                    if old_value_obj == new_value_obj:
+                        # If the objects or text are equal, the difference is only in formatting
+                        continue
+
+                    if not real_update:
+                        print_title(f"{address} will be updated in-place:")
+                        real_update = True
+                    console.print(f"  [orange3]{item_path}[/orange3]")
+                    console.print(
+                        f"    ~ [orange3]{json.dumps(old_value, indent=4, default=str)} => {json.dumps(new_value, indent=4, default=str)}[/orange3]")
 
         # Handle added items
         if 'dictionary_item_added' in changes or 'iterable_item_added' in changes:
             added_key = 'dictionary_item_added' if 'dictionary_item_added' in changes else 'iterable_item_added'
             for change_detail in changes[added_key]:
                 item_path = change_detail.split('root')[1]
+                if item_path in known_okay_changes:
+                    continue
+                if not real_update:
+                    print_title(f"{address} will be updated in-place:")
+                    real_update = True
                 value_added = changes[added_key][change_detail]
                 console.print(f"[green]  + {item_path}[/green]")
+                console.print(
+                    f"    + [green]{json.dumps(value_added, indent=4)}[/green]")
 
         # Handle removed items
         if 'dictionary_item_removed' in changes or 'iterable_item_removed' in changes:
             removed_key = 'dictionary_item_removed' if 'dictionary_item_removed' in changes else 'iterable_item_removed'
             for change_detail in changes[removed_key]:
                 item_path = change_detail.split('root')[1]
+                if item_path in known_okay_changes:
+                    continue
+                if not real_update:
+                    print_title(f"{address} will be updated in-place:")
+                    real_update = True
                 value_removed = changes[removed_key][change_detail]
                 console.print(f"[red]  - {item_path}[/red]")
+                console.print(
+                    f"    - [red]{json.dumps(value_removed, indent=4)}[/red]")
+
+        if not real_update:
+            if counts["update"] > 0:
+                counts["update"] -= 1
+
+    return counts
 
 
 def print_summary(counts, module):
@@ -90,6 +148,8 @@ def print_summary(counts, module):
         "no-op": "grey"
     }
 
+    console.print(
+        f"[bold][white]{module}[/white][/bold]", end=": ")
     for action, count in counts.items():
         if count > 0:
             console.print(
@@ -99,13 +159,17 @@ def print_summary(counts, module):
     console.print()  # For newline at the end
 
 
-# Example usage:
-if __name__ == "__main__":
-    with open('/tmp/ncm/tf_code/eks/eks_plan.json', 'r') as file:
-        terraform_plan = file.read()
+def print_tf_plan(counts, updates, module):
+    counts = print_detailed_changes(counts, updates)
+    print_summary(counts, module)
 
-    counts, updates = count_resources_by_action_and_collect_changes(
-        terraform_plan)
+# # Example usage:
+# if __name__ == "__main__":
+#     with open('/tmp/ncm/tf_code/eks/eks_plan.json', 'r') as file:
+#         terraform_plan = file.read()
 
-    print_summary(counts, "Module")
-    print_detailed_changes(updates)
+#     counts, updates = count_resources_by_action_and_collect_changes(
+#         terraform_plan)
+
+#     print_summary(counts, "Module")
+#     print_detailed_changes(updates)

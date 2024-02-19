@@ -36,6 +36,32 @@ class LaunchTemplate:
         self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
+    def get_subnet_names(self, subnet_ids):
+        subnet_names = []
+        for subnet_id in subnet_ids:
+            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                                                                    subnet_id])
+
+            # Check if 'Subnets' key exists and it's not empty
+            if not response or 'Subnets' not in response or not response['Subnets']:
+                logger.debug(
+                    f"No subnet information found for Subnet ID: {subnet_id}")
+                continue
+
+            # Extract the 'Tags' key safely using get
+            subnet_tags = response['Subnets'][0].get('Tags', [])
+
+            # Extract the subnet name from the tags
+            subnet_name = next(
+                (tag['Value'] for tag in subnet_tags if tag['Key'] == 'Name'), None)
+
+            if subnet_name:
+                subnet_names.append(subnet_name)
+            else:
+                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+
+        return subnet_names
+
     def launchtemplate(self):
         self.hcl.prepare_folder(os.path.join("generated"))
         self.aws_launch_template()
@@ -95,6 +121,9 @@ class LaunchTemplate:
 
         id = launch_template_id
 
+        # if id != "xxxx":
+        #     return
+
         attributes = {
             "id": id,
             "name": latest_version['LaunchTemplateName'],
@@ -122,6 +151,20 @@ class LaunchTemplate:
                     logger.debug(f"Found KMS Key ID for EBS: {kms_key_id}")
                     self.kms_instance.aws_kms_key(kms_key_id, ftstack)
                     break  # Assuming we need the first KMS Key ID found
+
+        network_interfaces = launch_template_data.get("NetworkInterfaces", [])
+        for network_interface in network_interfaces:
+            security_groups = network_interface.get("Groups", [])
+            for security_group in security_groups:
+                self.security_group_instance.aws_security_group(
+                    security_group, ftstack)
+            subnet_id = network_interface.get("SubnetId")
+            if subnet_id:
+                subnet_names = self.get_subnet_names([subnet_id])
+                if subnet_names:
+                    self.hcl.add_additional_data(
+                        resource_type, id, "subnet_name", subnet_names[0])
+
         else:
             logger.debug(
                 "No Block Device Mappings with EBS found in the Launch Template.")

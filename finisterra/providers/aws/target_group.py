@@ -99,7 +99,7 @@ class TargetGroup:
                     self.progress.update(
                         self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{tg_name}[/]")
 
-                # if tg_name != "platform-int":
+                # if tg_name != "xxxx":
                 #     continue
 
                 logger.debug(
