@@ -55,7 +55,7 @@ def normalize_text(value):
 
 def print_detailed_changes(counts, updates, known_okay_changes=None):
     known_okay_changes = [
-        "['default_action'][0]['target_group_arn']", "['action'][0]['target_group_arn']"]
+        "['default_action'][0]['target_group_arn']", "['action'][0]['target_group_arn']", "['default_action'][0]['forward'][0]"]
     console = Console()
 
     for address, changes in updates.items():

@@ -52,16 +52,43 @@ class Wafv2:
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
             self.progress.update(self.task, advance=1)
 
-    def aws_wafv2_ip_set(self, waf_id, ip_set_name, scope):
-        logger.debug(f"Processing WAFv2 IP Set:  {ip_set_name}")
+    def aws_wafv2_ip_set(self):
+        # Find IP sets for the ACL
+        for scope in ['REGIONAL', 'CLOUDFRONT']:
+            ip_sets = self.aws_clients.wafv2_client.list_ip_sets(Scope=scope)[
+                "IPSets"]
+            for ip_set in ip_sets:
+                ip_set_name = ip_set["Name"]
+                logger.debug(f"Processing WAFv2 IP Set: {ip_set_name}")
+                # Initialize ip_set_id as None
+                ip_set_id = None
+                # List all IP sets in the specified scope
+                try:
+                    response = self.aws_clients.wafv2_client.list_ip_sets(
+                        Scope=scope)
+                    # Iterate through the IP sets to find the one with the matching name
+                    for ip_set in response['IPSets']:
+                        if ip_set['Name'] == ip_set_name:
+                            ip_set_id = ip_set['Id']
+                            break
 
-        attributes = {
-            "id": waf_id,
-            "name": ip_set_name,
-            "scope": scope,
-        }
-        self.hcl.process_resource(
-            "aws_wafv2_ip_set", waf_id.replace("-", "_"), attributes)
+                    if ip_set_id is None:
+                        logger.error(f"IP Set named {ip_set_name} not found.")
+                        return
+                except Exception as e:
+                    logger.error(
+                        f"Error fetching IP Set ID for {ip_set_name}: {e}")
+                    return
+
+                id = ip_set_id + "/" + ip_set_name + "/" + scope
+
+                attributes = {
+                    "id": id,
+                    "name": ip_set_name,
+                    "scope": scope,
+                }
+                self.hcl.process_resource(
+                    "aws_wafv2_ip_set", ip_set_name, attributes)
 
     # def aws_wafv2_regex_pattern_set(self):
     #     logger.debug("Processing WAFv2 Regex Pattern Sets...")
@@ -86,27 +113,22 @@ class Wafv2:
     #         self.hcl.process_resource(
     #             "aws_wafv2_regex_pattern_set", regex_pattern_set_id.replace("-", "_"), attributes)
 
-    # def aws_wafv2_rule_group(self):
-    #     logger.debug("Processing WAFv2 Rule Groups...")
+    def aws_wafv2_rule_group(self, rule_group_arn):
+        scope = rule_group_arn.split(":")[5]
+        rule_group_id = rule_group_arn.split("/")[-1]
+        logger.debug(f"Processing WAFv2 Rule Group: {rule_group_id}")
 
-    #     scope = 'REGIONAL'
-    #     rule_groups = self.aws_clients.wafv2_client.list_rule_groups(Scope=scope)[
-    #         "RuleGroups"]
-
-    #     for rule_group in rule_groups:
-    #         rule_group_id = rule_group["Id"]
-    #         logger.debug(f"Processing WAFv2 Rule Group: {rule_group_id}")
-
-    #         rule_group_info = self.aws_clients.wafv2_client.get_rule_group(
-    #             Id=rule_group_id, Scope=scope)["RuleGroup"]
-    #         attributes = {
-    #             "id": rule_group_id,
-    #             "name": rule_group_info["Name"],
-    #             "description": rule_group_info.get("Description", ""),
-    #             "scope": scope,
-    #         }
-    #         self.hcl.process_resource(
-    #             "aws_wafv2_rule_group", rule_group_id.replace("-", "_"), attributes)
+        rule_group_info = self.aws_clients.wafv2_client.get_rule_group(
+            Id=rule_group_id, Scope=scope)["RuleGroup"]
+        rule_group_name = rule_group_info["Name"]
+        id = rule_group_id + "/" + rule_group_name + "/" + scope
+        attributes = {
+            "id": id,
+            "name": rule_group_name,
+            "scope": scope,
+        }
+        self.hcl.process_resource(
+            "aws_wafv2_rule_group", rule_group_name, attributes)
 
     def aws_wafv2_web_acl(self, web_acl_id=None, ftstack=None):
         logger.debug("Processing WAFv2 Web ACLs...")
@@ -139,8 +161,8 @@ class Wafv2:
 
         web_acl_id = web_acl["Id"]
 
-        # if web_acl_name != "aws-managed-waf-sandbox":
-        #     continue
+        # if web_acl_name != "test-partner-whitelist":
+        #     return
 
         logger.debug(f"Processing WAFv2 Web ACL: {web_acl_id}")
 
@@ -168,13 +190,6 @@ class Wafv2:
         self.hcl.process_resource(
             resource_type, id, attributes)
         self.hcl.add_stack(resource_type, id, ftstack)
-
-        # Find IP sets for the ACL
-        ip_sets = self.aws_clients.wafv2_client.list_ip_sets(Scope=scope)[
-            "IPSets"]
-        for ip_set in ip_sets:
-            ip_set_name = ip_set["Name"]
-            self.aws_wafv2_ip_set(web_acl_id, ip_set_name, scope)
 
         # call the other functions with appropriate arguments
         # self.aws_wafv2_web_acl_association(web_acl_id)

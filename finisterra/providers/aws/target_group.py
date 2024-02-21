@@ -1,7 +1,7 @@
 import os
 from ...utils.hcl import HCL
 from ...providers.aws.acm import ACM
-from ...providers.aws.elbv2 import ELBV2
+# from ...providers.aws.elbv2 import ELBV2
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -33,8 +33,8 @@ class TargetGroup:
 
         self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.elbv2_instance = ELBV2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
-                                    region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        # self.elbv2_instance = ELBV2(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        #                             region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
         self.load_balancers = None
         self.listeners = {}
@@ -132,27 +132,27 @@ class TargetGroup:
                         self.hcl.add_additional_data(
                             resource_type, id, "vpc_name", vpc_name)
 
-                # Call the aws_lb_listener_rule function with the target_group_arn
-                self.aws_lb_listener_rule(tg_arn, ftstack)
+                # # Call the aws_lb_listener_rule function with the target_group_arn
+                # self.aws_lb_listener_rule(tg_arn, ftstack)
 
-                # Check if the target group is used in any loadbalancer default actions
-                if not self.load_balancers:
-                    self.load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
-                        "LoadBalancers"]
-                for lb in self.load_balancers:
-                    lb_arn = lb["LoadBalancerArn"]
-                    # logger.debug(f"Processing Load Balancer: {lb_arn}")
+                # # Check if the target group is used in any loadbalancer default actions
+                # if not self.load_balancers:
+                #     self.load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
+                #         "LoadBalancers"]
+                # for lb in self.load_balancers:
+                #     lb_arn = lb["LoadBalancerArn"]
+                #     # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
-                    if lb_arn not in self.listeners:
-                        self.listeners[lb_arn] = self.aws_clients.elbv2_client.describe_listeners(
-                            LoadBalancerArn=lb_arn)["Listeners"]
+                #     if lb_arn not in self.listeners:
+                #         self.listeners[lb_arn] = self.aws_clients.elbv2_client.describe_listeners(
+                #             LoadBalancerArn=lb_arn)["Listeners"]
 
-                    for listener in self.listeners[lb_arn]:
-                        default_actions = listener.get('DefaultActions', [])
-                        for default_action in default_actions:
-                            if default_action.get('TargetGroupArn') == tg_arn:
-                                self.elbv2_instance.aws_lb(lb_arn, ftstack)
-                                break
+                #     for listener in self.listeners[lb_arn]:
+                #         default_actions = listener.get('DefaultActions', [])
+                #         for default_action in default_actions:
+                #             if default_action.get('TargetGroupArn') == tg_arn:
+                #                 self.elbv2_instance.aws_lb(lb_arn, ftstack)
+                #                 break
 
     def aws_lb_listener_rule(self, target_group_arn, ftstack):
         logger.debug("Processing Load Balancer Listener Rules")

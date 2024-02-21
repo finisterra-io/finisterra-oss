@@ -3,7 +3,7 @@ from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.acm import ACM
 from ...providers.aws.s3 import S3
-# from ...providers.aws.target_group import TargetGroup
+from ...providers.aws.target_group import TargetGroup
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -44,7 +44,8 @@ class ELBV2:
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
         self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
                               s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        # self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
+        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+                                                 region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_subnet_names(self, subnet_ids):
         subnets_info = []
@@ -274,12 +275,12 @@ class ELBV2:
                         self.acm_instance.aws_acm_certificate(
                             certificate['CertificateArn'], ftstack)
 
-                    # default_action = listener.get('DefaultActions', [])
-                    # for action in default_action:
-                    #     target_group_arn = action.get('TargetGroupArn')
-                    #     if target_group_arn:
-                    #         self.target_group_instance.aws_lb_target_group(target_group_arn, ftstack)
-                    #         exit()
+                    default_action = listener.get('DefaultActions', [])
+                    for action in default_action:
+                        target_group_arn = action.get('TargetGroupArn')
+                        if target_group_arn:
+                            self.target_group_instance.aws_lb_target_group(
+                                target_group_arn, ftstack)
 
     def aws_lb_listener_certificate(self, listener_arns, ftstack):
         logger.debug("Processing Load Balancer Listener Certificates...")

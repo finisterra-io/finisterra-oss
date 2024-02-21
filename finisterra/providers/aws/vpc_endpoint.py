@@ -112,7 +112,7 @@ class VPCEndPoint:
                 endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints(
                     VpcEndpointIds=[vpce_id])["VpcEndpoints"]
 
-            if len(endpoints) > 0:
+            if len(endpoints) > 0 and not vpce_id:
                 self.task = self.progress.add_task(
                     f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
             for endpoint in endpoints:
@@ -161,8 +161,9 @@ class VPCEndPoint:
                         self.hcl.add_additional_data(
                             resource_type, endpoint_id, "subnet_names", subnet_names)
 
-                self.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")
+                if not vpce_id:
+                    self.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")
 
             if not endpoints:
                 logger.debug("No VPC Endpoints found.")

@@ -6,6 +6,7 @@ from ...providers.aws.logs import Logs
 from ...providers.aws.acm import ACM
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import tempfile
 
 logger = logging.getLogger('finisterra')
 
@@ -85,7 +86,13 @@ class Apigateway:
         resource_type = "aws_api_gateway_rest_api"
         # logger.debug(f"Processing API Gateway REST APIs...")
 
-        rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
+        paginator = self.aws_clients.apigateway_client.get_paginator(
+            'get_rest_apis')
+        rest_apis_pages = paginator.paginate()
+
+        rest_apis = []  # List to hold all rest apis
+        for page in rest_apis_pages:
+            rest_apis.extend(page['items'])
 
         # Get the region from the client
         region = self.aws_clients.apigateway_client.meta.region_name
@@ -98,13 +105,14 @@ class Apigateway:
             self.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rest_api['name']}[/]")
 
-            # if rest_api["name"] != "crm-dev-green-household":
+            # if rest_api["name"] != "notes":
             #     continue
 
             api_id = rest_api["id"]
 
             # Construct the ARN for the API Gateway REST API
             arn = f"arn:aws:apigateway:{region}::/restapis/{api_id}"
+            print(arn)
 
             ftstack = "apigateway"
             try:
@@ -133,36 +141,24 @@ class Apigateway:
                     self.vpc_endpoint_instance.aws_vpc_endpoint(
                         vpc_link_id, ftstack)
 
-            self.hcl.add_stack(resource_type, api_id, ftstack)
-
             stages = self.aws_clients.apigateway_client.get_stages(restApiId=api_id)[
                 "item"]
+
+            openapi_spec_file = self.aws_api_gateway_stage(
+                rest_api["id"], stages, ftstack)
 
             self.aws_api_gateway_method_settings(rest_api["id"], stages)
             self.aws_api_gateway_rest_api_policy(rest_api["id"])
             self.aws_api_gateway_resource(rest_api["id"], ftstack)
-            self.aws_api_gateway_stage(rest_api["id"], stages, ftstack)
             self.aws_api_gateway_gateway_response(rest_api["id"])
             self.aws_api_gateway_model(rest_api["id"])
             self.aws_api_gateway_base_path_mapping(rest_api["id"], ftstack)
 
-    def aws_api_gateway_deployment(self, rest_api_id, deployment_id, ftstack):
-        logger.debug(f"Processing API Gateway Deployment: {deployment_id}")
-        attributes = {
-            "id": deployment_id,
-            "rest_api_id": rest_api_id
-        }
+            self.hcl.add_stack(resource_type, api_id, ftstack, {
+                               "filename": openapi_spec_file})
 
-        # deployment = self.aws_clients.apigateway_client.get_deployment(
-        #     restApiId=rest_api_id,
-        #     deploymentId=deployment_id
-        # )
-
-        # if "description" in deployment:
-        #     attributes["description"] = deployment["description"]
-
-        self.hcl.process_resource(
-            "aws_api_gateway_deployment", deployment_id, attributes)
+            self.hcl.add_additional_data(
+                resource_type, api_id, "openapi_spec_file", openapi_spec_file)
 
     def aws_api_gateway_stage(self, rest_api_id, stages, ftstack):
         logger.debug(f"Processing API Gateway Stages...")
@@ -192,21 +188,35 @@ class Apigateway:
             self.aws_api_gateway_deployment(
                 rest_api_id, stage["deploymentId"], ftstack)
 
-            # response = self.aws_clients.apigateway_client.get_export(
-            #     restApiId=rest_api_id,
-            #     stageName="dummy",
-            #     exportType='oas30',
-            #     parameters={'extensions': 'integrations'},
-            #     accepts='application/yaml'
-            # )
-            # open_api_definition = response['body'].read()
-            # # Save the YAML to a file or process it as needed
-            # folder = os.path.join(ftstack)
-            # os.makedirs(folder, exist_ok=True)
-            # api_file_name = os.path.join(folder, f"{rest_api_id}-{stage['stageName']}-api_definition.yaml")
-            # with open(api_file_name, 'wb') as file:
-            #     file.write(open_api_definition)
-            # logger.debug(f"Exported API definition to api_definition.yaml")
+            response = self.aws_clients.apigateway_client.get_export(
+                restApiId=rest_api_id,
+                stageName=stage["stageName"],
+                exportType='oas30',
+                parameters={'extensions': 'apigateway'},
+                accepts='application/yaml'
+            )
+            open_api_definition = response['body'].read()
+
+            # Save the YAML to a file or process it as needed
+            temp_folder = tempfile.mkdtemp()
+            folder = os.path.join(temp_folder, "tf_code", ftstack)
+            os.makedirs(folder, exist_ok=True)
+            api_file_name = os.path.join(
+                folder, f"{rest_api_id}-{stage['stageName']}-api.yaml")
+            with open(api_file_name, 'wb') as file:
+                file.write(open_api_definition)
+            # logger.debug(f"Exported API definition to {api_file_name}")
+            return api_file_name
+
+    def aws_api_gateway_deployment(self, rest_api_id, deployment_id, ftstack):
+        logger.debug(f"Processing API Gateway Deployment: {deployment_id}")
+        attributes = {
+            "id": deployment_id,
+            "rest_api_id": rest_api_id
+        }
+
+        self.hcl.process_resource(
+            "aws_api_gateway_deployment", deployment_id, attributes)
 
     def aws_api_gateway_method(self, rest_api_id, resource_id, ftstack):
         try:

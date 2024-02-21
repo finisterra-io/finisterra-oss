@@ -183,7 +183,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
                 's3',
                 'sns',
                 'sqs',
-                # 'wafv2',
+                'wafv2',
                 'stepfunction',
                 'msk',
                 'aurora',

@@ -4,7 +4,6 @@ import json
 import http.client
 import tempfile
 from urllib.parse import urlparse
-from rich.console import Console
 from ...utils.hcl import HCL
 
 from ...providers.aws.iam_role import IAM

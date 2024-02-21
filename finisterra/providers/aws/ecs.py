@@ -131,13 +131,15 @@ class ECS:
 
         if clusters:
             self.task = self.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=0)
+                f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
 
         for cluster in clusters:
             cluster_name = cluster["clusterName"]
             cluster_arn = cluster["clusterArn"]
+            self.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
 
-            # if cluster_name == "dev-ecs-cluster":
+            # if cluster_name == "xxx":
             #     continue
 
             logger.debug(f"Processing ECS Cluster: {cluster_name}")
@@ -195,32 +197,6 @@ class ECS:
             self.aws_ecs_cluster_capacity_providers(cluster_name)
             self.aws_ecs_capacity_provider(cluster_name)
             self.aws_ecs_service(cluster_name, ftstack)
-
-    def aws_cloudwatch_log_group(self, log_group_name):
-        logger.debug(f"Processing CloudWatch Log Group...")
-
-        paginator = self.aws_clients.logs_client.get_paginator(
-            'describe_log_groups')
-
-        for page in paginator.paginate():
-            for log_group in page['logGroups']:
-                if log_group['logGroupName'] == log_group_name:
-                    logger.debug(
-                        f"Processing CloudWatch Log Group: {log_group_name}")
-
-                    # Prepare the attributes
-                    attributes = {
-                        "id": log_group_name,
-                        "name": log_group_name,
-                    }
-
-                    # Process the resource
-                    self.hcl.process_resource(
-                        "aws_cloudwatch_log_group", log_group_name.replace("/", "_"), attributes)
-                    return  # End the function once we've found the matching log group
-
-        logger.debug(
-            f"  Warning: No matching CloudWatch Log Group found: {log_group_name}")
 
     def aws_ecs_cluster_capacity_providers(self, cluster_name):
         logger.debug(
@@ -297,14 +273,6 @@ class ECS:
         clusters = self.aws_clients.ecs_client.describe_clusters(
             clusters=clusters_arns)["clusters"]
 
-        total = 0
-        for cluster in clusters:
-            total += 1
-
-        if total > 0:
-            self.progress.update(
-                self.task, desciption=f"[cyan]Processing {self.__class__.__name__}...", total=total)
-
         for cluster in clusters:
             if cluster['clusterName'] == cluster_name:
                 cluster_arn = cluster['clusterArn']
@@ -320,15 +288,10 @@ class ECS:
                     services = self.aws_clients.ecs_client.describe_services(
                         cluster=cluster_arn, services=services_arns)["services"]
 
-                    self.progress.update(
-                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
-
                     for service in services:
                         service_name = service["serviceName"]
 
-                        # if service_name != "eureka-discovery-service":
-                        # if service_name != "eureka-discovery-service" and service_name != "spring-config-server":
-                        # if service_name != "assessment-service":
+                        # if service_name != "xxx":
                         #     continue
 
                         service_arn = service["serviceArn"]
