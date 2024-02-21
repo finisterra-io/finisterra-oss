@@ -80,8 +80,15 @@ class ECR:
         resource_type = "aws_ecr_repository"
         # logger.debug(f"Processing ECR Repositories...")
 
-        repositories = self.aws_clients.ecr_client.describe_repositories()[
-            "repositories"]
+        # Create a paginator for the describe_repositories operation
+        paginator = self.aws_clients.ecr_client.get_paginator(
+            'describe_repositories')
+        repositories = []
+
+        # Paginate through the repositories, appending each batch to the repositories list
+        for page in paginator.paginate():
+            repositories.extend(page["repositories"])
+
         if len(repositories) > 0:
             self.task = self.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(repositories))
@@ -102,7 +109,7 @@ class ECR:
                 for tag in tags:
                     if tag['Key'] == 'ftstack':
                         if tag['Value'] != 'ecr':
-                            ftstack = "stack_"+tag['Value']
+                            ftstack = "stack_" + tag['Value']
                         break
             except Exception as e:
                 logger.error("Error occurred: ", e)
@@ -114,9 +121,9 @@ class ECR:
             self.hcl.process_resource(
                 resource_type, repository_name.replace("-", "_"), attributes)
 
-            emcryption_configuration = repo.get("encryptionConfiguration", {})
-            if emcryption_configuration:
-                kmsKey = emcryption_configuration.get("kmsKey", None)
+            encryption_configuration = repo.get("encryptionConfiguration", {})
+            if encryption_configuration:
+                kmsKey = encryption_configuration.get("kmsKey", None)
                 if kmsKey:
                     type = self.kms_instance.aws_kms_key(kmsKey, ftstack)
                     if type == "MANAGED":
