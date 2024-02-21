@@ -4,6 +4,7 @@ from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.acm import ACM
 from ...providers.aws.s3 import S3
 from ...providers.aws.target_group import TargetGroup
+from ...providers.aws.utils import get_subnet_names
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -46,37 +47,6 @@ class ELBV2:
                               s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
         self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
                                                  region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
-    def get_subnet_names(self, subnet_ids):
-        subnets_info = []
-        for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
-
-            # Check if 'Subnets' key exists and it's not empty
-            if not response or 'Subnets' not in response or not response['Subnets']:
-                logger.debug(
-                    f"No subnet information found for Subnet ID: {subnet_id}")
-                continue
-
-            subnet_info = response['Subnets'][0]
-            subnet_tags = subnet_info.get('Tags', [])
-
-            # Extract the subnet name from the tags
-            subnet_name = next(
-                (tag['Value'] for tag in subnet_tags if tag['Key'] == 'Name'), None)
-
-            # Extract the CIDR block
-            subnet_cidr = subnet_info.get('CidrBlock', None)
-
-            if subnet_name and subnet_cidr:
-                subnets_info.append(
-                    {'name': subnet_name, 'cidr_block': subnet_cidr})
-            else:
-                logger.debug(
-                    f"No 'Name' tag or CIDR block found for Subnet ID: {subnet_id}")
-
-        return subnets_info
 
     def get_vpc_name(self, vpc_id):
         response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
@@ -207,8 +177,8 @@ class ELBV2:
 
             AvailabilityZones = lb.get("AvailabilityZones", [])
             if AvailabilityZones:
-                subnets = self.get_subnet_names(
-                    [az["SubnetId"] for az in AvailabilityZones])
+                subnets = get_subnet_names(self.aws_clients,
+                                           [az["SubnetId"] for az in AvailabilityZones])
                 if subnets:
                     if resource_type not in self.hcl.additional_data:
                         self.hcl.additional_data[resource_type] = {}

@@ -1,5 +1,6 @@
 import os
 from ...utils.hcl import HCL
+from ...providers.aws.utils import get_subnet_names
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
 import logging
@@ -35,32 +36,6 @@ class LaunchTemplate:
                                                       region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
         self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
-    def get_subnet_names(self, subnet_ids):
-        subnet_names = []
-        for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
-
-            # Check if 'Subnets' key exists and it's not empty
-            if not response or 'Subnets' not in response or not response['Subnets']:
-                logger.debug(
-                    f"No subnet information found for Subnet ID: {subnet_id}")
-                continue
-
-            # Extract the 'Tags' key safely using get
-            subnet_tags = response['Subnets'][0].get('Tags', [])
-
-            # Extract the subnet name from the tags
-            subnet_name = next(
-                (tag['Value'] for tag in subnet_tags if tag['Key'] == 'Name'), None)
-
-            if subnet_name:
-                subnet_names.append(subnet_name)
-            else:
-                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
-
-        return subnet_names
 
     def launchtemplate(self):
         self.hcl.prepare_folder(os.path.join("generated"))
@@ -160,7 +135,7 @@ class LaunchTemplate:
                     security_group, ftstack)
             subnet_id = network_interface.get("SubnetId")
             if subnet_id:
-                subnet_names = self.get_subnet_names([subnet_id])
+                subnet_names = get_subnet_names(self.aws_clients, [subnet_id])
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, id, "subnet_name", subnet_names[0])

@@ -112,7 +112,6 @@ class Apigateway:
 
             # Construct the ARN for the API Gateway REST API
             arn = f"arn:aws:apigateway:{region}::/restapis/{api_id}"
-            print(arn)
 
             ftstack = "apigateway"
             try:
@@ -144,7 +143,7 @@ class Apigateway:
             stages = self.aws_clients.apigateway_client.get_stages(restApiId=api_id)[
                 "item"]
 
-            openapi_spec_file = self.aws_api_gateway_stage(
+            self.aws_api_gateway_stage(
                 rest_api["id"], stages, ftstack)
 
             self.aws_api_gateway_method_settings(rest_api["id"], stages)
@@ -154,11 +153,13 @@ class Apigateway:
             self.aws_api_gateway_model(rest_api["id"])
             self.aws_api_gateway_base_path_mapping(rest_api["id"], ftstack)
 
-            self.hcl.add_stack(resource_type, api_id, ftstack, {
-                               "filename": openapi_spec_file})
+            self.hcl.add_stack(resource_type, api_id, ftstack)
 
-            self.hcl.add_additional_data(
-                resource_type, api_id, "openapi_spec_file", openapi_spec_file)
+            # self.hcl.add_stack(resource_type, api_id, ftstack, {
+            #                    "filename": openapi_spec_file})
+
+            # self.hcl.add_additional_data(
+            #     resource_type, api_id, "openapi_spec_file", openapi_spec_file)
 
     def aws_api_gateway_stage(self, rest_api_id, stages, ftstack):
         logger.debug(f"Processing API Gateway Stages...")
@@ -198,15 +199,15 @@ class Apigateway:
             open_api_definition = response['body'].read()
 
             # Save the YAML to a file or process it as needed
-            temp_folder = tempfile.mkdtemp()
-            folder = os.path.join(temp_folder, "tf_code", ftstack)
-            os.makedirs(folder, exist_ok=True)
-            api_file_name = os.path.join(
-                folder, f"{rest_api_id}-{stage['stageName']}-api.yaml")
-            with open(api_file_name, 'wb') as file:
-                file.write(open_api_definition)
-            # logger.debug(f"Exported API definition to {api_file_name}")
-            return api_file_name
+            # temp_folder = tempfile.mkdtemp()
+            # folder = os.path.join(temp_folder, "tf_code", ftstack)
+            # os.makedirs(folder, exist_ok=True)
+            # api_file_name = os.path.join(
+            #     folder, f"{rest_api_id}-{stage['stageName']}-api.yaml")
+            # with open(api_file_name, 'wb') as file:
+            #     file.write(open_api_definition)
+            # # logger.debug(f"Exported API definition to {api_file_name}")
+            # return api_file_name
 
     def aws_api_gateway_deployment(self, rest_api_id, deployment_id, ftstack):
         logger.debug(f"Processing API Gateway Deployment: {deployment_id}")

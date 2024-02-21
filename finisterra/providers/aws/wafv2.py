@@ -2,6 +2,7 @@ import os
 from ...utils.hcl import HCL
 from ...providers.aws.s3 import S3
 from ...providers.aws.logs import Logs
+from botocore.exceptions import ClientError
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -52,35 +53,24 @@ class Wafv2:
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
             self.progress.update(self.task, advance=1)
 
-    def aws_wafv2_ip_set(self):
+    def aws_wafv7_ip_set(self):
         # Find IP sets for the ACL
         for scope in ['REGIONAL', 'CLOUDFRONT']:
-            ip_sets = self.aws_clients.wafv2_client.list_ip_sets(Scope=scope)[
-                "IPSets"]
+            try:
+                # Moving the client call inside the try block to ensure we handle any client errors, including valid issues
+                ip_sets = self.aws_clients.wafv2_client.list_ip_sets(Scope=scope)[
+                    "IPSets"]
+            except ClientError as e:
+                logger.error(f"Error fetching IP Sets for scope {scope}: {e}")
+                continue  # This will make sure we skip to the next loop in case of an issue with the scope or another error
+
             for ip_set in ip_sets:
                 ip_set_name = ip_set["Name"]
+                # Assuming the immediate goal is to process configurations, and we don't need an extra logic to reconcile IDs
+                ip_set_id = ip_set['Id']
                 logger.debug(f"Processing WAFv2 IP Set: {ip_set_name}")
-                # Initialize ip_set_id as None
-                ip_set_id = None
-                # List all IP sets in the specified scope
-                try:
-                    response = self.aws_clients.wafv2_client.list_ip_sets(
-                        Scope=scope)
-                    # Iterate through the IP sets to find the one with the matching name
-                    for ip_set in response['IPSets']:
-                        if ip_set['Name'] == ip_set_name:
-                            ip_set_id = ip_set['Id']
-                            break
 
-                    if ip_set_id is None:
-                        logger.error(f"IP Set named {ip_set_name} not found.")
-                        return
-                except Exception as e:
-                    logger.error(
-                        f"Error fetching IP Set ID for {ip_set_name}: {e}")
-                    return
-
-                id = ip_set_id + "/" + ip_set_name + "/" + scope
+                id = f"{ip_set_id}/{ip_set_name}/{scope}"
 
                 attributes = {
                     "id": id,
@@ -135,9 +125,14 @@ class Wafv2:
 
         total = 0
         for scope in ['REGIONAL', 'CLOUDFRONT']:
-            web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)[
-                "WebACLs"]
-            total += len(web_acls)
+            try:
+                web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)[
+                    "WebACLs"]
+                total += len(web_acls)
+            except ClientError as e:
+                logger.error(
+                    f"An error occurred while listing WebACLs for scope {scope}: {e}")
+                continue  # Skip this scope and continue with the next one
 
         if total > 0 and not web_acl_id:
             self.task = self.progress.add_task(
@@ -145,8 +140,14 @@ class Wafv2:
 
         # iterate through both scopes
         for scope in ['REGIONAL', 'CLOUDFRONT']:
-            web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)[
-                "WebACLs"]
+            try:
+                web_acls = self.aws_clients.wafv2_client.list_web_acls(Scope=scope)[
+                    "WebACLs"]
+            except ClientError as e:
+                logger.error(
+                    f"An error occurred while listing WebACLs for scope {scope}: {e}")
+                continue  # Skip this scope and continue with the next one
+
             for web_acl in web_acls:
                 if web_acl_id and web_acl["Id"] != web_acl_id:
                     continue

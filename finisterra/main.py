@@ -224,11 +224,14 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
             for result in results:
                 ftstacks = ftstacks.union(result)
 
-        if run_plan:
+        base_dir = os.path.join(output_dir, "tf_code")
+        if run_plan and ftstacks:
+            # check if the output directory exists
             os.chdir(os.path.join(output_dir, "tf_code"))
-            shutil.copyfile("./terragrunt.hcl",
-                            "./terragrunt.hcl.remote-state")
-            shutil.copyfile("./terragrunt.hcl.local-state", "./terragrunt.hcl")
+            shutil.copyfile(os.path.join(base_dir, "terragrunt.hcl"),
+                            os.path.join(base_dir, "terragrunt.hcl.remote-state"))
+            shutil.copyfile(os.path.join(
+                base_dir, "terragrunt.hcl.local-state"), os.path.join(base_dir, "terragrunt.hcl"))
 
             results = []  # Initialize a list to store results
             with ThreadPoolExecutor(max_workers=max_parallel) as executor:
@@ -242,9 +245,10 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
 
             # Restore original terragrunt.hcl files after all plans have been executed
             os.chdir(os.path.join(output_dir, "tf_code"))
-            shutil.copyfile("./terragrunt.hcl", "./terragrunt.hcl.local-state")
-            shutil.copyfile("./terragrunt.hcl.remote-state",
-                            "./terragrunt.hcl")
+            shutil.copyfile(os.path.join(base_dir, "terragrunt.hcl"), os.path.join(
+                base_dir, "terragrunt.hcl.local-state"))
+            shutil.copyfile(os.path.join(base_dir, "terragrunt.hcl.remote-state"),
+                            os.path.join(base_dir, "terragrunt.hcl"))
 
             # Process the results after all plans are done
             for counts, updates, ftstack in results:
@@ -254,7 +258,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan):
                 console.print('-' * 50)
 
         for ftstack in ftstacks:
-            generated_path = os.path.join(output_dir, "tf_code", ftstack)
+            generated_path = os.path.join(base_dir, ftstack)
             logger.info(f"Terraform code created at: {generated_path}")
 
 

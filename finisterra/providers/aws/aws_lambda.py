@@ -9,6 +9,7 @@ from ...utils.hcl import HCL
 from ...providers.aws.iam_role import IAM
 from ...providers.aws.logs import Logs
 from ...providers.aws.security_group import SECURITY_GROUP
+from ...providers.aws.utils import get_subnet_names
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -44,32 +45,6 @@ class AwsLambda:
                                   s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
         self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
                                                       region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-
-    def get_subnet_names(self, subnet_ids):
-        subnet_names = []
-        for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
-
-            # Check if 'Subnets' key exists and it's not empty
-            if not response or 'Subnets' not in response or not response['Subnets']:
-                logger.debug(
-                    f"No subnet information found for Subnet ID: {subnet_id}")
-                continue
-
-            # Extract the 'Tags' key safely using get
-            subnet_tags = response['Subnets'][0].get('Tags', [])
-
-            # Extract the subnet name from the tags
-            subnet_name = next(
-                (tag['Value'] for tag in subnet_tags if tag['Key'] == 'Name'), None)
-
-            if subnet_name:
-                subnet_names.append(subnet_name)
-            else:
-                logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
-
-        return subnet_names
 
     def get_vpc_name(self, vpc_id):
         response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
@@ -137,7 +112,7 @@ class AwsLambda:
     def process_single_lambda_function(self, function_name, ftstack=None):
         resource_type = "aws_lambda_function"
 
-        # if function_name != 'CRM-AWSDistributedLoadTes-DLTLambdaFunctionResults-XeiL2MdUoMav':
+        # if function_name != 'xxx':
         #     return
 
         logger.debug(f"Processing Lambda Function: {function_name}")
@@ -166,7 +141,7 @@ class AwsLambda:
                 s3_key = function_details['Code']['S3Key']
 
         if 'Location' not in function_details['Code']:
-            logger.debug(
+            logger.info(
                 f"  Warning: No function code found for Lambda Function: {function_name}")
             return
         code_url = function_details['Code']['Location']
@@ -216,7 +191,7 @@ class AwsLambda:
                 if vpc_name:
                     self.hcl.add_additional_data(
                         resource_type, function_arn, "vpc_name", vpc_name)
-                subnet_names = self.get_subnet_names(subnet_ids)
+                subnet_names = get_subnet_names(self.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, function_arn, "subnet_names", subnet_names)

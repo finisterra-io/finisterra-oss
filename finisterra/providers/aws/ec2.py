@@ -5,6 +5,8 @@ from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
 from ...providers.aws.iam_role import IAM
 import logging
+from botocore.exceptions import ClientError
+
 
 logger = logging.getLogger('finisterra')
 
@@ -460,9 +462,16 @@ class EC2:
         logger.debug(
             f"Processing IAM Instance Profile: {iam_instance_profile_id}")
 
-        # Fetch the details of IAM Instance Profile using the IAM client
-        response = self.aws_clients.iam_client.get_instance_profile(
-            InstanceProfileName=iam_instance_profile_id)
+        try:
+            response = self.aws_clients.iam_client.get_instance_profile(
+                InstanceProfileName=iam_instance_profile_id)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchEntity':
+                logger.info(
+                    f"Instance Profile {iam_instance_profile_id} cannot be found.")
+            else:
+                logger.error(f"An unexpected error occurred: {e}")
+            return
 
         profile = response["InstanceProfile"]
 
@@ -470,9 +479,6 @@ class EC2:
         for role in profile["Roles"]:
             role_name = role["RoleName"]
             self.iam_role_instance.aws_iam_role(role_name, ftstack)
-
-        # if profile["Roles"]:
-        #     self.aws_iam_role(profile["Roles"][0]["Arn"])
 
     def aws_ebs_volume(self, volume_id):
         resource_type = "aws_ebs_volume"

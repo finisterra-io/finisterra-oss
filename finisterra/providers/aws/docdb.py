@@ -2,6 +2,7 @@ import os
 from ...utils.hcl import HCL
 from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.kms import KMS
+from ...providers.aws.utils import get_subnet_names
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -49,22 +50,6 @@ class DocDb:
             logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
 
         return vpc_name
-
-    def get_subnet_names(self, subnet_ids):
-        subnet_names = []
-        for subnet_id in subnet_ids:
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
-
-            # Depending on how your subnets are tagged, you may need to adjust this line.
-            # This assumes you have a tag 'Name' for your subnet names.
-            subnet_name = next(
-                (tag['Value'] for tag in response['Subnets'][0]['Tags'] if tag['Key'] == 'Name'), None)
-
-            if subnet_name:
-                subnet_names.append(subnet_name)
-
-        return subnet_names
 
     def docdb(self):
         self.hcl.prepare_folder(os.path.join("generated"))
@@ -231,7 +216,8 @@ class DocDb:
                         self.hcl.process_resource(
                             resource_type, subnet_group["DBSubnetGroupName"].replace("-", "_"), attributes)
 
-                        subnet_names = self.get_subnet_names(subnet_ids)
+                        subnet_names = get_subnet_names(
+                            self.aws_clients, subnet_ids)
                         if subnet_names:
                             if resource_type not in self.hcl.additional_data:
                                 self.hcl.additional_data[resource_type] = {}

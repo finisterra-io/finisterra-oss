@@ -279,7 +279,7 @@ class HCL:
             'id_key_list': self.id_key_list,
             'region': self.region,
             'account_id': self.account_id,
-            'local_modules': os.environ.get('LOCAL_MODULES', False)
+            'local_modules': os.environ.get('FT_LOCAL_MODULES', False)
         }
 
         if not tfstate_json:
@@ -326,6 +326,9 @@ class HCL:
                     target_file = os.path.join(
                         target_dir, os.path.basename(filename))
                     shutil.copyfile(filename, target_file)
+
+            shutil.rmtree(temp_dir)
+            shutil.rmtree(self.script_dir)
 
         else:
             logger.error(f"{response.status} {response.reason}")
