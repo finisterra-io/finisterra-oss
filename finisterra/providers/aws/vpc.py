@@ -587,63 +587,6 @@ class VPC:
                     bucket_name = attributes["log_destination"].split(':')[-1]
                     self.s3_instance.aws_s3_bucket(bucket_name, ftstack)
 
-    # def aws_iam_role(self, role_arn):
-    #     # the role name is the last part of the ARN
-    #     role_name = role_arn.split('/')[-1]
-
-    #     role = self.aws_clients.iam_client.get_role(RoleName=role_name)
-    #     logger.debug(f"Processing IAM Role: {role_name}")
-
-    #     attributes = {
-    #         "id": role_name,
-    #         # "name": role['Role']['RoleName'],
-    #         # "arn": role['Role']['Arn'],
-    #         # "description": role['Role']['Description'],
-    #         # "assume_role_policy": role['Role']['AssumeRolePolicyDocument'],
-    #     }
-    #     self.hcl.process_resource(
-    #         "aws_iam_role", role_name.replace("-", "_"), attributes)
-
-    #     # After processing the role, process the policies attached to it
-    #     self.aws_iam_role_policy_attachment(role_name)
-
-    # def aws_iam_role_policy_attachment(self, role_name):
-    #     logger.debug(f"Processing IAM Role Policy Attachments for {role_name}...")
-
-    #     policy_paginator = self.aws_clients.iam_client.get_paginator(
-    #         "list_attached_role_policies")
-
-    #     for policy_page in policy_paginator.paginate(RoleName=role_name):
-    #         for policy in policy_page["AttachedPolicies"]:
-    #             policy_arn = policy["PolicyArn"]
-    #             logger.debug(
-    #                 f"Processing IAM Role Policy Attachment: {role_name} - {policy_arn}")
-
-    #             attributes = {
-    #                 "id": f"{role_name}/{policy_arn}",
-    #                 "role": role_name,
-    #                 "policy_arn": policy_arn,
-    #             }
-    #             self.hcl.process_resource(
-    #                 "aws_iam_role_policy_attachment", f"{role_name}_{policy_arn.split(':')[-1]}", attributes)
-
-    # def aws_iam_policy(self, policy_arn):
-    #     logger.debug(f"Processing IAM Policy: {policy_arn}...")
-
-    #     try:
-    #         policy = self.aws_clients.iam_client.get_policy(PolicyArn=policy_arn)
-    #         attributes = {
-    #             "id": policy['Policy']['Arn'],
-    #             "arn": policy['Policy']['Arn'],
-    #             "name": policy['Policy']['PolicyName'],
-    #             # add more attributes as needed
-    #         }
-
-    #         self.hcl.process_resource(
-    #             "aws_iam_policy", policy['Policy']['PolicyName'].replace("-", "_"), attributes)
-    #     except self.aws_clients.iam_client.exceptions.NoSuchEntityException:
-    #         logger.debug(f"  Policy: {policy_arn} does not exist.")
-
     def aws_cloudwatch_log_group(self, log_group_name):
         logger.debug(f"Processing CloudWatch Log Group: {log_group_name}...")
 
