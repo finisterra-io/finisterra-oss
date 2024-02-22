@@ -1,4 +1,5 @@
 from ..utils.filesystem import create_version_file
+from ..utils.auth import read_token_from_file
 import subprocess
 import os
 import re
@@ -257,6 +258,9 @@ class HCL:
 
         # Define the API endpoint
         api_token = os.environ.get('FT_API_TOKEN')
+        if not api_token:
+            # If not defined, read the token from the file
+            api_token = read_token_from_file()
         api_host = os.environ.get('FT_API_HOST', 'api.finisterra.io')
         api_port = os.environ.get('FT_API_PORT', 443)
         api_path = '/hcl/'
