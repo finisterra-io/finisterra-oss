@@ -6,9 +6,12 @@ import logging
 import time
 import http
 import json
+from pathlib import Path
 
 
 logger = logging.getLogger('finisterra')
+
+CREDENTIALS_FILE = os.path.expanduser('~/.finisterra/credentials.json')
 
 
 class AuthHandler(BaseHTTPRequestHandler):
@@ -38,6 +41,7 @@ class AuthHandler(BaseHTTPRequestHandler):
             # Signal the script to continue with the token
             if token:
                 os.environ['FT_API_TOKEN'] = token
+                save_token_to_file(token)
 
             # Serve an HTML page indicating the window can be closed
             self.wfile.write(
@@ -62,8 +66,27 @@ def start_server():
     httpd.serve_forever()
 
 
+def save_token_to_file(token):
+    os.makedirs(os.path.dirname(CREDENTIALS_FILE), exist_ok=True)
+    with open(CREDENTIALS_FILE, 'w') as file:
+        json.dump({"credentials": {"app.finisterra.io": {"token": token}}}, file)
+
+
+def read_token_from_file():
+    try:
+        with open(CREDENTIALS_FILE, 'r') as file:
+            data = json.load(file)
+            return data["credentials"]["app.finisterra.io"]["token"]
+    except (FileNotFoundError, KeyError):
+        return None
+
+
 def auth(payload):
     api_token = os.environ.get('FT_API_TOKEN')
+    if not api_token:
+        # If not defined, read the token from the file
+        api_token = read_token_from_file()
+
     if not api_token:
         # Start local server in a separate thread
         server_thread = threading.Thread(target=start_server)
