@@ -88,7 +88,7 @@ class AutoScaling:
         for as_group in as_groups:
             as_group_name = as_group["AutoScalingGroupName"]
 
-            # if as_group_name != "production-noovie-web-AutoScalingGroup-1MZ5FBASQRUJL":
+            # if as_group_name != "xxxx":
             #     continue
 
             # Check tags to determine if this group is controlled by Elastic Beanstalk or EKS

@@ -105,7 +105,7 @@ class Apigateway:
             self.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rest_api['name']}[/]")
 
-            # if rest_api["name"] != "notes":
+            # if rest_api["name"] != "xxxxx":
             #     continue
 
             api_id = rest_api["id"]

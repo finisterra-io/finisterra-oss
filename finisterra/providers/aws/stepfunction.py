@@ -72,7 +72,7 @@ class StepFunction:
                 self.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{state_machine_summary['name']}[/]")
 
-                # if state_machine_summary['name'] != 'dev-fpm-3431_backfill-email-verified':
+                # if state_machine_summary['name'] != 'xxxxx':
                 #     continue
 
                 # Call describe_state_machine to get detailed info, including roleArn

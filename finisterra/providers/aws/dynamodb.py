@@ -83,7 +83,7 @@ class Dynamodb:
                 table_description = self.aws_clients.dynamodb_client.describe_table(
                     TableName=table_name)["Table"]
 
-                # if table_name != "staging_WallFeedItem":
+                # if table_name != "xxxxx":
                 #     continue
 
                 logger.debug(f"Processing DynamoDB Table: {table_name}")

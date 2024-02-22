@@ -98,7 +98,7 @@ class EKS:
             if tags.get("ftstack", "eks") != "eks":
                 ftstack = "stack_"+tags.get("ftstack", "eks")
 
-            # if cluster_name != "dev":
+            # if cluster_name != "xxxxx":
             #     continue
 
             logger.debug(f"Processing EKS Cluster: {cluster_name}")

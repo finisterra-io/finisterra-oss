@@ -162,7 +162,7 @@ class Wafv2:
 
         web_acl_id = web_acl["Id"]
 
-        # if web_acl_name != "test-partner-whitelist":
+        # if web_acl_name != "xxxxx":
         #     return
 
         logger.debug(f"Processing WAFv2 Web ACL: {web_acl_id}")

@@ -63,7 +63,7 @@ class SQS:
                 self.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{queue_name}[/]")
 
-                # if queue_name != 'market-marketSubscriptionTenantIdentityActivationQueue':
+                # if queue_name != 'xxxxx':
                 #     continue
 
                 logger.debug(f"Processing SQS Queue: {queue_name}")

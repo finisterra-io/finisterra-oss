@@ -169,7 +169,7 @@ class IAM:
         # if policy_arn.startswith('arn:aws:iam::aws:policy/') or '/service-role/' in policy_arn:
         #     return
 
-        # if policy_name != "DenyCannedPublicACL":
+        # if policy_name != "xxxxx":
         #     continue
 
         logger.debug(f"Processing IAM Policy: {policy_name}")

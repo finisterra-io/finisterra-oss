@@ -177,7 +177,7 @@ class ElasticBeanstalk:
             self.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{env_id}[/]")
 
-            # if env_id != "e-asi52zmcu8":
+            # if env_id != "xxxxx":
             #     continue
             logger.debug(f"Processing Elastic Beanstalk Environment: {env_id}")
             id = env_id

@@ -116,7 +116,7 @@ class CloudFront:
                 self.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{distribution_id}[/]")
 
-                # if distribution_id != "E31WQ2W96RYYTV":
+                # if distribution_id != "xxxxx":
                 #     continue
 
                 logger.debug(

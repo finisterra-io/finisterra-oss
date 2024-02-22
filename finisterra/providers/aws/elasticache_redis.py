@@ -108,7 +108,7 @@ class ElasticacheRedis:
                 if "Engine" in replication_group and replication_group["Engine"] != "redis":
                     continue
 
-                # if replication_group['ReplicationGroupId'] != "bpu-replication-group":
+                # if replication_group['ReplicationGroupId'] != "xxxxx":
                 #     continue
 
                 logger.debug(

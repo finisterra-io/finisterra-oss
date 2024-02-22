@@ -8,9 +8,9 @@ logger = logging.getLogger('finisterra')
 
 class IAM_POLICY:
     def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir,hcl = None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
-        
+
         self.aws_clients = aws_clients
         self.aws_account_id = aws_account_id
         self.workspace_id = workspace_id
@@ -26,18 +26,15 @@ class IAM_POLICY:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-
     def iam(self):
         self.hcl.prepare_folder(os.path.join("generated"))
 
         self.aws_iam_policy()
 
         self.hcl.refresh_state()
-        
-        
+
         self.hcl.request_tf_code()
-        
-        
+
     def aws_iam_access_key(self):
         logger.debug("Processing IAM Access Keys...")
         paginator = self.aws_clients.iam_client.get_paginator("list_users")
@@ -65,7 +62,8 @@ class IAM_POLICY:
 
     def aws_iam_account_alias(self):
         logger.debug("Processing IAM Account Aliases...")
-        paginator = self.aws_clients.iam_client.get_paginator("list_account_aliases")
+        paginator = self.aws_clients.iam_client.get_paginator(
+            "list_account_aliases")
 
         for page in paginator.paginate():
             for alias in page["AccountAliases"]:
@@ -150,7 +148,8 @@ class IAM_POLICY:
 
     def aws_iam_instance_profile(self):
         logger.debug("Processing IAM Instance Profiles...")
-        paginator = self.aws_clients.iam_client.get_paginator("list_instance_profiles")
+        paginator = self.aws_clients.iam_client.get_paginator(
+            "list_instance_profiles")
 
         for page in paginator.paginate():
             for instance_profile in page["InstanceProfiles"]:
@@ -174,7 +173,8 @@ class IAM_POLICY:
 
         for provider in openid_providers:
             provider_arn = provider["Arn"]
-            logger.debug(f"Processing IAM OpenID Connect Provider: {provider_arn}")
+            logger.debug(
+                f"Processing IAM OpenID Connect Provider: {provider_arn}")
 
             provider_details = self.aws_clients.iam_client.get_open_id_connect_provider(
                 OpenIDConnectProviderArn=provider_arn)
@@ -200,7 +200,7 @@ class IAM_POLICY:
                 if policy_arn.startswith('arn:aws:iam::aws:policy/') or '/service-role/' in policy_arn:
                     continue
 
-                # if policy_name != "DenyCannedPublicACL":
+                # if policy_name != "xxxxxx":
                 #     continue
 
                 logger.debug(f"Processing IAM Policy: {policy_name}")
@@ -262,7 +262,8 @@ class IAM_POLICY:
 
     def aws_iam_server_certificate(self):
         logger.debug("Processing IAM Server Certificates...")
-        paginator = self.aws_clients.iam_client.get_paginator("list_server_certificates")
+        paginator = self.aws_clients.iam_client.get_paginator(
+            "list_server_certificates")
 
         for page in paginator.paginate():
             for cert in page["ServerCertificateMetadataList"]:
@@ -295,7 +296,8 @@ class IAM_POLICY:
             for role in page["Roles"]:
                 if "ServiceLinkedRole" in role["Path"]:
                     role_name = role["RoleName"]
-                    logger.debug(f"Processing IAM Service Linked Role: {role_name}")
+                    logger.debug(
+                        f"Processing IAM Service Linked Role: {role_name}")
 
                     attributes = {
                         "id": role["RoleId"],
@@ -411,7 +413,8 @@ class IAM_POLICY:
                 self.hcl.process_resource(
                     "aws_iam_user_login_profile", user_name, attributes)
             except self.aws_clients.iam_client.exceptions.NoSuchEntityException:
-                logger.debug(f"  No login profile found for IAM User: {user_name}")
+                logger.debug(
+                    f"  No login profile found for IAM User: {user_name}")
 
     def aws_iam_user_policy(self):
         logger.debug("Processing IAM User Policies...")
