@@ -66,6 +66,21 @@ def start_server():
     httpd.serve_forever()
 
 
+def delete_token_from_file():
+    try:
+        # Attempt to read the existing data from the file
+        if os.path.exists(CREDENTIALS_FILE):
+            with open(CREDENTIALS_FILE, 'r') as file:
+                data = json.load(file)
+            # Remove the token from the data structure
+            data["credentials"]["app.finisterra.io"]["token"] = ""
+            # Write the updated data back to the file
+            with open(CREDENTIALS_FILE, 'w') as file:
+                json.dump(data, file)
+    except Exception as e:
+        logger.error(f"Failed to delete token from file: {e}")
+
+
 def save_token_to_file(token):
     os.makedirs(os.path.dirname(CREDENTIALS_FILE), exist_ok=True)
     with open(CREDENTIALS_FILE, 'w') as file:
@@ -82,58 +97,68 @@ def read_token_from_file():
 
 
 def auth(payload):
-    api_token = os.environ.get('FT_API_TOKEN')
-    if not api_token:
-        # If not defined, read the token from the file
-        api_token = read_token_from_file()
-
-    if not api_token:
-        # Start local server in a separate thread
-        server_thread = threading.Thread(target=start_server)
-        server_thread.daemon = True
-        server_thread.start()
-
-        api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
-        api_host = os.environ.get('FT_API_HOST_WEB', 'api.finisterra.io')
-        api_port = os.environ.get('FT_API_PORT_WEB', '443')
-        api_part = os.environ.get('FT_API_PART_WEB', 'get-cli-token')
-
-        # Create the authentication URL
-        auth_url = f"{api_protocol}://{api_host}:{api_port}/{api_part}"
-
-        # Print a message with the URL and instruct the user to click on it
-        # Bright cyan color
-        print("\033[1;96mPlease authenticate by visiting the following URL:\033[0m")
-
-        print(auth_url)
-
-        # Wait for the server thread to complete (i.e., until authentication is done)
-        server_thread.join()
-
-        # Check again for the token
+    retry_authentication = True  # Flag to control reauthentication attempt
+    while True:
         api_token = os.environ.get('FT_API_TOKEN')
         if not api_token:
-            logger.error("Authentication failed or was cancelled.")
-            exit()
+            # If not defined, read the token from the file
+            api_token = read_token_from_file()
 
-    api_host = os.environ.get('FT_API_HOST', 'api.finisterra.io')
-    api_port = os.environ.get('FT_API_PORT', 443)
-    api_path = '/auth/'
+        if not api_token:
+            # Start local server in a separate thread only if we are retrying
+            server_thread = threading.Thread(target=start_server)
+            server_thread.daemon = True
+            server_thread.start()
 
-    logger.info(f"Authenticating with {api_host}:{api_port}...")
+            api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
+            api_host = os.environ.get('FT_API_HOST_WEB', 'api.finisterra.io')
+            api_port = os.environ.get('FT_API_PORT_WEB', '443')
+            api_part = os.environ.get('FT_API_PART_WEB', 'get-cli-token')
 
-    if api_port == 443:
-        conn = http.client.HTTPSConnection(api_host, api_port)
-    else:
-        conn = http.client.HTTPConnection(api_host, api_port)
-    headers = {'Content-Type': 'application/json',
-               "Authorization": "Bearer " + api_token}
+            # Create the authentication URL
+            auth_url = f"{api_protocol}://{api_host}:{api_port}/{api_part}"
+            print(
+                "\033[1;96mPlease authenticate by visiting the following URL:\033[0m")
+            print(auth_url)
 
-    payload_json = json.dumps(payload, default=list)
-    conn.request('POST', api_path, body=payload_json, headers=headers)
-    response = conn.getresponse()
-    if response.status == 200:
-        return True
-    else:
-        logger.error(f"Error: {response.status} - {response.reason}")
-        exit()
+            # Wait for the server thread to complete
+            server_thread.join()
+
+            retry_authentication = False
+
+            # Check again for the token
+            api_token = os.environ.get('FT_API_TOKEN')
+            if not api_token:
+                logger.error("Authentication failed or was cancelled.")
+                exit()
+
+        # Proceed with authentication using the token
+        api_host = os.environ.get('FT_API_HOST', 'api.finisterra.io')
+        api_port = os.environ.get('FT_API_PORT', 443)
+        api_path = '/auth/'
+
+        logger.info(f"Authenticating with {api_host}:{api_port}...")
+        conn = http.client.HTTPSConnection(
+            api_host, api_port) if api_port == 443 else http.client.HTTPConnection(api_host, api_port)
+        headers = {'Content-Type': 'application/json',
+                   "Authorization": "Bearer " + api_token}
+        payload_json = json.dumps(payload, default=list)
+        logger.info("Validating token...")
+        conn.request('POST', api_path, body=payload_json, headers=headers)
+        response = conn.getresponse()
+
+        if response.status == 200:
+            return True  # Authentication successful
+        else:
+            logger.error(f"Error: {response.status} - {response.reason}")
+            if response.status in [401, 403] and retry_authentication:
+                logger.info(
+                    "Attempting to re-authenticate due to possible invalid token.")
+                # Remove invalid token from environment
+                os.environ.pop('FT_API_TOKEN', None)
+                delete_token_from_file()  # Ensure you have implemented this
+                retry_authentication = False  # Prevent further reauthentication attempts
+                continue
+            else:
+                delete_token_from_file()
+                exit()
