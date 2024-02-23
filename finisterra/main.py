@@ -99,12 +99,16 @@ def execute_terraform_plan(output_dir, ftstack):
 @click.option('--output_dir', '-o', default=os.getcwd(), help='Output directory')
 @click.option('--process_dependencies', '-d', default=True, help='Process dependencies')
 @click.option('--run-plan', '-r', default=True, help='Run plan')
-def main(provider, module, output_dir, process_dependencies, run_plan):
+@click.option('--token', '-t', default=None, help='Token')
+def main(provider, module, output_dir, process_dependencies, run_plan, token):
     if not os.environ.get('PROCESS_DEPENDENCIES'):
         os.environ['PROCESS_DEPENDENCIES'] = str(process_dependencies)
 
     setup_logger()
     logger = logging.getLogger('finisterra')
+
+    if token:
+        os.environ['FT_API_TOKEN'] = token
 
     if provider == "aws":
         aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')

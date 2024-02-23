@@ -83,4 +83,4 @@ def auth(payload):
     else:
         logger.error(f"Error: {response.status} - {response.reason}")
         delete_token_from_file()
-        exit()
+        exit(-1)
