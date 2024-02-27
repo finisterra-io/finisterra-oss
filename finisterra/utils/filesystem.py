@@ -1,4 +1,9 @@
 import os
+import subprocess
+import json
+import logging
+
+logger = logging.getLogger('finisterra')
 
 
 def create_version_file(path, provider_name, provider_source, provider_version):
@@ -12,3 +17,29 @@ def create_version_file(path, provider_name, provider_source, provider_version):
         version_file.write('}\n')
         version_file.write('}\n')
         version_file.write('}\n')
+
+
+def load_provider_schema(script_dir,  provider_name, provider_source, provider_version):
+    # Save current folder
+    temp_file = os.path.join(
+        script_dir, f'terraform_providers_schema_{provider_name}.json')
+
+    # If the schema file already exists, load and return its contents
+    if not os.path.isfile(temp_file):
+        create_version_file(script_dir,  provider_name,
+                            provider_source, provider_version)
+
+        logger.info("Initializing Terraform...")
+        subprocess.run(["terraform", "init"], check=True,
+                       cwd=script_dir, stdout=subprocess.PIPE)
+
+        logger.info("Loading provider schema...")
+        with open(temp_file, 'w') as output:
+            subprocess.run(["terraform", "providers", "schema",
+                            "-json"], check=True, stdout=output, cwd=script_dir)
+
+    # Load the schema data from the newly created file
+    with open(temp_file, "r") as schema_file:
+        schema_data = json.load(schema_file)
+
+    return schema_data

@@ -1,13 +1,12 @@
 import os
 import boto3
 import os
-import re
 import subprocess
 import json
 import logging
 
 
-from ...utils.filesystem import create_version_file
+from ...utils.filesystem import load_provider_schema
 from ...providers.aws.vpc import VPC
 from ...providers.aws.vpc_endpoint import VPCEndPoint
 from ...providers.aws.acm import ACM
@@ -54,7 +53,8 @@ class Aws:
         self.output_dir = output_dir
         self.provider_name = "registry.terraform.io/hashicorp/aws"
         self.script_dir = script_dir
-        self.schema_data = self.load_provider_schema()
+        self.schema_data = load_provider_schema(self.script_dir, "aws",
+                                                "hashicorp/aws", "~> 5.33.0")
         self.s3Bucket = s3Bucket
         self.dynamoDBTable = dynamoDBTable
         self.state_key = state_key
@@ -127,42 +127,6 @@ class Aws:
     def create_folder(self, folder):
         if not os.path.exists(folder):
             os.makedirs(folder)
-
-    def load_provider_schema(self):
-        # Save current folder
-        current_folder = os.getcwd()
-        os.chdir(self.script_dir)
-        temp_dir = os.path.join("tmp")
-        temp_file = os.path.join(temp_dir, 'terraform_providers_schema.json')
-
-        # If the schema file already exists, load and return its contents
-        if os.path.isfile(temp_file):
-            with open(temp_file, "r") as schema_file:
-                return json.load(schema_file)
-
-        # If the schema file doesn't exist, run terraform commands
-        self.create_folder(temp_dir)
-        os.chdir(temp_dir)
-        create_version_file(".", "aws",
-                            "hashicorp/aws", "~> 5.33.0")
-
-        logger.info("Initializing Terraform...")
-        subprocess.run(["terraform", "init"], check=True)
-
-        logger.info("Loading provider schema...")
-        temp_file = os.path.join('terraform_providers_schema.json')
-        with open(temp_file, 'w') as output:
-            subprocess.run(["terraform", "providers", "schema",
-                            "-json"], check=True, stdout=output)
-
-        # Load the schema data from the newly created file
-        with open(temp_file, "r") as schema_file:
-            schema_data = json.load(schema_file)
-
-        # Return to the original folder
-        os.chdir(current_folder)
-
-        return schema_data
 
     def vpc(self):
         instance = VPC(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name,

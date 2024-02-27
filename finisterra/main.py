@@ -7,6 +7,7 @@ import subprocess
 import logging
 from rich.logging import RichHandler
 import time
+import tempfile
 
 
 from rich.console import Console
@@ -135,7 +136,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token):
         auth(auth_payload)
         execute = True
 
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_dir = script_dir = tempfile.mkdtemp()
         provider_instance = Cloudflare(progress, script_dir, output_dir)
 
         # Define all provider methods for execution
@@ -175,10 +176,10 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token):
         }
         auth(auth_payload)
 
-        script_dir = os.path.dirname(os.path.abspath(__file__))
         s3Bucket = f'ft-{aws_account_id}-{aws_region}-tfstate'
         dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
         stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
+        script_dir = script_dir = tempfile.mkdtemp()
 
         provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable,
                                 stateKey, aws_account_id, aws_region, output_dir)

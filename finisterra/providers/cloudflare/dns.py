@@ -1,6 +1,5 @@
 import os
 from ...utils.hcl import HCL
-import datetime
 import logging
 
 logger = logging.getLogger('finisterra')
@@ -50,6 +49,7 @@ class DNS:
             return
 
         zones = self.cf_clients.cf.zones.get()
+        total = 0
         for zone in zones:
             total += 1
 
@@ -57,7 +57,7 @@ class DNS:
             self.task = self.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for zone in zones:
-            print(zone)
+            zone_id = zone['id']
             self.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{zone['name']}[/]")
             self.process_single_cloudflare_zone(zone_id, ftstack)
@@ -66,21 +66,7 @@ class DNS:
         resource_name = "cloudflare_zone"
 
         logger.debug(f"Processing {resource_name}: {zone_id}")
-
-        # Tag processing and other logic
-        # if not ftstack:
-        #     ftstack = "acm"
-        #     try:
-        #         response = self.aws_clients.acm_client.list_tags_for_certificate(
-        #             CertificateArn=cert_arn)
-        #         tags = response.get('Tags', {})
-        #         for tag in tags:
-        #             if tag['Key'] == 'ftstack':
-        #                 if tag['Value'] != 'acm':
-        #                     ftstack = "stack_" + tag['Value']
-        #                 break
-        #     except Exception as e:
-        #         logger.error("Error occurred: ", e)
+        ftstack = "dns"
 
         id = zone_id
         attributes = {
