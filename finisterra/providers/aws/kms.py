@@ -38,7 +38,8 @@ class KMS:
         self.additional_data = {}
 
     def kms(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
         self.aws_kms_key()
         self.aws_kms_replica_key()
         self.aws_kms_external_key()

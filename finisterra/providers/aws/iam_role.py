@@ -33,7 +33,8 @@ class IAM:
         self.hcl.account_id = aws_account_id
 
     def iam(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_iam_role()
         if self.hcl.count_state():

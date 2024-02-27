@@ -106,7 +106,8 @@ class RDS:
         return vpc_id, vpc_name
 
     def rds(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_db_instance()
         if self.hcl.count_state():

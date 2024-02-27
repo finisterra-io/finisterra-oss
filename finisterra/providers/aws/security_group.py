@@ -47,7 +47,8 @@ class SECURITY_GROUP:
         return vpc_name
 
     def security_group(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_security_group()
         if self.hcl.count_state():

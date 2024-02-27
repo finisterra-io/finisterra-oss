@@ -40,7 +40,8 @@ class S3:
         # self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def s3(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
         self.aws_s3_bucket()
         if self.hcl.count_state():
             self.progress.update(

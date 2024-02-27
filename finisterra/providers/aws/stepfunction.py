@@ -37,7 +37,8 @@ class StepFunction:
         return [attributes.get(arg)]
 
     def stepfunction(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_sfn_state_machine()
         if self.hcl.count_state():

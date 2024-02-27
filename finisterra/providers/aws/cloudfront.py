@@ -57,7 +57,8 @@ class CloudFront:
         return result
 
     def cloudfront(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         if "gov" not in self.region:
             self.aws_cloudfront_distribution()

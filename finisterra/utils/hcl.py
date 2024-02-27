@@ -202,9 +202,10 @@ class HCL:
             # shutil.rmtree(folder)
         os.makedirs(folder, exist_ok=True)
 
-    def prepare_folder(self, folder):
+    def prepare_folder(self, provider_name, provider_source, provider_version):
         try:
-            create_version_file(self.script_dir)
+            create_version_file(self.script_dir, provider_name,
+                                provider_source, provider_version)
         except Exception as e:
             logger.error(e)
             exit()

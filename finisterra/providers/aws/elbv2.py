@@ -66,7 +66,8 @@ class ELBV2:
         return vpc_name
 
     def elbv2(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_lb()
         if self.hcl.count_state():

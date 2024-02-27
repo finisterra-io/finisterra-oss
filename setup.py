@@ -13,6 +13,7 @@ setup(
         'click==8.1.7',
         'rich==13.7.0',
         'deepdiff==5.5.0',
+        'cloudflare==2.19.2',
     ],
     entry_points={
         'console_scripts': [

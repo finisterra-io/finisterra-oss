@@ -48,7 +48,8 @@ class Cloudmap:
         return vpc_name
 
     def cloudmap(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_service_discovery_private_dns_namespace()
         # self.aws_service_discovery_public_dns_namespace()

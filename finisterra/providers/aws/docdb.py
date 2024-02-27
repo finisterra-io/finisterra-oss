@@ -52,7 +52,8 @@ class DocDb:
         return vpc_name
 
     def docdb(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_docdb_cluster()
         if self.hcl.count_state():

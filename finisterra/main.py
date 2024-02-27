@@ -14,6 +14,8 @@ from rich.traceback import Traceback
 
 
 from .providers.aws.Aws import Aws
+from .providers.cloudflare.Cloudflare import Cloudflare
+
 from .utils.auth import auth
 from .utils.tf_plan import count_resources_by_action_and_collect_changes, print_tf_plan
 
@@ -110,7 +112,39 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token):
     if token:
         os.environ['FT_API_TOKEN'] = token
 
+    progress = Progress(
+        SpinnerColumn(spinner_name="dots"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TextColumn(
+            "[progress.description]{task.description}"),
+        console=console
+    )
+
+    execute = False
+
+    if provider == "cloudflare":
+        auth_payload = {
+            "provider": provider,
+            "module": module,
+            "account_id": "",
+            "region": ""
+        }
+        auth(auth_payload)
+        execute = True
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        provider_instance = Cloudflare(progress, script_dir, output_dir)
+
+        # Define all provider methods for execution
+        all_provider_methods = [
+            'dns',
+        ]
+
     if provider == "aws":
+        execute = True
         aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
         aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
         aws_session_token = os.getenv('AWS_SESSION_TOKEN')
@@ -141,63 +175,54 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token):
         }
         auth(auth_payload)
 
-        progress = Progress(
-            SpinnerColumn(spinner_name="dots"),
-            BarColumn(),
-            TaskProgressColumn(),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            TextColumn(
-                "[progress.description]{task.description}"),
-            console=console
-        )
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        s3Bucket = f'ft-{aws_account_id}-{aws_region}-tfstate'
+        dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
+        stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
+
+        provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable,
+                                stateKey, aws_account_id, aws_region, output_dir)
+
+        # Define all provider methods for execution
+        all_provider_methods = [
+            'vpc',
+            'acm',
+            'apigateway',
+            'autoscaling',
+            'cloudmap',
+            'cloudfront',
+            'logs',
+            'docdb',
+            'dynamodb',
+            'ec2',
+            'ecr',
+            'ecs',
+            'eks',
+            'elbv2',
+            'elasticache_redis',
+            'elasticbeanstalk',
+            'iam',
+            'kms',
+            'aws_lambda',
+            'rds',
+            's3',
+            'sns',
+            'sqs',
+            'wafv2',
+            'stepfunction',
+            'msk',
+            'aurora',
+            'security_group',
+            'vpc_endpoint',
+            'target_group',
+            'elasticsearch',
+            'codeartifact',
+            'launchtemplate',
+        ]
+
+    if execute:
         with progress:
-            logger.info("Fetching AWS resources...")
-
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            s3Bucket = f'ft-{aws_account_id}-{aws_region}-tfstate'
-            dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
-            stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
-
-            provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable,
-                                    stateKey, aws_account_id, aws_region, output_dir)
-
-            # Define all provider methods for execution
-            all_provider_methods = [
-                'vpc',
-                'acm',
-                'apigateway',
-                'autoscaling',
-                'cloudmap',
-                'cloudfront',
-                'logs',
-                'docdb',
-                'dynamodb',
-                'ec2',
-                'ecr',
-                'ecs',
-                'eks',
-                'elbv2',
-                'elasticache_redis',
-                'elasticbeanstalk',
-                'iam',
-                'kms',
-                'aws_lambda',
-                'rds',
-                's3',
-                'sns',
-                'sqs',
-                'wafv2',
-                'stepfunction',
-                'msk',
-                'aurora',
-                'security_group',
-                'vpc_endpoint',
-                'target_group',
-                'elasticsearch',
-                'codeartifact',
-                'launchtemplate',
-            ]
+            logger.info(f"Fetching {provider} resources...")
 
             # Check for invalid modules
             modules_to_execute = module.split(',')

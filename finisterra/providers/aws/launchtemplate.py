@@ -38,7 +38,8 @@ class LaunchTemplate:
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def launchtemplate(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
         self.aws_launch_template()
         if self.hcl.count_state():
             self.progress.update(

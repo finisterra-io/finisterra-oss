@@ -56,7 +56,8 @@ class VPCEndPoint:
         return vpc_name
 
     def vpc_endpoint(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_vpc_endpoint()
         if self.hcl.count_state():

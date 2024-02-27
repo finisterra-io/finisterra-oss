@@ -109,7 +109,8 @@ class Aurora:
         return vpc_id, vpc_name
 
     def aurora(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
         self.aws_rds_cluster()
         if self.hcl.count_state():
             self.progress.update(

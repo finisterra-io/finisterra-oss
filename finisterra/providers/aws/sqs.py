@@ -30,7 +30,8 @@ class SQS:
         self.hcl.account_id = aws_account_id
 
     def sqs(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_sqs_queue()
         if self.hcl.count_state():

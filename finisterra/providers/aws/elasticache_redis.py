@@ -70,7 +70,8 @@ class ElasticacheRedis:
         return vpc_id, vpc_name
 
     def elasticache_redis(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
         self.aws_elasticache_replication_group()
         if self.hcl.count_state():
             self.progress.update(

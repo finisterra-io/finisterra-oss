@@ -57,7 +57,8 @@ class TargetGroup:
             return None
 
     def target_group(self):
-        self.hcl.prepare_folder(os.path.join("generated"))
+        self.hcl.prepare_folder("aws",
+                                "hashicorp/aws", "~> 5.33.0")
 
         self.aws_lb_target_group()
         if self.hcl.count_state():
