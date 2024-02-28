@@ -11,7 +11,8 @@ logger = logging.getLogger('finisterra')
 
 
 class ELBV2:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
+    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
+                 provider_source, provider_version, schema_data, region, s3Bucket,
                  dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
 
@@ -21,15 +22,12 @@ class ELBV2:
         self.script_dir = script_dir
         self.schema_data = schema_data
         self.region = region
-        self.workspace_id = workspace_id
-        self.s3Bucket = s3Bucket
-        self.dynamoDBTable = dynamoDBTable
-        self.state_key = state_key
         self.aws_account_id = aws_account_id
 
+        self.workspace_id = workspace_id
         self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data, self.provider_name)
+            self.hcl = HCL(self.schema_data)
         else:
             self.hcl = hcl
 
@@ -37,15 +35,20 @@ class ELBV2:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
+        self.hcl.provider_name = provider_name
+        self.hcl.provider_name_short = provider_name_short
+        self.hcl.provider_source = provider_source
+        self.hcl.provider_version = provider_version
+
         self.listeners = {}
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
                                                       region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                               s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
                                                  region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def get_vpc_name(self, vpc_id):
@@ -66,8 +69,7 @@ class ELBV2:
         return vpc_name
 
     def elbv2(self):
-        self.hcl.prepare_folder("aws",
-                                "hashicorp/aws", "~> 5.33.0")
+        self.hcl.prepare_folder()
 
         self.aws_lb()
         if self.hcl.count_state():

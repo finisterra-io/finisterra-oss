@@ -9,7 +9,8 @@ logger = logging.getLogger('finisterra')
 
 
 class LaunchTemplate:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
+    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
+                 provider_source, provider_version, schema_data, region, s3Bucket,
                  dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
 
@@ -23,23 +24,27 @@ class LaunchTemplate:
 
         self.workspace_id = workspace_id
         self.modules = modules
-        if hcl:
-            self.hcl = hcl
+        if not hcl:
+            self.hcl = HCL(self.schema_data)
         else:
-            self.hcl = HCL(self.schema_data, self.provider_name)
+            self.hcl = hcl
 
         self.hcl.region = region
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        self.hcl.provider_name = provider_name
+        self.hcl.provider_name_short = provider_name_short
+        self.hcl.provider_source = provider_source
+        self.hcl.provider_version = provider_version
+
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
                                                       region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def launchtemplate(self):
-        self.hcl.prepare_folder("aws",
-                                "hashicorp/aws", "~> 5.33.0")
+        self.hcl.prepare_folder()
         self.aws_launch_template()
         if self.hcl.count_state():
             self.progress.update(

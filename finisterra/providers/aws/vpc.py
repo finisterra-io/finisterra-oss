@@ -9,7 +9,8 @@ logger = logging.getLogger('finisterra')
 
 
 class VPC:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
+    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
+                 provider_source, provider_version, schema_data, region, s3Bucket,
                  dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
 
@@ -20,21 +21,22 @@ class VPC:
         self.schema_data = schema_data
         self.region = region
         self.aws_account_id = aws_account_id
-        self.s3Bucket = s3Bucket
-        self.dynamoDBTable = dynamoDBTable
-        self.state_key = state_key
 
         self.workspace_id = workspace_id
         self.modules = modules
-
         if not hcl:
-            self.hcl = HCL(self.schema_data, self.provider_name)
+            self.hcl = HCL(self.schema_data)
         else:
             self.hcl = hcl
 
         self.hcl.region = region
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
+
+        self.hcl.provider_name = provider_name
+        self.hcl.provider_name_short = provider_name_short
+        self.hcl.provider_source = provider_source
+        self.hcl.provider_version = provider_version
 
         self.public_subnets = {}
         self.private_subnets = {}
@@ -47,11 +49,11 @@ class VPC:
         self.dhcp_options_domain_name = {}
         self.default_routes = {}
 
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                               s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                                   s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
     def is_subnet_public(self, subnet_id):
@@ -73,8 +75,7 @@ class VPC:
         return True
 
     def vpc(self):
-        self.hcl.prepare_folder("aws",
-                                "hashicorp/aws", "~> 5.33.0")
+        self.hcl.prepare_folder()
         self.aws_vpc()
         if self.hcl.count_state():
             self.progress.update(

@@ -12,7 +12,8 @@ logger = logging.getLogger('finisterra')
 
 
 class Aurora:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, schema_data, region, s3Bucket,
+    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
+                 provider_source, provider_version, schema_data, region, s3Bucket,
                  dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
         self.progress = progress
 
@@ -21,18 +22,13 @@ class Aurora:
         self.provider_name = provider_name
         self.script_dir = script_dir
         self.schema_data = schema_data
-
         self.region = region
         self.aws_account_id = aws_account_id
 
         self.workspace_id = workspace_id
         self.modules = modules
-        self.s3Bucket = s3Bucket
-        self.dynamoDBTable = dynamoDBTable
-        self.state_key = state_key
-
         if not hcl:
-            self.hcl = HCL(self.schema_data, self.provider_name)
+            self.hcl = HCL(self.schema_data)
         else:
             self.hcl = hcl
 
@@ -40,13 +36,18 @@ class Aurora:
         self.hcl.output_dir = output_dir
         self.hcl.account_id = aws_account_id
 
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        self.hcl.provider_name = provider_name
+        self.hcl.provider_name_short = provider_name_short
+        self.hcl.provider_source = provider_source
+        self.hcl.provider_version = provider_version
+
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                                   s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, schema_data,
+        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
                                                       region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, schema_data, region,
+        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
                                 s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, self.hcl)
 
         self.aws_rds_cluster_attrs = {}
@@ -109,8 +110,7 @@ class Aurora:
         return vpc_id, vpc_name
 
     def aurora(self):
-        self.hcl.prepare_folder("aws",
-                                "hashicorp/aws", "~> 5.33.0")
+        self.hcl.prepare_folder()
         self.aws_rds_cluster()
         if self.hcl.count_state():
             self.progress.update(

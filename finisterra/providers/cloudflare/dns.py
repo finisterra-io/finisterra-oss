@@ -83,3 +83,19 @@ class DNS:
         self.hcl.process_resource(
             resource_name, zone_id.replace("-", "_"), attributes)
         self.hcl.add_stack(resource_name, id, ftstack)
+        self.cloudflare_record(zone_id)
+
+    def cloudflare_record(self, zone_id):
+        resource_name = "cloudflare_record"
+
+        records = self.cf_clients.cf.zones.dns_records.get(zone_id)
+        for record in records:
+            logger.debug(
+                f"Processing {resource_name}: {record['name']} {record['type']}")
+            id = record['id']+"/"+zone_id
+            attributes = {
+                "id": id,
+                "zone_id": zone_id,
+            }
+            self.hcl.process_resource(
+                resource_name, id.replace("-", "_"), attributes)
