@@ -6,30 +6,37 @@ logger = logging.getLogger('finisterra')
 
 
 class DNS:
-    def __init__(self, progress, cf_clients, script_dir, provider_name, schema_data, output_dir, hcl=None):
+    def __init__(self, progress, cf_clients, script_dir, provider_name, provider_name_short,
+                 provider_source, provider_version, schema_data, output_dir, hcl=None):
         self.progress = progress
 
         self.cf_clients = cf_clients
-        self.provider_name = provider_name
+
         self.script_dir = script_dir
         self.schema_data = schema_data
 
         if not hcl:
-            self.hcl = HCL(self.schema_data, self.provider_name)
+            self.hcl = HCL(self.schema_data)
         else:
             self.hcl = hcl
 
         self.hcl.output_dir = output_dir
+        self.hcl.region = "global"
+        self.hcl.account_id = ""
+
+        self.hcl.provider_name = provider_name
+        self.hcl.provider_name_short = provider_name_short
+        self.hcl.provider_source = provider_source
+        self.hcl.provider_version = provider_version
 
     def dns(self):
-        self.hcl.prepare_folder("cloudflare",
-                                "cloudflare/cloudflare", "~> 4.0")
+        self.hcl.prepare_folder()
         self.cloudflare_zone()
         if self.hcl.count_state():
             self.progress.update(
                 self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
-            # self.hcl.request_tf_code()
+            self.hcl.request_tf_code()
             self.progress.update(
                 self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
         else:

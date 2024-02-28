@@ -15,9 +15,8 @@ logger = logging.getLogger('finisterra')
 
 
 class HCL:
-    def __init__(self, schema_data, provider_name):
+    def __init__(self, schema_data):
         self.schema_data = schema_data
-        self.provider_name = provider_name
         self.script_dir = tempfile.mkdtemp()
         self.terraform_state_file = os.path.join(
             self.script_dir, "terraform.tfstate")
@@ -202,10 +201,10 @@ class HCL:
             # shutil.rmtree(folder)
         os.makedirs(folder, exist_ok=True)
 
-    def prepare_folder(self, provider_name, provider_source, provider_version):
+    def prepare_folder(self):
         try:
-            create_version_file(self.script_dir, provider_name,
-                                provider_source, provider_version)
+            create_version_file(self.script_dir, self.provider_name_short,
+                                self.provider_source, self.provider_version)
         except Exception as e:
             logger.error(e)
             exit()
@@ -279,6 +278,9 @@ class HCL:
         payload = {
             'tfstate': tfstate_json,
             'provider_name': self.provider_name,
+            'provider_name_short': self.provider_name_short,
+            'provider_source': self.provider_source,
+            'provider_version': self.provider_version,
             'ftstacks': self.ftstacks,
             'additional_data': self.additional_data,
             'id_key_list': self.id_key_list,

@@ -52,6 +52,9 @@ class Aws:
         self.progress = progress
         self.output_dir = output_dir
         self.provider_name = "registry.terraform.io/hashicorp/aws"
+        self.provider_version = "~> 5.33.0"
+        self.provider_name_short = "aws"
+        self.provider_source = "hashicorp/aws"
         self.script_dir = script_dir
         self.schema_data = load_provider_schema(self.script_dir, "aws",
                                                 "hashicorp/aws", "~> 5.33.0")
@@ -124,10 +127,6 @@ class Aws:
 
         return True
 
-    def create_folder(self, folder):
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-
     def vpc(self):
         instance = VPC(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name,
                        self.schema_data, self.aws_region, self.s3Bucket,
@@ -167,6 +166,7 @@ class Aws:
 
     def acm(self):
         instance = ACM(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name,
+                       self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
                        self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
         instance.acm()
