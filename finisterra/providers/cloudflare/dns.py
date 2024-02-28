@@ -61,22 +61,22 @@ class DNS:
 
         zones = self.cf_clients.cf.zones.get()
         total = 0
-        for zone in zones:
+        for zone in zones['result']:
             total += 1
 
         if total > 0:
             self.task = self.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        for zone in zones:
+        for zone in zones['result']:
             zone_id = zone['id']
             self.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{zone['name']}[/]")
-            self.process_single_cloudflare_zone(zone_id, ftstack)
+            self.process_single_cloudflare_zone(zone_id, zone['name'], ftstack)
 
-    def process_single_cloudflare_zone(self, zone_id, ftstack=None):
+    def process_single_cloudflare_zone(self, zone_id, zone_name, ftstack=None):
         resource_name = "cloudflare_zone"
 
-        logger.debug(f"Processing {resource_name}: {zone_id}")
+        logger.debug(f"Processing {resource_name}: {zone_name}")
         ftstack = "dns"
 
         id = zone_id
@@ -87,21 +87,40 @@ class DNS:
         self.hcl.process_resource(
             resource_name, zone_id.replace("-", "_"), attributes)
         self.hcl.add_stack(resource_name, id, ftstack)
-        self.cloudflare_record(zone_id)
+        self.cloudflare_record(zone_id, zone_name)
 
-    def cloudflare_record(self, zone_id):
+    def cloudflare_record(self, zone_id, zone_name):
         resource_name = "cloudflare_record"
+        page_number = 0
 
-        records = self.cf_clients.cf.zones.dns_records.get(zone_id)
-        for record in records:
-            logger.debug(
-                f"Processing {resource_name}: {record['name']} {record['type']}")
-            id = record['id']
-            attributes = {
-                "id": id,
-                "zone_id": zone_id,
-                # "name": record['name'],
-                # "type": record['type'],
+        while True:
+            page_number += 1
+            params = {
+                'per_page': 50,
+                'page': page_number
             }
-            self.hcl.process_resource(
-                resource_name, id.replace("-", "_"), attributes)
+
+            try:
+                raw_response = self.cf_clients.cf.zones.dns_records.get(
+                    zone_id, params=params)
+            except Exception as e:
+                logger.error(f'Cloudflare API call failed: {e}')
+                break
+
+            records = raw_response['result']
+            for record in records:
+                logger.debug(
+                    f"Processing {resource_name}: {record['name']} {record['type']}")
+                id = record['id']
+                attributes = {
+                    "id": id,
+                    "zone_id": zone_id,
+                }
+                self.hcl.process_resource(
+                    resource_name, id.replace("-", "_"), attributes)
+                self.hcl.add_additional_data(
+                    resource_name, id, "zone_name", zone_name)
+
+            total_pages = raw_response['result_info']['total_pages']
+            if page_number >= total_pages:
+                break

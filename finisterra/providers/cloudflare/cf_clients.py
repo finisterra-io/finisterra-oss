@@ -3,4 +3,4 @@ import CloudFlare
 
 class CFClients:
     def __init__(self):
-        self.cf = CloudFlare.CloudFlare()
+        self.cf = CloudFlare.CloudFlare(raw=True)
