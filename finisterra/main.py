@@ -84,6 +84,8 @@ def execute_terraform_plan(output_dir, ftstack):
             os.remove(plan_file_name)
             os.remove(json_file_name)
             return (counts, updates, ftstack)
+        except FileNotFoundError as e:
+            return None
         except subprocess.CalledProcessError as e:
             console.print(
                 f"[red]Error in Terraform operation for {ftstack}: {e.stderr.decode('utf-8')}[/red]")

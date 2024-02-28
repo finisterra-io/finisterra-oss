@@ -36,9 +36,13 @@ class DNS:
             self.progress.update(
                 self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
-            self.hcl.request_tf_code()
-            self.progress.update(
-                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            if self.hcl.request_tf_code():
+                self.progress.update(
+                    self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            else:
+                self.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]No Code Generated[/]")
+
         else:
             self.task = self.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
@@ -92,10 +96,12 @@ class DNS:
         for record in records:
             logger.debug(
                 f"Processing {resource_name}: {record['name']} {record['type']}")
-            id = record['id']+"/"+zone_id
+            id = record['id']
             attributes = {
                 "id": id,
                 "zone_id": zone_id,
+                # "name": record['name'],
+                # "type": record['type'],
             }
             self.hcl.process_resource(
                 resource_name, id.replace("-", "_"), attributes)

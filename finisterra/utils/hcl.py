@@ -198,7 +198,6 @@ class HCL:
             logger.debug(f"Folder '{folder}' already exists removing it.")
             [shutil.rmtree(os.path.join(folder, f)) if os.path.isdir(os.path.join(
                 folder, f)) else os.remove(os.path.join(folder, f)) for f in os.listdir(folder)]
-            # shutil.rmtree(folder)
         os.makedirs(folder, exist_ok=True)
 
     def prepare_folder(self):
@@ -306,6 +305,14 @@ class HCL:
             # Read the response data
             response_data = response.read()
 
+            try:
+                if json.loads(response_data.decode()).get("message") == "No zip file created.":
+                    logger.info("No code created.")
+                    self.unique_ftstacks = set()
+                    return False
+            except UnicodeDecodeError as e:
+                pass
+
             temp_dir = tempfile.mkdtemp()
             zip_file_path = os.path.join(temp_dir, 'finisterra.zip')
             with open(zip_file_path, 'wb') as zip_file:
@@ -341,3 +348,5 @@ class HCL:
             logger.error(f"{response.status} {response.reason}")
 
         conn.close()
+
+        return True
