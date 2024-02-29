@@ -276,6 +276,7 @@ class HCL:
         # Define the request payload
         payload = {
             'tfstate': tfstate_json,
+            'provider': self.provider_name_short,
             'provider_name': self.provider_name,
             'provider_name_short': self.provider_name_short,
             'provider_source': self.provider_source,
@@ -346,6 +347,9 @@ class HCL:
 
         else:
             logger.error(f"{response.status} {response.reason}")
+            logger.info("No code created.")
+            self.unique_ftstacks = set()
+            return False
 
         conn.close()
 

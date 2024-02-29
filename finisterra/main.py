@@ -133,7 +133,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token):
             "provider": provider,
             "module": module,
             "account_id": "",
-            "region": ""
+            "region": "global"
         }
         auth(auth_payload)
         execute = True

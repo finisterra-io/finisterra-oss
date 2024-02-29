@@ -50,6 +50,14 @@ def get_auth_url():
     return f"{api_protocol}://{api_host}:{api_port}/{api_part}"
 
 
+def get_billing_url():
+    api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
+    api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
+    api_port = os.environ.get('FT_API_PORT_WEB', '443')
+    api_part = os.environ.get('FT_API_PART_WEB', 'organization/billing')
+    return f"{api_protocol}://{api_host}:{api_port}/{api_part}"
+
+
 def auth(payload):
     api_token = os.environ.get('FT_API_TOKEN')
     if not api_token:
@@ -79,8 +87,22 @@ def auth(payload):
     response = conn.getresponse()
 
     if response.status == 200:
-        return True  # Authentication successful
+        return True
     else:
-        logger.error(f"Error: {response.status} - {response.reason}")
+        response_body = response.read()
+        try:
+            # Parse the JSON response
+            data = json.loads(response_body)
+            if data.get('error') == "noplan":
+                logger.info(
+                    f"Free plan used up. Please visit {get_billing_url()} to upgrade your plan.")
+                exit(-1)
+            logger.error(
+                f"Error: {response.status} - {response.reason}")
+        except json.JSONDecodeError:
+            # Handle case where response is not in JSON format
+            logger.error(
+                f"Error: {response.status} - {response.reason} - Response not in JSON format")
+
         delete_token_from_file()
         exit(-1)
