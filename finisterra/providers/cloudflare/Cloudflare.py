@@ -25,11 +25,16 @@ class Cloudflare:
                                                 self.provider_source, self.provider_version)
 
         self.cf_clients_instance = CFClients()
+        self.account_name = self.get_account_name()
+
+    def get_account_name(self):
+        account_name = "Cloudflare"
+        return account_name
 
     def dns(self):
 
         instance = DNS(self.progress, self.cf_clients_instance, self.script_dir,
                        self.provider_name, self.provider_name_short,
-                       self.provider_source, self.provider_version, self.schema_data, self.output_dir)
+                       self.provider_source, self.provider_version, self.schema_data, self.output_dir, self.account_name)
         instance.dns()
         return instance.hcl.unique_ftstacks

@@ -1,13 +1,13 @@
-import os
 from ...utils.hcl import HCL
 import logging
+import inspect
 
 logger = logging.getLogger('finisterra')
 
 
 class DNS:
     def __init__(self, progress, cf_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, output_dir, hcl=None):
+                 provider_source, provider_version, schema_data, output_dir, account_name, hcl=None):
         self.progress = progress
 
         self.cf_clients = cf_clients
@@ -31,7 +31,9 @@ class DNS:
 
     def dns(self):
         self.hcl.prepare_folder()
-        self.cloudflare_zone()
+        self.hcl.module = inspect.currentframe().f_code.co_name
+
+        self.aws_acm_certificate()
         if self.hcl.count_state():
             self.progress.update(
                 self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
@@ -41,8 +43,7 @@ class DNS:
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
                 self.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]No Code Generated[/]")
-
+                    self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
             self.task = self.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)

@@ -1,7 +1,7 @@
-import os
 from ...utils.hcl import HCL
 import json
 import logging
+import inspect
 
 logger = logging.getLogger('finisterra')
 
@@ -9,7 +9,7 @@ logger = logging.getLogger('finisterra')
 class IAM:
     def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
                  provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, hcl=None):
+                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
         self.progress = progress
 
         self.aws_clients = aws_clients
@@ -35,18 +35,23 @@ class IAM:
         self.hcl.provider_name_short = provider_name_short
         self.hcl.provider_source = provider_source
         self.hcl.provider_version = provider_version
+        self.hcl.account_name = account_name
 
     def iam(self):
         self.hcl.prepare_folder()
 
         self.aws_iam_role()
+        self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
             self.progress.update(
                 self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
-            self.hcl.request_tf_code()
-            self.progress.update(
-                self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            if self.hcl.request_tf_code():
+                self.progress.update(
+                    self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
+            else:
+                self.progress.update(
+                    self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
             self.task = self.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)

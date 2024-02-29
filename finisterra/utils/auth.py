@@ -42,19 +42,10 @@ def prompt_for_token(auth_url):
     return input("Token: ")
 
 
-def get_auth_url():
+def get_url(api_part):
     api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
     api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
     api_port = os.environ.get('FT_API_PORT_WEB', '443')
-    api_part = os.environ.get('FT_API_PART_WEB', 'organization/apikeys')
-    return f"{api_protocol}://{api_host}:{api_port}/{api_part}"
-
-
-def get_billing_url():
-    api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
-    api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
-    api_port = os.environ.get('FT_API_PORT_WEB', '443')
-    api_part = os.environ.get('FT_API_PART_WEB', 'organization/billing')
     return f"{api_protocol}://{api_host}:{api_port}/{api_part}"
 
 
@@ -64,7 +55,7 @@ def auth(payload):
         api_token = read_token_from_file()
 
     if not api_token:
-        auth_url = get_auth_url()
+        auth_url = get_url('organization/apikeys')
         api_token = prompt_for_token(auth_url)
         if api_token:
             os.environ['FT_API_TOKEN'] = api_token
@@ -95,7 +86,11 @@ def auth(payload):
             data = json.loads(response_body)
             if data.get('error') == "noplan":
                 logger.info(
-                    f"Free plan used up. Please visit {get_billing_url()} to upgrade your plan.")
+                    f"Free plan used up. Please visit {get_url('organization/billing')} to upgrade your plan.")
+                exit(-1)
+            if data.get('error') == "aws_account_disabled":
+                logger.info(
+                    f"AWS Account disabled. Please visit {get_url('aws/aws-account-list')} to enable it.")
                 exit(-1)
             logger.error(
                 f"Error: {response.status} - {response.reason}")

@@ -68,6 +68,23 @@ class Aws:
         self.aws_account_id = aws_account_id
         self.session = boto3.Session()
         self.aws_clients_instance = AwsClients(self.session, self.aws_region)
+        self.account_name = self.get_account_name()
+
+    def get_account_name(self):
+        account_name = self.aws_account_id
+        try:
+            # Call the list_account_aliases API
+            response = self.aws_clients_instance.iam_client.list_account_aliases()
+
+            # Check if any aliases exist and print the first one
+            if response['AccountAliases']:
+                account_name = response['AccountAliases'][0]
+                logger.debug(f"Account Alias: {account_name}")
+            else:
+                logger.debug("No account alias found.")
+        except Exception as e:
+            logger.debug(f"Error fetching account alias: {e}")
+        return account_name
 
     def set_boto3_session(self, id_token=None, role_arn=None, session_duration=None, aws_region="us-east-1"):
         if id_token and role_arn and session_duration:
@@ -130,7 +147,7 @@ class Aws:
     def vpc(self):
         instance = VPC(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.vpc()
         return instance.hcl.unique_ftstacks
         # ec2_client = self.session.client('ec2',
@@ -146,21 +163,21 @@ class Aws:
     def vpc_endpoint(self):
         instance = VPCEndPoint(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                self.schema_data, self.aws_region, self.s3Bucket,
-                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.vpc_endpoint()
         return instance.hcl.unique_ftstacks
 
     def s3(self):
         instance = S3(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                       self.schema_data, self.aws_region, self.s3Bucket,
-                      self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                      self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.s3()
         return instance.hcl.unique_ftstacks
 
     def iam(self):
         instance = IAM(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.iam()
         return instance.hcl.unique_ftstacks
 
@@ -168,28 +185,28 @@ class Aws:
         instance = ACM(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name,
                        self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.acm()
         return instance.hcl.unique_ftstacks
 
     def cloudfront(self):
         instance = CloudFront(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                               self.schema_data, self.aws_region, self.s3Bucket,
-                              self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                              self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.cloudfront()
         return instance.hcl.unique_ftstacks
 
     def ec2(self):
         instance = EC2(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.ec2()
         return instance.hcl.unique_ftstacks
 
     def ecr(self):
         instance = ECR(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.ecr()
         return instance.hcl.unique_ftstacks
 
@@ -197,112 +214,112 @@ class Aws:
 
         instance = ECS(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.ecs()
         return instance.hcl.unique_ftstacks
 
     def eks(self):
         instance = EKS(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.eks()
         return instance.hcl.unique_ftstacks
 
     def autoscaling(self):
         instance = AutoScaling(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                self.schema_data, self.aws_region, self.s3Bucket,
-                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.autoscaling()
         return instance.hcl.unique_ftstacks
 
     def docdb(self):
         instance = DocDb(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                          self.schema_data, self.aws_region, self.s3Bucket,
-                         self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                         self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.docdb()
         return instance.hcl.unique_ftstacks
 
     def elasticache_redis(self):
         instance = ElasticacheRedis(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                     self.schema_data, self.aws_region, self.s3Bucket,
-                                    self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                    self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.elasticache_redis()
         return instance.hcl.unique_ftstacks
 
     def dynamodb(self):
         instance = Dynamodb(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                             self.schema_data, self.aws_region, self.s3Bucket,
-                            self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                            self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.dynamodb()
         return instance.hcl.unique_ftstacks
 
     def logs(self):
         instance = Logs(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                         self.schema_data, self.aws_region, self.s3Bucket,
-                        self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                        self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.logs()
         return instance.hcl.unique_ftstacks
 
     def cloudmap(self):
         instance = Cloudmap(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                             self.schema_data, self.aws_region, self.s3Bucket,
-                            self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                            self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.cloudmap()
         return instance.hcl.unique_ftstacks
 
     def apigateway(self):
         instance = Apigateway(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                               self.schema_data, self.aws_region, self.s3Bucket,
-                              self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                              self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.apigateway()
         return instance.hcl.unique_ftstacks
 
     def wafv2(self):
         instance = Wafv2(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                          self.schema_data, self.aws_region, self.s3Bucket,
-                         self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                         self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.wafv2()
         return instance.hcl.unique_ftstacks
 
     def sqs(self):
         instance = SQS(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.sqs()
         return instance.hcl.unique_ftstacks
 
     def sns(self):
         instance = SNS(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.sns()
         return instance.hcl.unique_ftstacks
 
     def rds(self):
         instance = RDS(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.rds()
         return instance.hcl.unique_ftstacks
 
     def aurora(self):
         instance = Aurora(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                           self.schema_data, self.aws_region, self.s3Bucket,
-                          self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                          self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.aurora()
         return instance.hcl.unique_ftstacks
 
     def aws_lambda(self):
         instance = AwsLambda(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                              self.schema_data, self.aws_region, self.s3Bucket,
-                             self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                             self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.aws_lambda()
         return instance.hcl.unique_ftstacks
 
     def kms(self):
         instance = KMS(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.kms()
         return instance.hcl.unique_ftstacks
 
@@ -310,28 +327,28 @@ class Aws:
 
         instance = ElasticBeanstalk(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                     self.schema_data, self.aws_region, self.s3Bucket,
-                                    self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                    self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.elasticbeanstalk()
         return instance.hcl.unique_ftstacks
 
     def elbv2(self):
         instance = ELBV2(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                          self.schema_data, self.aws_region, self.s3Bucket,
-                         self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                         self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.elbv2()
         return instance.hcl.unique_ftstacks
 
     def stepfunction(self):
         instance = StepFunction(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                 self.schema_data, self.aws_region, self.s3Bucket,
-                                self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.stepfunction()
         return instance.hcl.unique_ftstacks
 
     def msk(self):
         instance = MSK(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                        self.schema_data, self.aws_region, self.s3Bucket,
-                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                       self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.msk()
         return instance.hcl.unique_ftstacks
 
@@ -339,7 +356,7 @@ class Aws:
 
         instance = SECURITY_GROUP(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                   self.schema_data, self.aws_region, self.s3Bucket,
-                                  self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                  self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.security_group()
         return instance.hcl.unique_ftstacks
 
@@ -347,27 +364,27 @@ class Aws:
 
         instance = TargetGroup(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                self.schema_data, self.aws_region, self.s3Bucket,
-                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                               self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.target_group()
         return instance.hcl.unique_ftstacks
 
     def elasticsearch(self):
         instance = Elasticsearch(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                  self.schema_data, self.aws_region, self.s3Bucket,
-                                 self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                 self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.elasticsearch()
         return instance.hcl.unique_ftstacks
 
     def codeartifact(self):
         instance = CodeArtifact(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                 self.schema_data, self.aws_region, self.s3Bucket,
-                                self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.codeartifact()
         return instance.hcl.unique_ftstacks
 
     def launchtemplate(self):
         instance = LaunchTemplate(self.progress, self.aws_clients_instance, self.script_dir, self.provider_name, self.provider_name_short, self.provider_source, self.provider_version,
                                   self.schema_data, self.aws_region, self.s3Bucket,
-                                  self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir)
+                                  self.dynamoDBTable, self.state_key, self.workspace_id, self.modules, self.aws_account_id, self.output_dir, self.account_name)
         instance.launchtemplate()
         return instance.hcl.unique_ftstacks

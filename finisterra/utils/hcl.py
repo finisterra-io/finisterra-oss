@@ -286,6 +286,8 @@ class HCL:
             'id_key_list': self.id_key_list,
             'region': self.region,
             'account_id': self.account_id,
+            'account_name': self.account_name,
+            'module': self.module,
             'local_modules': os.environ.get('FT_LOCAL_MODULES', False)
         }
 
