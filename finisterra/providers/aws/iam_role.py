@@ -168,7 +168,8 @@ class IAM:
                 self.hcl.process_resource(
                     "aws_iam_role_policy_attachment", f"{role_name}_{policy_arn.split(':')[-1]}", attributes)
 
-                if not policy_arn.startswith('arn:aws:iam::aws:policy/') and '/service-role/' not in policy_arn:
+                # if not policy_arn.startswith('arn:aws:iam::aws:policy/') and '/service-role/' not in policy_arn:
+                if not policy_arn.startswith('arn:aws:iam::aws:policy/'):
                     self.aws_iam_policy(policy_arn, ftstack)
 
     def aws_iam_policy(self, policy_arn, ftstack=None):

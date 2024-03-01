@@ -1,7 +1,7 @@
 from ...utils.hcl import HCL
 from botocore.exceptions import ClientError
 from botocore.exceptions import ClientError
-from ...providers.aws.kms import KMS
+from ...providers.aws.iam_role import IAM
 import logging
 import inspect
 
@@ -39,7 +39,8 @@ class S3:
         self.hcl.provider_version = provider_version
         self.hcl.account_name = account_name
 
-        # self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version,
+                                     schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
 
     def s3(self):
         self.hcl.prepare_folder()
@@ -531,9 +532,11 @@ class S3:
             if e.response["Error"]["Code"] != "NoSuchPublicAccessBlockConfiguration":
                 raise
 
-    def aws_s3_bucket_replication_configuration(self, bucket_name):
+    def aws_s3_bucket_replication_configuration(self, bucket_name, ftstack=None):
         logger.debug(f"Processing S3 Bucket Replication Configurations...")
         try:
+            if not ftstack:
+                ftstack = 's3'
             replication_configuration = self.aws_clients.s3_client.get_bucket_replication(
                 Bucket=bucket_name)
             config = replication_configuration.get(
@@ -548,6 +551,12 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_replication_configuration", bucket_name, attributes)
+
+                role = config.get("Role")
+                if role:
+                    role_name = role.split("/")[-1]
+                    self.iam_role_instance.aws_iam_role(role_name, ftstack)
+
         except self.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "ReplicationConfigurationNotFoundError":
                 raise

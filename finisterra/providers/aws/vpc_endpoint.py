@@ -151,8 +151,10 @@ class VPCEndPoint:
             if not endpoints:
                 logger.debug("No VPC Endpoints found.")
         except Exception as e:
-            logger.error(f"An error occurred: {str(e)}")
-            pass
+            if "InvalidVpcEndpointId.NotFound" in str(e):
+                logger.info(f"The VPC Endpoint ID does not exist {str(e)}")
+            else:
+                logger.error(f"An error occurred: {str(e)}")
 
     def aws_vpc_endpoint_connection_accepter(self):
         logger.debug("Processing VPC Endpoint Connection Accepters...")

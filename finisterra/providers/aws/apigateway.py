@@ -395,7 +395,7 @@ class Apigateway:
         process_domain = False
         for domain in domains:
             base_path_mappings = self.aws_clients.apigateway_client.get_base_path_mappings(
-                domainName=domain["domainName"])["items"]
+                domainName=domain["domainName"]).get("items", [])
 
             for base_path_mapping in base_path_mappings:
                 if base_path_mapping["restApiId"] == api_id:

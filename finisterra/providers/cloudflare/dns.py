@@ -28,12 +28,13 @@ class DNS:
         self.hcl.provider_name_short = provider_name_short
         self.hcl.provider_source = provider_source
         self.hcl.provider_version = provider_version
+        self.hcl.account_name = account_name
 
     def dns(self):
         self.hcl.prepare_folder()
         self.hcl.module = inspect.currentframe().f_code.co_name
 
-        self.aws_acm_certificate()
+        self.cloudflare_zone()
         if self.hcl.count_state():
             self.progress.update(
                 self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
