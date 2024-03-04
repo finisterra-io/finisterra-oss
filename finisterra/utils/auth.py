@@ -45,8 +45,10 @@ def prompt_for_token(auth_url):
 def get_url(api_part):
     api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
     api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
-    api_port = os.environ.get('FT_API_PORT_WEB', '443')
-    return f"{api_protocol}://{api_host}:{api_port}/{api_part}"
+    api_port = os.environ.get('FT_API_PORT_WEB', '')
+    if api_port:
+        api_port = f":{api_port}"
+    return f"{api_protocol}://{api_host}{api_port}/{api_part}"
 
 
 def auth(payload):
