@@ -105,9 +105,13 @@ def execute_terraform_plan(output_dir, ftstack):
 @click.option('--process_dependencies', '-d', default=True, help='Process dependencies')
 @click.option('--run-plan', '-r', default=True, help='Run plan')
 @click.option('--token', '-t', default=None, help='Token')
-def main(provider, module, output_dir, process_dependencies, run_plan, token):
-    if not os.environ.get('PROCESS_DEPENDENCIES'):
-        os.environ['PROCESS_DEPENDENCIES'] = str(process_dependencies)
+@click.option('--cache-dir', '-c', default=None, help='Cache directory to save the terraform providers schema')
+def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir):
+    if not os.environ.get('FT_PROCESS_DEPENDENCIES'):
+        os.environ['FT_PROCESS_DEPENDENCIES'] = str(process_dependencies)
+
+    if not os.environ.get('FT_CACHE_DIR'):
+        os.environ['FT_CACHE_DIR'] = cache_dir
 
     setup_logger()
     logger = logging.getLogger('finisterra')

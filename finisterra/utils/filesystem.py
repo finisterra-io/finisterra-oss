@@ -20,23 +20,27 @@ def create_version_file(path, provider_name, provider_source, provider_version):
 
 
 def load_provider_schema(script_dir,  provider_name, provider_source, provider_version):
+    cache_dir = script_dir
+    if os.environ.get('FT_CACHE_DIR', '') != '':
+        cache_dir = os.environ.get('FT_CACHE_DIR')
+
     # Save current folder
     temp_file = os.path.join(
-        script_dir, f'terraform_providers_schema_{provider_name}.json')
+        cache_dir, f'terraform_providers_schema_{provider_name}.json')
 
     # If the schema file already exists, load and return its contents
     if not os.path.isfile(temp_file):
-        create_version_file(script_dir,  provider_name,
+        create_version_file(cache_dir,  provider_name,
                             provider_source, provider_version)
 
         logger.info("Initializing Terraform...")
         subprocess.run(["terraform", "init"], check=True,
-                       cwd=script_dir, stdout=subprocess.PIPE)
+                       cwd=cache_dir, stdout=subprocess.PIPE)
 
-        logger.info("Loading provider schema...")
+        logger.info("-Loading provider schema...")
         with open(temp_file, 'w') as output:
             subprocess.run(["terraform", "providers", "schema",
-                            "-json"], check=True, stdout=output, cwd=script_dir)
+                            "-json"], check=True, stdout=output, cwd=cache_dir)
 
     # Load the schema data from the newly created file
     with open(temp_file, "r") as schema_file:

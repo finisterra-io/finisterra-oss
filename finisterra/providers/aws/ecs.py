@@ -181,7 +181,7 @@ class ECS:
 
             self.hcl.add_stack(resource_type, id, ftstack)
 
-            if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+            if os.environ.get('FT_PROCESS_DEPENDENCIES', 'False') != 'False':
                 # Extract CloudWatch log group name from cluster configuration
                 cloudwatch_log_group_name = None
                 kmsKeyId = None
@@ -339,7 +339,7 @@ class ECS:
                         self.aws_appautoscaling_target(
                             cluster_name, service_name)
 
-                        if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+                        if os.environ.get('FT_PROCESS_DEPENDENCIES', 'False') != 'False':
                             if service.get('roleArn'):
                                 role_name = service['roleArn'].split('/')[-1]
                                 self.iam_role_instance.aws_iam_role(
@@ -355,7 +355,7 @@ class ECS:
                         #     if lb.get('targetGroupArn'):
                         #         self.aws_lb_target_group(lb['targetGroupArn'])
 
-                        if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+                        if os.environ.get('FT_PROCESS_DEPENDENCIES', 'False') != 'False':
                             network_configuration = service.get(
                                 'networkConfiguration', {})
                             if network_configuration:
@@ -420,7 +420,7 @@ class ECS:
         self.hcl.process_resource(
             "aws_ecs_task_definition", family.replace("-", "_")+"_"+str(revision), attributes)
 
-        if os.environ.get('PROCESS_DEPENDENCIES', 'False') != 'False':
+        if os.environ.get('FT_PROCESS_DEPENDENCIES', 'False') != 'False':
             # Process IAM roles for the task
             if task_definition.get('taskRoleArn'):
                 role_name = task_definition.get('taskRoleArn').split('/')[-1]
