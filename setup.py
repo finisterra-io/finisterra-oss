@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='finisterra',
-    version='1.0.7',
+    version='1.0.8',
     packages=find_packages(),
     install_requires=[
         'boto3==1.26.94',
