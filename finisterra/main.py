@@ -110,7 +110,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
     if not os.environ.get('FT_PROCESS_DEPENDENCIES'):
         os.environ['FT_PROCESS_DEPENDENCIES'] = str(process_dependencies)
 
-    if not os.environ.get('FT_CACHE_DIR'):
+    if not os.environ.get('FT_CACHE_DIR') and cache_dir:
         os.environ['FT_CACHE_DIR'] = cache_dir
 
     setup_logger()

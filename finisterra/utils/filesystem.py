@@ -37,7 +37,7 @@ def load_provider_schema(script_dir,  provider_name, provider_source, provider_v
         subprocess.run(["terraform", "init"], check=True,
                        cwd=cache_dir, stdout=subprocess.PIPE)
 
-        logger.info("-Loading provider schema...")
+        logger.info("Loading provider schema...")
         with open(temp_file, 'w') as output:
             subprocess.run(["terraform", "providers", "schema",
                             "-json"], check=True, stdout=output, cwd=cache_dir)
