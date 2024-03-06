@@ -107,6 +107,8 @@ def execute_terraform_plan(output_dir, ftstack):
 @click.option('--token', '-t', default=None, help='Token')
 @click.option('--cache-dir', '-c', default=None, help='Cache directory to save the terraform providers schema')
 def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir):
+    if output_dir:
+        output_dir = os.path.abspath(output_dir)
     if not os.environ.get('FT_PROCESS_DEPENDENCIES'):
         os.environ['FT_PROCESS_DEPENDENCIES'] = str(process_dependencies)
 
