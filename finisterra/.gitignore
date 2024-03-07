@@ -1,0 +1,16 @@
+env/*
+tmp/*
+
+.terraform*
+generated/*
+tf_code/*
+dist/*
+build/*
+*.egg-info
+*.egg
+*.log
+
+*.pyc
+.env
+
+.vscode/*
