@@ -36,7 +36,7 @@ def execute_provider_method(provider, method_name):
     try:
         if method_name == "iam":
             # Special handling for IAM module
-            original_region = provider.aws_region
+            original_region = provider.region
             provider.region = "global"
             method = getattr(provider, method_name)
             result = method()
@@ -146,7 +146,8 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         execute = True
 
         script_dir = script_dir = tempfile.mkdtemp()
-        provider_instance = Cloudflare(progress, script_dir, output_dir, filters)
+        provider_instance = Cloudflare(
+            progress, script_dir, output_dir, filters)
 
         # Define all provider methods for execution
         all_provider_methods = [
