@@ -36,3 +36,18 @@ def get_subnet_names(aws_clients, subnet_ids):
             logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
     return subnet_names
+
+def parse_filters(filters_str):
+    """
+    Parses a filter string formatted as "key=value,key=value" into a list of
+    dictionaries suitable for use with Boto3's describe_instances() method.
+    """
+    filters = []
+    if filters_str:
+        for filter_part in filters_str.split(','):
+            key, value = filter_part.split('=')
+            filters.append({
+                'Name': f'tag:{key}',  # Format the name as 'tag:key'
+                'Values': [value]      # Values must be a list
+            })
+    return filters
