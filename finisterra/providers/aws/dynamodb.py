@@ -6,35 +6,22 @@ logger = logging.getLogger('finisterra')
 
 
 class Dynamodb:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
     def dynamodb_aws_dynamodb_target_name(self, table_name):
         service_namespace = 'dynamodb'
@@ -43,7 +30,7 @@ class Dynamodb:
             f"Processing AppAutoScaling targets for DynamoDB Table: {table_name}")
 
         try:
-            response = self.aws_clients.appautoscaling_client.describe_scalable_targets(
+            response = self.provider_instance.aws_clients.appautoscaling_client.describe_scalable_targets(
                 ServiceNamespace=service_namespace,
                 ResourceIds=[resource_id]
             )
@@ -62,38 +49,38 @@ class Dynamodb:
         self.aws_dynamodb_table()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_dynamodb_table(self):
         resource_type = "aws_dynamodb_table"
         # logger.debug(f"Processing DynamoDB Tables...")
 
-        paginator = self.aws_clients.dynamodb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.dynamodb_client.get_paginator(
             "list_tables")
         total = 0
         for page in paginator.paginate():
             total += len(page["TableNames"])
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for table_name in page["TableNames"]:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{table_name}[/]")
-                table_description = self.aws_clients.dynamodb_client.describe_table(
+                table_description = self.provider_instance.aws_clients.dynamodb_client.describe_table(
                     TableName=table_name)["Table"]
 
                 # if table_name != "xxxxx":
@@ -104,7 +91,7 @@ class Dynamodb:
 
                 ftstack = "dynamodb"
                 try:
-                    response = self.aws_clients.dynamodb_client.list_tags_of_resource(
+                    response = self.provider_instance.aws_clients.dynamodb_client.list_tags_of_resource(
                         ResourceArn=table_description["TableArn"])
                     tags = response.get('Tags', [])
                     for tag in tags:
@@ -149,7 +136,7 @@ class Dynamodb:
             f"Processing AppAutoScaling targets for DynamoDB Table: {table_name}")
 
         try:
-            response = self.aws_clients.appautoscaling_client.describe_scalable_targets(
+            response = self.provider_instance.aws_clients.appautoscaling_client.describe_scalable_targets(
                 ServiceNamespace=service_namespace,
                 ResourceIds=[resource_id]
             )
@@ -186,7 +173,7 @@ class Dynamodb:
             f"Processing AppAutoScaling policies for resource: {resource_id} with dimension: {scalable_dimension}...")
 
         try:
-            response = self.aws_clients.appautoscaling_client.describe_scaling_policies(
+            response = self.provider_instance.aws_clients.appautoscaling_client.describe_scaling_policies(
                 ServiceNamespace=service_namespace,
                 ResourceId=resource_id,
                 ScalableDimension=scalable_dimension

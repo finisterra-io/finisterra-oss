@@ -7,35 +7,23 @@ logger = logging.getLogger('finisterra')
 
 
 class KMS:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
         self.additional_data = {}
 
@@ -47,19 +35,19 @@ class KMS:
         self.aws_kms_replica_external_key()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_kms_key(self, key_arn=None, ftstack=None):
         logger.debug("Processing KMS Keys...")
@@ -69,7 +57,7 @@ class KMS:
         if key_arn:
             # Process only the key specified by the ARN
             try:
-                key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_arn)[
+                key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key_arn)[
                     "KeyMetadata"]
                 if key_metadata["KeyManager"] == "CUSTOMER":
                     self.process_key(key_metadata, ftstack)
@@ -79,23 +67,23 @@ class KMS:
                 logger.error(f"  Error processing KMS Key: {e}")
         else:
             # Process all customer-managed keys
-            paginator = self.aws_clients.kms_client.get_paginator("list_keys")
+            paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
             total = 0
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     total += 1
 
             if total > 0:
-                self.task = self.progress.add_task(
+                self.task = self.provider_instance.progress.add_task(
                     f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     key_id = key["KeyId"]
-                    self.progress.update(
+                    self.provider_instance.progress.update(
                         self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{key_id}[/]")
                     try:
-                        key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)[
+                        key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key_id)[
                             "KeyMetadata"]
                         if key_metadata["KeyManager"] == "CUSTOMER":
                             self.process_key(key_metadata, ftstack)
@@ -130,7 +118,7 @@ class KMS:
         logger.debug("Processing KMS Aliases...")
         try:
             # List aliases directly for the specified key ARN
-            aliases = self.aws_clients.kms_client.list_aliases(KeyId=kms_arn)[
+            aliases = self.provider_instance.aws_clients.kms_client.list_aliases(KeyId=kms_arn)[
                 "Aliases"]
 
             for alias in aliases:
@@ -162,7 +150,7 @@ class KMS:
 
     #     for key_arn in key_arns:
     #         for data in plaintext_data:
-    #             ciphertext = self.aws_clients.kms_client.encrypt(KeyId=key_arn, Plaintext=data)[
+    #             ciphertext = self.provider_instance.aws_clients.kms_client.encrypt(KeyId=key_arn, Plaintext=data)[
     #                 "CiphertextBlob"]
     #             b64_ciphertext = base64.b64encode(ciphertext).decode("utf-8")
     #             logger.debug(f"Processing KMS Ciphertext for Key ARN: {key_arn}")
@@ -178,7 +166,7 @@ class KMS:
 
     # def aws_kms_custom_key_store(self):
     #     logger.debug("Processing KMS Custom Key Stores...")
-    #     custom_key_stores = self.aws_clients.kms_client.describe_custom_key_stores()[
+    #     custom_key_stores = self.provider_instance.aws_clients.kms_client.describe_custom_key_stores()[
     #         "CustomKeyStores"]
 
     #     for cks in custom_key_stores:
@@ -199,7 +187,7 @@ class KMS:
     #     logger.debug("Processing KMS Grants...")
     #     try:
     #         # Directly list grants for the specified key ARN
-    #         grants = self.aws_clients.kms_client.list_grants(KeyId=kms_arn)["Grants"]
+    #         grants = self.provider_instance.aws_clients.kms_client.list_grants(KeyId=kms_arn)["Grants"]
 
     #         for grant in grants:
     #             grant_id = grant["GrantId"]
@@ -217,7 +205,7 @@ class KMS:
 
     def check_iam_role_exists(self, role_name):
         try:
-            self.aws_clients.iam_client.get_role(RoleName=role_name)
+            self.provider_instance.aws_clients.iam_client.get_role(RoleName=role_name)
             return True  # Role exists
         except botocore.exceptions.ClientError as error:
             if error.response['Error']['Code'] == 'NoSuchEntity':
@@ -229,7 +217,7 @@ class KMS:
         logger.debug("Processing KMS Grants...")
         try:
             # Directly list grants for the specified key ARN
-            grants = self.aws_clients.kms_client.list_grants(KeyId=kms_arn)[
+            grants = self.provider_instance.aws_clients.kms_client.list_grants(KeyId=kms_arn)[
                 "Grants"]
 
             for grant in grants:
@@ -261,7 +249,7 @@ class KMS:
         logger.debug("Processing KMS Key Policies...")
         try:
             # Directly get the policy for the specified key ARN
-            policy = self.aws_clients.kms_client.get_key_policy(
+            policy = self.provider_instance.aws_clients.kms_client.get_key_policy(
                 KeyId=kms_arn, PolicyName="default")["Policy"]
 
             logger.debug(f"Processing KMS Key Policy for Key: {kms_arn}")
@@ -279,12 +267,12 @@ class KMS:
 
     def aws_kms_replica_key(self):
         logger.debug("Processing KMS Replica Keys...")
-        paginator = self.aws_clients.kms_client.get_paginator("list_keys")
+        paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
 
         try:
             for page in paginator.paginate():
                 for key in page["Keys"]:
-                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])[
+                    key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])[
                         "KeyMetadata"]
 
                     # Check if the key is multi-region
@@ -296,7 +284,7 @@ class KMS:
 
                         # Check for replicas in the same region
                         for replica_key in replica_keys:
-                            if replica_key["Region"] == self.region:
+                            if replica_key["Region"] == self.provider_instance.region:
                                 logger.debug(
                                     f"Processing Multi-Region KMS Replica Key: {replica_key['Arn']}")
 
@@ -319,12 +307,12 @@ class KMS:
 
     def aws_kms_external_key(self):
         logger.debug("Processing KMS External Keys...")
-        paginator = self.aws_clients.kms_client.get_paginator("list_keys")
+        paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
         for page in paginator.paginate():
             for key in page["Keys"]:
                 try:
                     key_id = key["KeyId"]
-                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key_id)[
+                    key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key_id)[
                         "KeyMetadata"]
 
                     if key_metadata["Origin"] == "EXTERNAL":
@@ -345,12 +333,12 @@ class KMS:
 
     def aws_kms_replica_external_key(self):
         logger.debug("Processing KMS Replica External Keys...")
-        paginator = self.aws_clients.kms_client.get_paginator("list_keys")
+        paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
 
         try:
             for page in paginator.paginate():
                 for key in page["Keys"]:
-                    key_metadata = self.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])[
+                    key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key["KeyId"])[
                         "KeyMetadata"]
 
                     # Check if the key's origin is external and it's a multi-region key
@@ -362,7 +350,7 @@ class KMS:
 
                         # Check for replicas in the same region
                         for replica_key in replica_keys:
-                            if replica_key["Region"] == self.region:
+                            if replica_key["Region"] == self.provider_instance.region:
                                 logger.debug(
                                     f"Processing KMS Replica External Key: {replica_key['Arn']}")
 

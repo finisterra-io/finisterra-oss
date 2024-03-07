@@ -9,46 +9,33 @@ logger = logging.getLogger('finisterra')
 
 
 class ECR:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
 
     def get_kms_alias(self, kms_key_id):
         try:
             value = ""
-            response = self.aws_clients.kms_client.list_aliases()
+            response = self.provider_instance.aws_clients.kms_client.list_aliases()
             aliases = response.get('Aliases', [])
             while 'NextMarker' in response:
-                response = self.aws_clients.kms_client.list_aliases(
+                response = self.provider_instance.aws_clients.kms_client.list_aliases(
                     Marker=response['NextMarker'])
                 aliases.extend(response.get('Aliases', []))
             for alias in aliases:
@@ -67,32 +54,32 @@ class ECR:
 
         self.aws_ecr_repository()
 
-        if "gov" not in self.region:
+        if "gov" not in self.provider_instance.region:
             self.aws_ecr_registry_policy()
             self.aws_ecr_pull_through_cache_rule()
             self.aws_ecr_replication_configuration()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_ecr_repository(self):
         resource_type = "aws_ecr_repository"
         # logger.debug(f"Processing ECR Repositories...")
 
         # Create a paginator for the describe_repositories operation
-        paginator = self.aws_clients.ecr_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.ecr_client.get_paginator(
             'describe_repositories')
         repositories = []
 
@@ -101,12 +88,12 @@ class ECR:
             repositories.extend(page["repositories"])
 
         if len(repositories) > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(repositories))
         for repo in repositories:
             repository_name = repo["repositoryName"]
             repository_arn = repo["repositoryArn"]
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{repository_name}[/]")
 
             logger.debug(f"Processing ECR Repository: {repository_name}")
@@ -114,7 +101,7 @@ class ECR:
 
             ftstack = "ecr"
             try:
-                tags_response = self.aws_clients.ecr_client.list_tags_for_resource(
+                tags_response = self.provider_instance.aws_clients.ecr_client.list_tags_for_resource(
                     resourceArn=repository_arn)
                 tags = tags_response.get('tags', [])
                 for tag in tags:
@@ -152,7 +139,7 @@ class ECR:
             self.aws_ecr_repository_policy(repository_name)
             self.aws_ecr_lifecycle_policy(repository_name)
 
-            if "gov" not in self.region:
+            if "gov" not in self.provider_instance.region:
                 # Call to the aws_ecr_registry_scanning_configuration function
                 self.aws_ecr_registry_scanning_configuration(repo)
 
@@ -161,9 +148,9 @@ class ECR:
             f"Processing ECR Repository Policy for: {repository_name}")
 
         try:
-            policy = self.aws_clients.ecr_client.get_repository_policy(
+            policy = self.provider_instance.aws_clients.ecr_client.get_repository_policy(
                 repositoryName=repository_name)
-        except self.aws_clients.ecr_client.exceptions.RepositoryPolicyNotFoundException:
+        except self.provider_instance.aws_clients.ecr_client.exceptions.RepositoryPolicyNotFoundException:
             return
 
         policy_text = json.loads(policy["policyText"])
@@ -179,9 +166,9 @@ class ECR:
         logger.debug(f"Processing ECR Lifecycle Policy for: {repository_name}")
 
         try:
-            lifecycle_policy = self.aws_clients.ecr_client.get_lifecycle_policy(repositoryName=repository_name)[
+            lifecycle_policy = self.provider_instance.aws_clients.ecr_client.get_lifecycle_policy(repositoryName=repository_name)[
                 "lifecyclePolicyText"]
-        except self.aws_clients.ecr_client.exceptions.LifecyclePolicyNotFoundException:
+        except self.provider_instance.aws_clients.ecr_client.exceptions.LifecyclePolicyNotFoundException:
             return
 
         logger.debug(
@@ -199,15 +186,15 @@ class ECR:
         resource_type = "aws_ecr_registry_policy"
 
         try:
-            registry_policy = self.aws_clients.ecr_client.get_registry_policy()
+            registry_policy = self.provider_instance.aws_clients.ecr_client.get_registry_policy()
             if "registryPolicyText" not in registry_policy:
                 return
             registry_policy = registry_policy["registryPolicyText"]
-        except self.aws_clients.ecr_client.exceptions.RegistryPolicyNotFoundException:
+        except self.provider_instance.aws_clients.ecr_client.exceptions.RegistryPolicyNotFoundException:
             return
 
         logger.debug(f"Processing ECR Registry Policy")
-        id = self.aws_clients.ecr_client.describe_registries()[
+        id = self.provider_instance.aws_clients.ecr_client.describe_registries()[
             "registries"][0]["registryId"],
 
         attributes = {
@@ -223,17 +210,17 @@ class ECR:
         logger.debug(f"Processing ECR Pull Through Cache Rules...")
         resource_type = "aws_ecr_pull_through_cache_rule"
 
-        repositories = self.aws_clients.ecr_client.describe_repositories()[
+        repositories = self.provider_instance.aws_clients.ecr_client.describe_repositories()[
             "repositories"]
         for repo in repositories:
             repository_name = repo["repositoryName"]
             try:
-                cache_settings = self.aws_clients.ecr_client.get_registry_policy()
+                cache_settings = self.provider_instance.aws_clients.ecr_client.get_registry_policy()
                 if "registryPolicyText" not in cache_settings:
                     continue
                 cache_settings = cache_settings["registryPolicyText"]
                 cache_settings_data = json.loads(cache_settings)
-            except self.aws_clients.ecr_client.exceptions.RegistryPolicyNotFoundException:
+            except self.provider_instance.aws_clients.ecr_client.exceptions.RegistryPolicyNotFoundException:
                 continue
 
             for rule in cache_settings_data.get("rules", []):
@@ -270,7 +257,7 @@ class ECR:
         resource_type = "aws_ecr_replication_configuration"
 
         try:
-            registry = self.aws_clients.ecr_client.describe_registry()
+            registry = self.provider_instance.aws_clients.ecr_client.describe_registry()
             registryId = registry["registryId"]
             replication_configuration = registry["replicationConfiguration"]
         except KeyError:

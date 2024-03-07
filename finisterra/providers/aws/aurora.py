@@ -12,54 +12,38 @@ logger = logging.getLogger('finisterra')
 
 
 class Aurora:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
+        self.logs_instance = Logs(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
 
         self.aws_rds_cluster_attrs = {}
 
     def get_kms_alias(self, kms_key_id):
         try:
             value = ""
-            response = self.aws_clients.kms_client.list_aliases()
+            response = self.provider_instance.aws_clients.kms_client.list_aliases()
             aliases = response.get('Aliases', [])
             while 'NextMarker' in response:
-                response = self.aws_clients.kms_client.list_aliases(
+                response = self.provider_instance.aws_clients.kms_client.list_aliases(
                     Marker=response['NextMarker'])
                 aliases.extend(response.get('Aliases', []))
             for alias in aliases:
@@ -74,7 +58,7 @@ class Aurora:
                 raise e
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -96,7 +80,7 @@ class Aurora:
         if subnet_ids:
             subnet_id = subnet_ids[0]
             # get the vpc id for the subnet_id
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+            response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
                                                                     subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
@@ -115,24 +99,24 @@ class Aurora:
         self.aws_rds_cluster()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_db_cluster_snapshot(self):
         logger.debug(f"Processing DB Cluster Snapshots...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_cluster_snapshots")
         for page in paginator.paginate():
             for snapshot in page.get("DBClusterSnapshots", []):
@@ -151,7 +135,7 @@ class Aurora:
         logger.debug(
             f"Processing AppAutoScaling Targets for Aurora Cluster ARN {cluster_arn}...")
 
-        paginator = self.aws_clients.appautoscaling_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.appautoscaling_client.get_paginator(
             "describe_scalable_targets")
         page_iterator = paginator.paginate(
             ServiceNamespace='kafka',
@@ -177,7 +161,7 @@ class Aurora:
         logger.debug(
             f"Processing AppAutoScaling Policies for Aurora Cluster ARN {cluster_arn}...")
 
-        paginator = self.aws_clients.appautoscaling_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.appautoscaling_client.get_paginator(
             "describe_scaling_policies")
         page_iterator = paginator.paginate(
             ServiceNamespace='kafka',
@@ -203,7 +187,7 @@ class Aurora:
     def aws_db_event_subscription(self):
         logger.debug(f"Processing DB Event Subscriptions...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_event_subscriptions")
         for page in paginator.paginate():
             for subscription in page.get("EventSubscriptionsList", []):
@@ -225,7 +209,7 @@ class Aurora:
     def aws_db_instance(self):
         logger.debug(f"Processing DB Instances...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_instances")
         for page in paginator.paginate():
             for instance in page.get("DBInstances", []):
@@ -256,7 +240,7 @@ class Aurora:
         logger.debug(
             f"Processing DB Instance Automated Backups Replications...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_instances")
         for page in paginator.paginate():
             for instance in page.get("DBInstances", []):
@@ -278,7 +262,7 @@ class Aurora:
     def aws_db_instance_role_association(self):
         logger.debug(f"Processing DB Instance Role Associations...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_instances")
         for page in paginator.paginate():
             for instance in page.get("DBInstances", []):
@@ -302,7 +286,7 @@ class Aurora:
     def aws_db_option_group(self):
         logger.debug(f"Processing DB Option Groups...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_option_groups")
         for page in paginator.paginate():
             for option_group in page.get("OptionGroupsList", []):
@@ -325,7 +309,7 @@ class Aurora:
         if parameter_group_name.startswith("default"):
             return
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_parameter_groups")
         for page in paginator.paginate():
             for parameter_group in page.get("DBParameterGroups", []):
@@ -349,7 +333,7 @@ class Aurora:
     def aws_db_proxy(self):
         logger.debug(f"Processing DB Proxies...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_proxies")
         for page in paginator.paginate():
             for db_proxy in page.get("DBProxies", []):
@@ -369,14 +353,14 @@ class Aurora:
         logger.debug(f"Processing DB Proxy Default Target Groups...")
 
         # Get all DB Proxies
-        db_proxies_response = self.aws_clients.rds_client.describe_db_proxies()
+        db_proxies_response = self.provider_instance.aws_clients.rds_client.describe_db_proxies()
         db_proxies = db_proxies_response.get('DBProxies', [])
 
         for db_proxy in db_proxies:
             db_proxy_name = db_proxy.get('DBProxyName')
 
             # Describe target groups for each DB Proxy
-            target_groups_response = self.aws_clients.rds_client.describe_db_proxy_target_groups(
+            target_groups_response = self.provider_instance.aws_clients.rds_client.describe_db_proxy_target_groups(
                 DBProxyName=db_proxy_name)
             target_groups = target_groups_response.get('TargetGroups', [])
 
@@ -395,7 +379,7 @@ class Aurora:
     def aws_db_proxy_endpoint(self):
         logger.debug(f"Processing DB Proxy Endpoints...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_proxy_endpoints")
         for page in paginator.paginate():
             for db_proxy_endpoint in page.get("DBProxyEndpoints", []):
@@ -415,14 +399,14 @@ class Aurora:
         logger.debug(f"Processing DB Proxy Targets...")
 
         # Get all DB Proxies
-        db_proxies_response = self.aws_clients.rds_client.describe_db_proxies()
+        db_proxies_response = self.provider_instance.aws_clients.rds_client.describe_db_proxies()
         db_proxies = db_proxies_response.get('DBProxies', [])
 
         for db_proxy in db_proxies:
             db_proxy_name = db_proxy.get('DBProxyName')
 
             # Get paginator for each DB Proxy
-            paginator = self.aws_clients.rds_client.get_paginator(
+            paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
                 "describe_db_proxy_targets")
 
             for page in paginator.paginate(DBProxyName=db_proxy_name):
@@ -442,7 +426,7 @@ class Aurora:
     def aws_db_snapshot(self):
         logger.debug(f"Processing DB Snapshots...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_snapshots")
         for page in paginator.paginate():
             for db_snapshot in page.get("DBSnapshots", []):
@@ -457,7 +441,7 @@ class Aurora:
     def aws_db_snapshot_copy(self):
         logger.debug(f"Processing DB Snapshot Copies...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_snapshots")
         for page in paginator.paginate():
             for db_snapshot in page.get("DBSnapshots", []):
@@ -478,7 +462,7 @@ class Aurora:
         resource_type = "aws_db_subnet_group"
         logger.debug(f"Processing DB Subnet Groups {db_subnet_group_name}")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_subnet_groups")
         for page in paginator.paginate():
             for db_subnet_group in page.get("DBSubnetGroups", []):
@@ -490,7 +474,7 @@ class Aurora:
                 id = db_subnet_group_name
                 subnet_ids = [subnet["SubnetIdentifier"]
                               for subnet in db_subnet_group["Subnets"]]
-                subnet_names = get_subnet_names(self.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, id, "subnet_names",  subnet_names)
@@ -523,20 +507,20 @@ class Aurora:
         resource_type = "aws_rds_cluster"
         # logger.debug(f"Processing RDS Clusters...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_clusters")
         total = 0
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
                 total += 1
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
                 engine = rds_cluster.get("Engine", "")
                 rds_cluster_id = rds_cluster["DBClusterIdentifier"]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rds_cluster_id}[/]")
                 if not engine.startswith("aurora"):
                     continue
@@ -545,7 +529,7 @@ class Aurora:
 
                 ftstack = "aurora"
                 try:
-                    tags_response = self.aws_clients.rds_client.list_tags_for_resource(
+                    tags_response = self.provider_instance.aws_clients.rds_client.list_tags_for_resource(
                         ResourceName=cluster_arn)
                     tags = tags_response.get('TagList', [])
                     for tag in tags:
@@ -573,7 +557,7 @@ class Aurora:
                 vpc_security_groups = rds_cluster.get("VpcSecurityGroups", [])
                 security_group_ids = []
                 for sg in vpc_security_groups:
-                    sg_details = self.aws_clients.ec2_client.describe_security_groups(
+                    sg_details = self.provider_instance.aws_clients.ec2_client.describe_security_groups(
                         GroupIds=[sg['VpcSecurityGroupId']])
 
                     if sg_details and sg_details['SecurityGroups']:
@@ -619,7 +603,7 @@ class Aurora:
     def aws_rds_cluster_activity_stream(self):
         logger.debug(f"Processing RDS Cluster Activity Streams...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_clusters")
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
@@ -645,7 +629,7 @@ class Aurora:
     def aws_rds_cluster_endpoint(self, cluster_id):
         logger.debug(f"Processing RDS Cluster Endpoints...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_cluster_endpoints")
         for page in paginator.paginate():
             for rds_cluster_endpoint in page.get("DBClusterEndpoints", []):
@@ -668,7 +652,7 @@ class Aurora:
     def aws_rds_cluster_instance(self, cluster_id, ftstack, rds_cluster_data):
         logger.debug(f"Processing RDS Cluster Instances...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_instances")
         for page in paginator.paginate():
             for rds_instance in page.get("DBInstances", []):
@@ -745,7 +729,7 @@ class Aurora:
         resource_type = "aws_rds_cluster_parameter_group"
         logger.debug(f"Processing RDS Cluster Parameter Groups...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_cluster_parameter_groups")
         for page in paginator.paginate():
             for rds_cluster_parameter_group in page.get("DBClusterParameterGroups", []):
@@ -768,7 +752,7 @@ class Aurora:
     def aws_rds_cluster_role_association(self, cluster_id):
         logger.debug(f"Processing RDS Cluster Role Associations...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_db_clusters")
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
@@ -796,7 +780,7 @@ class Aurora:
     def aws_rds_export_task(self):
         logger.debug(f"Processing RDS Export Tasks...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_export_tasks")
         for page in paginator.paginate():
             for export_task in page.get("ExportTasks", []):
@@ -818,7 +802,7 @@ class Aurora:
     def aws_rds_global_cluster(self):
         logger.debug(f"Processing RDS Global Clusters...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_global_clusters")
         for page in paginator.paginate():
             for global_cluster in page.get("GlobalClusters", []):
@@ -838,7 +822,7 @@ class Aurora:
     def aws_rds_reserved_instance(self):
         logger.debug(f"Processing RDS Reserved Instances...")
 
-        paginator = self.aws_clients.rds_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.rds_client.get_paginator(
             "describe_reserved_db_instances")
         for page in paginator.paginate():
             for reserved_instance in page.get("ReservedDBInstances", []):
@@ -865,7 +849,7 @@ class Aurora:
         logger.debug(
             f"Processing AppAutoScaling Targets for Aurora Cluster ARN {cluster_identifier}...")
 
-        paginator = self.aws_clients.appautoscaling_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.appautoscaling_client.get_paginator(
             "describe_scalable_targets")
         page_iterator = paginator.paginate(
             ServiceNamespace='kafka',
@@ -892,7 +876,7 @@ class Aurora:
         logger.debug(
             f"Processing AppAutoScaling Policies for Aurora Cluster ARN {cluster_identifier}...")
 
-        paginator = self.aws_clients.appautoscaling_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.appautoscaling_client.get_paginator(
             "describe_scaling_policies")
         page_iterator = paginator.paginate(
             ServiceNamespace='kafka',

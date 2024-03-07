@@ -12,51 +12,32 @@ logger = logging.getLogger('finisterra')
 
 
 class EKS:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.aws_account_id = aws_account_id
-
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.logs_instance = Logs(self.provider_instance, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -78,33 +59,33 @@ class EKS:
         self.aws_eks_cluster()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_eks_cluster(self):
         resource_type = 'aws_eks_cluster'
         logger.debug("Processing EKS Clusters...")
 
-        clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
+        clusters = self.provider_instance.aws_clients.eks_client.list_clusters()["clusters"]
         if len(clusters):
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
 
         for cluster_name in clusters:
-            cluster = self.aws_clients.eks_client.describe_cluster(name=cluster_name)[
+            cluster = self.provider_instance.aws_clients.eks_client.describe_cluster(name=cluster_name)[
                 "cluster"]
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
             tags = cluster.get("tags", {})
             ftstack = "eks"
@@ -175,11 +156,11 @@ class EKS:
         resource_type = 'aws_eks_addon'
         logger.debug(f"Processing EKS Add-ons for Cluster: {cluster_name}...")
 
-        addons = self.aws_clients.eks_client.list_addons(
+        addons = self.provider_instance.aws_clients.eks_client.list_addons(
             clusterName=cluster_name)["addons"]
 
         for addon_name in addons:
-            addon = self.aws_clients.eks_client.describe_addon(
+            addon = self.provider_instance.aws_clients.eks_client.describe_addon(
                 clusterName=cluster_name, addonName=addon_name)["addon"]
             logger.debug(
                 f"Processing EKS Add-on: {addon_name} for Cluster: {cluster_name}")
@@ -203,7 +184,7 @@ class EKS:
             f"Processing IAM OpenID Connect Providers for Cluster: {cluster_name}...")
 
         # Get cluster details to retrieve OIDC issuer URL
-        cluster = self.aws_clients.eks_client.describe_cluster(name=cluster_name)[
+        cluster = self.provider_instance.aws_clients.eks_client.describe_cluster(name=cluster_name)[
             "cluster"]
         expected_oidc_url = cluster.get("identity", {}).get(
             "oidc", {}).get("issuer", "")
@@ -217,14 +198,14 @@ class EKS:
             return
 
         # List the OIDC identity providers in the AWS account
-        oidc_providers = self.aws_clients.iam_client.list_open_id_connect_providers().get(
+        oidc_providers = self.provider_instance.aws_clients.iam_client.list_open_id_connect_providers().get(
             "OpenIDConnectProviderList", [])
 
         for provider in oidc_providers:
             provider_arn = provider["Arn"]
 
             # Describe the specific OIDC provider using its ARN
-            oidc_provider = self.aws_clients.iam_client.get_open_id_connect_provider(
+            oidc_provider = self.provider_instance.aws_clients.iam_client.get_open_id_connect_provider(
                 OpenIDConnectProviderArn=provider_arn
             )
 
@@ -254,14 +235,14 @@ class EKS:
     def aws_eks_fargate_profile(self):
         logger.debug("Processing EKS Fargate Profiles...")
 
-        clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
+        clusters = self.provider_instance.aws_clients.eks_client.list_clusters()["clusters"]
 
         for cluster_name in clusters:
-            fargate_profiles = self.aws_clients.eks_client.list_fargate_profiles(clusterName=cluster_name)[
+            fargate_profiles = self.provider_instance.aws_clients.eks_client.list_fargate_profiles(clusterName=cluster_name)[
                 "fargateProfileNames"]
 
             for profile_name in fargate_profiles:
-                fargate_profile = self.aws_clients.eks_client.describe_fargate_profile(
+                fargate_profile = self.provider_instance.aws_clients.eks_client.describe_fargate_profile(
                     clusterName=cluster_name, fargateProfileName=profile_name)["fargateProfile"]
                 logger.debug(
                     f"Processing EKS Fargate Profile: {profile_name} for Cluster: {cluster_name}")
@@ -278,7 +259,7 @@ class EKS:
         logger.debug(
             f"Processing EKS Identity Provider Configs for Cluster: {cluster_name}...")
 
-        identity_provider_configs = self.aws_clients.eks_client.list_identity_provider_configs(
+        identity_provider_configs = self.provider_instance.aws_clients.eks_client.list_identity_provider_configs(
             clusterName=cluster_name)["identityProviderConfigs"]
 
         for config in identity_provider_configs:
@@ -299,7 +280,7 @@ class EKS:
         logger.debug(f"Processing EC2 Tags for Resource ID: {resource_id}")
 
         # Fetch the tags for the specified resource
-        response = self.aws_clients.ec2_client.describe_tags(
+        response = self.provider_instance.aws_clients.ec2_client.describe_tags(
             Filters=[
                 {
                     'Name': 'resource-id',
@@ -337,18 +318,18 @@ class EKS:
     def aws_eks_node_group(self, cluster_name, ftstack):
         logger.debug("Processing EKS Node Groups...")
 
-        # clusters = self.aws_clients.eks_client.list_clusters()["clusters"]
+        # clusters = self.provider_instance.aws_clients.eks_client.list_clusters()["clusters"]
 
         # # Check if the provided cluster_name is in the list of clusters
         # if cluster_name not in clusters:
         #     logger.debug(f"Cluster '{cluster_name}' not found!")
         #     return
 
-        node_groups = self.aws_clients.eks_client.list_nodegroups(
+        node_groups = self.provider_instance.aws_clients.eks_client.list_nodegroups(
             clusterName=cluster_name)["nodegroups"]
 
         for node_group_name in node_groups:
-            node_group = self.aws_clients.eks_client.describe_nodegroup(
+            node_group = self.provider_instance.aws_clients.eks_client.describe_nodegroup(
                 clusterName=cluster_name, nodegroupName=node_group_name)["nodegroup"]
             logger.debug(
                 f"Processing EKS Node Group: {node_group_name} for Cluster: {cluster_name}")
@@ -364,7 +345,7 @@ class EKS:
 
             subnet_ids = node_group["subnets"]
             if subnet_ids:
-                subnet_names = get_subnet_names(self.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         "aws_eks_node_group", id, "subnet_names", subnet_names)
@@ -390,7 +371,7 @@ class EKS:
 
         try:
             # List all scheduled actions for the specified Auto Scaling group
-            scheduled_actions = self.aws_clients.autoscaling_client.describe_scheduled_actions(
+            scheduled_actions = self.provider_instance.aws_clients.autoscaling_client.describe_scheduled_actions(
                 AutoScalingGroupName=autoscaling_group_name)['ScheduledUpdateGroupActions']
 
             for action in scheduled_actions:

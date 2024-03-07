@@ -11,70 +11,54 @@ logger = logging.getLogger('finisterra')
 
 
 class Apigateway:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
         self.api_gateway_resource_list = {}
 
-        self.vpc_endpoint_instance = VPCEndPoint(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                 region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.elbv2_instance = ELBV2(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                    region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.vpc_endpoint_instance = VPCEndPoint(self.provider_instance, self.hcl)
+        self.elbv2_instance = ELBV2(self.provider_instance, self.hcl)
+        self.logs_instance = Logs(self.provider_instance, self.hcl)
+        self.acm_instance = ACM(self.provider_instance, self.hcl)
 
     def apigateway(self):
         self.hcl.prepare_folder()
         self.aws_api_gateway_rest_api()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_api_gateway_account(self):
         logger.debug(f"Processing API Gateway Account...")
 
-        account = self.aws_clients.apigateway_client.get_account()
+        account = self.provider_instance.aws_clients.apigateway_client.get_account()
 
         attributes = {}
 
@@ -96,7 +80,7 @@ class Apigateway:
         resource_type = "aws_api_gateway_rest_api"
         # logger.debug(f"Processing API Gateway REST APIs...")
 
-        paginator = self.aws_clients.apigateway_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.apigateway_client.get_paginator(
             'get_rest_apis')
         rest_apis_pages = paginator.paginate()
 
@@ -105,14 +89,14 @@ class Apigateway:
             rest_apis.extend(page['items'])
 
         # Get the region from the client
-        region = self.aws_clients.apigateway_client.meta.region_name
+        region = self.provider_instance.aws_clients.apigateway_client.meta.region_name
 
         if len(rest_apis) > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(rest_apis))
 
         for rest_api in rest_apis:
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rest_api['name']}[/]")
 
             # if rest_api["name"] != "xxxxx":
@@ -125,7 +109,7 @@ class Apigateway:
 
             ftstack = "apigateway"
             try:
-                response = self.aws_clients.apigateway_client.get_tags(
+                response = self.provider_instance.aws_clients.apigateway_client.get_tags(
                     resourceArn=arn)
                 tags = response.get('tags', {})
                 for tag_key, tag_value in tags.items():
@@ -150,7 +134,7 @@ class Apigateway:
                     self.vpc_endpoint_instance.aws_vpc_endpoint(
                         vpc_link_id, ftstack)
 
-            stages = self.aws_clients.apigateway_client.get_stages(restApiId=api_id)[
+            stages = self.provider_instance.aws_clients.apigateway_client.get_stages(restApiId=api_id)[
                 "item"]
 
             self.aws_api_gateway_stage(
@@ -199,7 +183,7 @@ class Apigateway:
             self.aws_api_gateway_deployment(
                 rest_api_id, stage["deploymentId"], ftstack)
 
-            response = self.aws_clients.apigateway_client.get_export(
+            response = self.provider_instance.aws_clients.apigateway_client.get_export(
                 restApiId=rest_api_id,
                 stageName=stage["stageName"],
                 exportType='oas30',
@@ -235,7 +219,7 @@ class Apigateway:
                 f"Processing API Gateway Methods for resource: {resource_id}...")
 
             # Attempt to retrieve the resource methods, default to an empty dict if not found
-            response = self.aws_clients.apigateway_client.get_resource(
+            response = self.provider_instance.aws_clients.apigateway_client.get_resource(
                 restApiId=rest_api_id, resourceId=resource_id)
             methods = response.get("resourceMethods", {})
 
@@ -285,7 +269,7 @@ class Apigateway:
     def aws_api_gateway_rest_api_policy(self, rest_api_id):
         logger.debug(f"Processing API Gateway REST API Policies...")
 
-        rest_api = self.aws_clients.apigateway_client.get_rest_api(
+        rest_api = self.provider_instance.aws_clients.apigateway_client.get_rest_api(
             restApiId=rest_api_id)
 
         policy = rest_api.get("policy", None)
@@ -313,7 +297,7 @@ class Apigateway:
 
         logger.debug(f"Processing API Gateway VPC Link: {vpc_link_id}")
 
-        vpc_link = self.aws_clients.apigateway_client.get_vpc_link(
+        vpc_link = self.provider_instance.aws_clients.apigateway_client.get_vpc_link(
             vpcLinkId=vpc_link_id
         )
 
@@ -334,7 +318,7 @@ class Apigateway:
     # def aws_api_gateway_api_key(self):
     #     logger.debug(f"Processing API Gateway API Keys...")
 
-    #     paginator = self.aws_clients.apigateway_client.get_paginator("get_api_keys")
+    #     paginator = self.provider_instance.aws_clients.apigateway_client.get_paginator("get_api_keys")
     #     page_iterator = paginator.paginate()
 
     #     for page in page_iterator:
@@ -358,10 +342,10 @@ class Apigateway:
     # def aws_api_gateway_authorizer(self):
     #     logger.debug(f"Processing API Gateway Authorizers...")
 
-    #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
+    #     rest_apis = self.provider_instance.aws_clients.apigateway_client.get_rest_apis()["items"]
 
     #     for rest_api in rest_apis:
-    #         authorizers = self.aws_clients.apigateway_client.get_authorizers(
+    #         authorizers = self.provider_instance.aws_clients.apigateway_client.get_authorizers(
     #             restApiId=rest_api["id"])["items"]
 
     #         for authorizer in authorizers:
@@ -390,11 +374,11 @@ class Apigateway:
     def aws_api_gateway_base_path_mapping(self, api_id, ftstack):
         logger.debug(f"Processing API Gateway Base Path Mappings...")
 
-        domains = self.aws_clients.apigateway_client.get_domain_names()[
+        domains = self.provider_instance.aws_clients.apigateway_client.get_domain_names()[
             "items"]
         process_domain = False
         for domain in domains:
-            base_path_mappings = self.aws_clients.apigateway_client.get_base_path_mappings(
+            base_path_mappings = self.provider_instance.aws_clients.apigateway_client.get_base_path_mappings(
                 domainName=domain["domainName"]).get("items", [])
 
             for base_path_mapping in base_path_mappings:
@@ -421,7 +405,7 @@ class Apigateway:
     # def aws_api_gateway_client_certificate(self):
     #     logger.debug(f"Processing API Gateway Client Certificates...")
 
-    #     client_certificates = self.aws_clients.apigateway_client.get_client_certificates()[
+    #     client_certificates = self.provider_instance.aws_clients.apigateway_client.get_client_certificates()[
     #         "items"]
 
     #     for client_certificate in client_certificates:
@@ -439,10 +423,10 @@ class Apigateway:
     # def aws_api_gateway_documentation_part(self):
     #     logger.debug(f"Processing API Gateway Documentation Parts...")
 
-    #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
+    #     rest_apis = self.provider_instance.aws_clients.apigateway_client.get_rest_apis()["items"]
 
     #     for rest_api in rest_apis:
-    #         documentation_parts = self.aws_clients.apigateway_client.get_documentation_parts(
+    #         documentation_parts = self.provider_instance.aws_clients.apigateway_client.get_documentation_parts(
     #             restApiId=rest_api["id"])["items"]
 
     #         for documentation_part in documentation_parts:
@@ -461,10 +445,10 @@ class Apigateway:
     # def aws_api_gateway_documentation_version(self):
     #     logger.debug(f"Processing API Gateway Documentation Versions...")
 
-    #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
+    #     rest_apis = self.provider_instance.aws_clients.apigateway_client.get_rest_apis()["items"]
 
     #     for rest_api in rest_apis:
-    #         documentation_versions = self.aws_clients.apigateway_client.get_documentation_versions(
+    #         documentation_versions = self.provider_instance.aws_clients.apigateway_client.get_documentation_versions(
     #             restApiId=rest_api["id"])["items"]
 
     #         for documentation_version in documentation_versions:
@@ -483,7 +467,7 @@ class Apigateway:
     def aws_api_gateway_domain_name(self, filter_domain, ftstack):
         resource_type = "aws_api_gateway_domain_name"
 
-        domains = self.aws_clients.apigateway_client.get_domain_names()[
+        domains = self.provider_instance.aws_clients.apigateway_client.get_domain_names()[
             "items"]
 
         for domain in domains:
@@ -522,7 +506,7 @@ class Apigateway:
         logger.debug(
             f"Processing API Gateway Gateway Responses for Rest API: {rest_api_id}")
 
-        gateway_responses = self.aws_clients.apigateway_client.get_gateway_responses(
+        gateway_responses = self.provider_instance.aws_clients.apigateway_client.get_gateway_responses(
             restApiId=rest_api_id)["items"]
 
         for gateway_response in gateway_responses:
@@ -543,7 +527,7 @@ class Apigateway:
         logger.debug(f"Processing API Gateway Integrations...")
         try:
             # Retrieve the integration for the specified method
-            integration = self.aws_clients.apigateway_client.get_integration(
+            integration = self.provider_instance.aws_clients.apigateway_client.get_integration(
                 restApiId=api_id, resourceId=resource_id, httpMethod=method)
 
             path = self.api_gateway_resource_list[api_id][resource_id]
@@ -599,7 +583,7 @@ class Apigateway:
     def aws_api_gateway_method_response(self, rest_api_id, resource_id, method):
         logger.debug(f"Processing API Gateway Method Responses...")
 
-        method_details = self.aws_clients.apigateway_client.get_method(
+        method_details = self.provider_instance.aws_clients.apigateway_client.get_method(
             restApiId=rest_api_id, resourceId=resource_id, httpMethod=method)
 
         for status_code in method_details.get("methodResponses", {}).keys():
@@ -621,7 +605,7 @@ class Apigateway:
         logger.debug(
             f"Processing API Gateway Models for Rest API: {rest_api_id}")
 
-        models = self.aws_clients.apigateway_client.get_models(restApiId=rest_api_id)[
+        models = self.provider_instance.aws_clients.apigateway_client.get_models(restApiId=rest_api_id)[
             "items"]
 
         for model in models:
@@ -640,10 +624,10 @@ class Apigateway:
     # def aws_api_gateway_request_validator(self):
     #     logger.debug(f"Processing API Gateway Request Validators...")
 
-    #     rest_apis = self.aws_clients.apigateway_client.get_rest_apis()["items"]
+    #     rest_apis = self.provider_instance.aws_clients.apigateway_client.get_rest_apis()["items"]
 
     #     for rest_api in rest_apis:
-    #         validators = self.aws_clients.apigateway_client.get_request_validators(
+    #         validators = self.provider_instance.aws_clients.apigateway_client.get_request_validators(
     #             restApiId=rest_api["id"])["items"]
 
     #         for validator in validators:
@@ -665,7 +649,7 @@ class Apigateway:
     def aws_api_gateway_resource(self, api_id, ftstack):
         logger.debug(f"Processing API Gateway Resources for API: {api_id}")
 
-        paginator = self.aws_clients.apigateway_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.apigateway_client.get_paginator(
             "get_resources")
 
         page_iterator = paginator.paginate(restApiId=api_id)
@@ -717,7 +701,7 @@ class Apigateway:
     # def aws_api_gateway_usage_plan_key(self):
     #     logger.debug(f"Processing API Gateway Usage Plans and Usage Plan Keys...")
 
-    #     paginator = self.aws_clients.apigateway_client.get_paginator("get_usage_plans")
+    #     paginator = self.provider_instance.aws_clients.apigateway_client.get_paginator("get_usage_plans")
     #     page_iterator = paginator.paginate()
 
     #     for page in page_iterator:
@@ -725,7 +709,7 @@ class Apigateway:
     #             usage_plan_id = usage_plan["id"]
 
     #             # Process Usage Plan Keys
-    #             paginator_key = self.aws_clients.apigateway_client.get_paginator(
+    #             paginator_key = self.provider_instance.aws_clients.apigateway_client.get_paginator(
     #                 "get_usage_plan_keys")
     #             page_iterator_key = paginator_key.paginate(
     #                 usagePlanId=usage_plan_id)
@@ -750,7 +734,7 @@ class Apigateway:
     # def aws_api_gateway_usage_plan(self):
     #     logger.debug(f"Processing API Gateway Usage Plans...")
 
-    #     paginator = self.aws_clients.apigateway_client.get_paginator("get_usage_plans")
+    #     paginator = self.provider_instance.aws_clients.apigateway_client.get_paginator("get_usage_plans")
     #     page_iterator = paginator.paginate()
 
     #     for page in page_iterator:
@@ -772,7 +756,7 @@ class Apigateway:
     # def aws_api_gateway_usage_plan_key(self):
     #     logger.debug(f"Processing API Gateway Usage Plan Keys...")
 
-    #     paginator = self.aws_clients.apigateway_client.get_paginator("get_usage_plans")
+    #     paginator = self.provider_instance.aws_clients.apigateway_client.get_paginator("get_usage_plans")
     #     page_iterator = paginator.paginate()
 
     #     for page in page_iterator:
@@ -780,7 +764,7 @@ class Apigateway:
     #             usage_plan_id = usage_plan["id"]
 
     #             # Process Usage Plan Keys
-    #             paginator_key = self.aws_clients.apigateway_client.get_paginator(
+    #             paginator_key = self.provider_instance.aws_clients.apigateway_client.get_paginator(
     #                 "get_usage_plan_keys")
     #             page_iterator_key = paginator_key.paginate(
     #                 usagePlanId=usage_plan_id)

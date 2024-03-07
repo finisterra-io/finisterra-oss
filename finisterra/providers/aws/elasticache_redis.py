@@ -8,41 +8,28 @@ logger = logging.getLogger('finisterra')
 
 
 class ElasticacheRedis:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -64,7 +51,7 @@ class ElasticacheRedis:
         if subnet_ids:
             subnet_id = subnet_ids[0]
             # get the vpc id for the subnet_id
-            response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+            response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
                                                                     subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
@@ -83,25 +70,25 @@ class ElasticacheRedis:
         self.aws_elasticache_replication_group()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_elasticache_replication_group(self):
         resource_type = "aws_elasticache_replication_group"
         logger.debug("Processing ElastiCache Replication Groups...")
 
-        paginator = self.aws_clients.elasticache_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.elasticache_client.get_paginator(
             "describe_replication_groups")
         total = 0
         for page in paginator.paginate():
@@ -109,13 +96,13 @@ class ElasticacheRedis:
                 total += 1
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in paginator.paginate():
             for replication_group in page["ReplicationGroups"]:
                 id = replication_group["ReplicationGroupId"]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
                 # Skip the groups that are not Redis
                 if "Engine" in replication_group and replication_group["Engine"] != "redis":
@@ -129,7 +116,7 @@ class ElasticacheRedis:
 
                 ftstack = "elasticache_redis"
                 try:
-                    tags_response = self.aws_clients.elasticache_client.list_tags_for_resource(
+                    tags_response = self.provider_instance.aws_clients.elasticache_client.list_tags_for_resource(
                         ResourceName=replication_group["ARN"])
                     tags = tags_response.get('TagList', [])
                     for tag in tags:
@@ -153,7 +140,7 @@ class ElasticacheRedis:
 
                 # Process the member Cache Clusters
                 for cache_cluster_id in replication_group["MemberClusters"]:
-                    cache_cluster = self.aws_clients.elasticache_client.describe_cache_clusters(
+                    cache_cluster = self.provider_instance.aws_clients.elasticache_client.describe_cache_clusters(
                         CacheClusterId=cache_cluster_id)["CacheClusters"][0]
 
                     # if "CacheSubnetGroupName" in cache_cluster and not cache_cluster["CacheSubnetGroupName"].startswith("default") and cache_cluster["CacheSubnetGroupName"] not in self.processed_subnet_groups:
@@ -196,7 +183,7 @@ class ElasticacheRedis:
         logger.debug(
             f"    Processing ElastiCache Parameter Group: {group_name}...")
 
-        response = self.aws_clients.elasticache_client.describe_cache_parameter_groups(
+        response = self.provider_instance.aws_clients.elasticache_client.describe_cache_parameter_groups(
             CacheParameterGroupName=group_name)
 
         for parameter_group in response["CacheParameterGroups"]:
@@ -222,7 +209,7 @@ class ElasticacheRedis:
         logger.debug(
             f"    Processing ElastiCache Subnet Group: {group_name}...")
 
-        response = self.aws_clients.elasticache_client.describe_cache_subnet_groups(
+        response = self.provider_instance.aws_clients.elasticache_client.describe_cache_subnet_groups(
             CacheSubnetGroupName=group_name)
 
         for subnet_group in response["CacheSubnetGroups"]:
@@ -240,7 +227,7 @@ class ElasticacheRedis:
 
             subnet_ids = [subnet["SubnetIdentifier"]
                           for subnet in subnet_group["Subnets"]]
-            subnet_names = get_subnet_names(self.aws_clients, subnet_ids)
+            subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
             if subnet_names:
                 self.hcl.add_additional_data(
                     resource_type, id, "subnet_names",  subnet_names)

@@ -7,54 +7,41 @@ logger = logging.getLogger('finisterra')
 
 
 class ACM:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
     def acm(self):
         self.hcl.prepare_folder()
         self.aws_acm_certificate()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_acm_certificate(self, acm_arn=None, ftstack=None):
         resource_name = "aws_acm_certificate"
@@ -67,7 +54,7 @@ class ACM:
             self.process_single_acm_certificate(acm_arn, ftstack)
             return
 
-        paginator = self.aws_clients.acm_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.acm_client.get_paginator(
             "list_certificates")
         total = 0
         for page in paginator.paginate():
@@ -75,11 +62,11 @@ class ACM:
                 total += 1
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for cert_summary in page["CertificateSummaryList"]:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cert_summary['CertificateArn'].split('/')[-1]}[/]")
                 cert_arn = cert_summary["CertificateArn"]
                 self.process_single_acm_certificate(cert_arn, ftstack)
@@ -87,7 +74,7 @@ class ACM:
     def process_single_acm_certificate(self, cert_arn, ftstack=None):
         resource_name = "aws_acm_certificate"
         # Fetch certificate details
-        cert_details = self.aws_clients.acm_client.describe_certificate(
+        cert_details = self.provider_instance.aws_clients.acm_client.describe_certificate(
             CertificateArn=cert_arn)["Certificate"]
         cert_domain = cert_details["DomainName"]
         certificate_type = cert_details["Type"]
@@ -104,7 +91,7 @@ class ACM:
         if not ftstack:
             ftstack = "acm"
             try:
-                response = self.aws_clients.acm_client.list_tags_for_certificate(
+                response = self.provider_instance.aws_clients.acm_client.list_tags_for_certificate(
                     CertificateArn=cert_arn)
                 tags = response.get('Tags', {})
                 for tag in tags:

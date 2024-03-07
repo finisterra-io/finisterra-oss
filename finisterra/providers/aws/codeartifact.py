@@ -8,47 +8,34 @@ logger = logging.getLogger('finisterra')
 
 
 class CodeArtifact:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
+        
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
 
     def code_artifact_get_kms_alias(self, kms_key_id):
         if kms_key_id:
             try:
                 value = ""
-                response = self.aws_clients.kms_client.list_aliases()
+                response = self.provider_instance.aws_clients.kms_client.list_aliases()
                 aliases = response.get('Aliases', [])
                 while 'NextMarker' in response:
-                    response = self.aws_clients.kms_client.list_aliases(
+                    response = self.provider_instance.aws_clients.kms_client.list_aliases(
                         Marker=response['NextMarker'])
                     aliases.extend(response.get('Aliases', []))
                 for alias in aliases:
@@ -68,19 +55,19 @@ class CodeArtifact:
         self.aws_codeartifact_domain()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_codeartifact_domain(self, domain_name=None, ftstack=None):
         # logger.debug(f"Processing CodeArtifact Domains")
@@ -89,24 +76,24 @@ class CodeArtifact:
             self.process_single_codeartifact_domain(domain_name, ftstack)
             return
 
-        paginator = self.aws_clients.codeartifact_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.codeartifact_client.get_paginator(
             'list_domains')
         total = 0
         for response in paginator.paginate():
             total += len(response["domains"])
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for response in paginator.paginate():
             for domain in response["domains"]:
                 domain_name = domain["name"]
                 domain_arn = domain["arn"]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{domain_name}[/]")
                 self.process_single_codeartifact_domain(domain_name, ftstack)
 
                 try:
-                    policy = self.aws_clients.codeartifact_client.get_domain_permissions_policy(
+                    policy = self.provider_instance.aws_clients.codeartifact_client.get_domain_permissions_policy(
                         domain=domain_name)
                     if policy["policy"]:
                         document = policy["policy"]["document"]
@@ -118,7 +105,7 @@ class CodeArtifact:
 
     def process_single_codeartifact_domain(self, domain_name, ftstack=None):
         resource_type = "aws_codeartifact_domain"
-        domain_info = self.aws_clients.codeartifact_client.describe_domain(
+        domain_info = self.provider_instance.aws_clients.codeartifact_client.describe_domain(
             domain=domain_name)
         domain_arn = domain_info["domain"]["arn"]
         logger.debug(f"Processing CodeArtifact Domain: {domain_name}")
@@ -131,7 +118,7 @@ class CodeArtifact:
         if not ftstack:
             ftstack = "codeartifact"
             # Retrieve and process domain tags if they exist
-            domain_tags = self.aws_clients.codeartifact_client.list_tags_for_resource(
+            domain_tags = self.provider_instance.aws_clients.codeartifact_client.list_tags_for_resource(
                 resourceArn=domain_arn)
             for tag in domain_tags.get('Tags', []):
                 if tag["Key"] == "ftstack":
@@ -155,7 +142,7 @@ class CodeArtifact:
                         "kms_key_alias": alias}
 
         # Process repositories in the specified domain
-        repositories = self.aws_clients.codeartifact_client.list_repositories_in_domain(
+        repositories = self.provider_instance.aws_clients.codeartifact_client.list_repositories_in_domain(
             domain=domain_name)
         for repository in repositories["repositories"]:
             repository_name = repository["name"]
@@ -176,7 +163,7 @@ class CodeArtifact:
             resource_type, id, attributes)
 
         try:
-            policy = self.aws_clients.codeartifact_client.get_repository_permissions_policy(
+            policy = self.provider_instance.aws_clients.codeartifact_client.get_repository_permissions_policy(
                 domain=domain_name, repository=repository_name)
             if policy["policy"]:
                 self.aws_codeartifact_repository_permissions_policy(

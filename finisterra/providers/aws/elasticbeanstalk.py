@@ -10,40 +10,26 @@ logger = logging.getLogger('finisterra')
 
 
 class ElasticBeanstalk:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
 
     def elasticbeanstalk(self):
         self.hcl.prepare_folder()
@@ -51,24 +37,24 @@ class ElasticBeanstalk:
         self.aws_elastic_beanstalk_environment()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_elastic_beanstalk_application(self):
         logger.debug("Processing Elastic Beanstalk Applications...")
 
-        applications = self.aws_clients.elasticbeanstalk_client.describe_applications()[
+        applications = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_applications()[
             "Applications"]
 
         for app in applications:
@@ -87,12 +73,12 @@ class ElasticBeanstalk:
     def aws_elastic_beanstalk_application_version(self):
         logger.debug("Processing Elastic Beanstalk Application Versions...")
 
-        applications = self.aws_clients.elasticbeanstalk_client.describe_applications()[
+        applications = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_applications()[
             "Applications"]
 
         for app in applications:
             app_name = app["ApplicationName"]
-            versions = self.aws_clients.elasticbeanstalk_client.describe_application_versions(
+            versions = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_application_versions(
                 ApplicationName=app_name)["ApplicationVersions"]
 
             for version in versions:
@@ -123,19 +109,19 @@ class ElasticBeanstalk:
     def aws_elastic_beanstalk_configuration_template(self):
         logger.debug("Processing Elastic Beanstalk Configuration Templates...")
 
-        applications = self.aws_clients.elasticbeanstalk_client.describe_applications()[
+        applications = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_applications()[
             "Applications"]
 
         for app in applications:
             app_name = app["ApplicationName"]
-            environments = self.aws_clients.elasticbeanstalk_client.describe_environments(
+            environments = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_environments(
                 ApplicationName=app_name)["Environments"]
             templates = {}
 
             for env in environments:
                 try:
                     env_name = env["EnvironmentName"]
-                    options = self.aws_clients.elasticbeanstalk_client.describe_configuration_options(
+                    options = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_configuration_options(
                         ApplicationName=app_name, EnvironmentName=env_name)["Options"]
 
                     for option in options:
@@ -173,15 +159,15 @@ class ElasticBeanstalk:
         resource_type = "aws_elastic_beanstalk_environment"
         logger.debug("Processing Elastic Beanstalk Environments...")
 
-        environments = self.aws_clients.elasticbeanstalk_client.describe_environments()[
+        environments = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_environments()[
             "Environments"]
         if len(environments) > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(environments))
 
         for env in environments:
             env_id = env["EnvironmentId"]
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{env_id}[/]")
 
             # if env_id != "xxxxx":
@@ -191,7 +177,7 @@ class ElasticBeanstalk:
 
             ftstack = "beanstalk"
             try:
-                tags_response = self.aws_clients.elasticbeanstalk_client.list_tags_for_resource(
+                tags_response = self.provider_instance.aws_clients.elasticbeanstalk_client.list_tags_for_resource(
                     ResourceArn=env["EnvironmentArn"]
                 )
                 tags = tags_response.get('ResourceTags', [])
@@ -215,7 +201,7 @@ class ElasticBeanstalk:
             self.hcl.add_stack(resource_type, id, ftstack)
 
             # Retrieve the environment configuration details
-            config_settings = self.aws_clients.elasticbeanstalk_client.describe_configuration_settings(
+            config_settings = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_configuration_settings(
                 ApplicationName=env["ApplicationName"],
                 EnvironmentName=env["EnvironmentName"]
             )
@@ -241,7 +227,7 @@ class ElasticBeanstalk:
             if ec2_instance_profile:
                 self.insatce_profiles[env_id] = ec2_instance_profile
                 # self.aws_iam_instance_profile(ec2_instance_profile)
-                instance_profile = self.aws_clients.iam_client.get_instance_profile(
+                instance_profile = self.provider_instance.aws_clients.iam_client.get_instance_profile(
                     InstanceProfileName=ec2_instance_profile)
                 ec2_role = instance_profile['InstanceProfile']['Roles'][0]['Arn']
                 self.ec2_roles[env_id] = ec2_role.split('/')[-1]
@@ -250,7 +236,7 @@ class ElasticBeanstalk:
                 # self.aws_iam_role(ec2_role)
 
             # Identify the Auto Scaling Group associated with the Elastic Beanstalk environment
-            auto_scaling_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()
+            auto_scaling_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()
 
             for group in auto_scaling_groups['AutoScalingGroups']:
                 # The Elastic Beanstalk environment name is part of the Auto Scaling Group name
@@ -262,19 +248,19 @@ class ElasticBeanstalk:
             # Get the Launch Configuration or Launch Template associated with the Auto Scaling Group
             if 'LaunchConfigurationName' in auto_scaling_group:
                 launch_config_name = auto_scaling_group['LaunchConfigurationName']
-                launch_config = self.aws_clients.autoscaling_client.describe_launch_configurations(
+                launch_config = self.provider_instance.aws_clients.autoscaling_client.describe_launch_configurations(
                     LaunchConfigurationNames=[launch_config_name]
                 )['LaunchConfigurations'][0]
                 security_group_names = launch_config['SecurityGroups']
                 for sg in security_group_names:
                     # Get the id by the name using boto3
-                    security_group_id = self.aws_clients.ec2_client.describe_security_groups(
+                    security_group_id = self.provider_instance.aws_clients.ec2_client.describe_security_groups(
                         GroupNames=[sg]
                     )['SecurityGroups'][0]
                     security_group_ids.append(security_group_id['GroupId'])
             elif 'LaunchTemplate' in auto_scaling_group:
                 launch_template_id = auto_scaling_group['LaunchTemplate']['LaunchTemplateId']
-                launch_template_version = self.aws_clients.ec2_client.describe_launch_template_versions(
+                launch_template_version = self.provider_instance.aws_clients.ec2_client.describe_launch_template_versions(
                     LaunchTemplateId=launch_template_id
                 )['LaunchTemplateVersions'][0]['LaunchTemplateData']
                 security_group_ids = launch_template_version['SecurityGroupIds']

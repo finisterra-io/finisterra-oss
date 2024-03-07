@@ -15,48 +15,31 @@ def cors_config_transform(value):
 
 
 class CloudFront:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
         self.origin = {}
 
-        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                              s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.aws_lambda_instance = AwsLambda(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                             region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.wafv2_instance = Wafv2(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                    region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.acm_instance = ACM(self.provider_instance, self.hcl)
+        self.s3_instance = S3(self.provider_instance, self.hcl)
+        self.aws_lambda_instance = AwsLambda(self.provider_instance, self.hcl)
+        self.wafv2_instance = Wafv2(self.provider_instance, self.hcl)
 
     def get_managed_cache_policies(self):
-        managed_cache_policies = self.aws_clients.cloudfront_client.list_cache_policies(
+        managed_cache_policies = self.provider_instance.aws_clients.cloudfront_client.list_cache_policies(
             Type="managed",
             MaxItems="100"
         ).get("CachePolicyList", [])
@@ -71,7 +54,7 @@ class CloudFront:
     def cloudfront(self):
         self.hcl.prepare_folder()
 
-        if "gov" not in self.region:
+        if "gov" not in self.provider_instance.region:
             self.aws_cloudfront_distribution()
 
         managed_policies = self.get_managed_cache_policies()
@@ -86,25 +69,25 @@ class CloudFront:
 
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_cloudfront_distribution(self):
         resource_type = "aws_cloudfront_distribution"
         # logger.debug(f"Processing CloudFront Distributions...")
 
-        paginator = self.aws_clients.cloudfront_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.cloudfront_client.get_paginator(
             "list_distributions")
         total = 0
         for page in paginator.paginate():
@@ -114,7 +97,7 @@ class CloudFront:
             total += len(distribution_list.get("Items", []))
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             distribution_list = page.get("DistributionList")
@@ -129,7 +112,7 @@ class CloudFront:
 
             for distribution_summary in items:
                 distribution_id = distribution_summary["Id"]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{distribution_id}[/]")
 
                 # if distribution_id != "xxxxx":
@@ -140,7 +123,7 @@ class CloudFront:
 
                 ftstack = "cloudfront"
                 try:
-                    response = self.aws_clients.cloudfront_client.list_tags_for_resource(
+                    response = self.provider_instance.aws_clients.cloudfront_client.list_tags_for_resource(
                         Resource=distribution_summary["ARN"])
                     tags = response.get('Tags', {}).get('Items', [])
                     for tag in tags:
@@ -166,7 +149,7 @@ class CloudFront:
 
                 # Fetch distribution configuration
                 try:
-                    dist_config_response = self.aws_clients.cloudfront_client.get_distribution_config(
+                    dist_config_response = self.provider_instance.aws_clients.cloudfront_client.get_distribution_config(
                         Id=distribution_id)
 
                     dist_config = dist_config_response.get(
@@ -276,7 +259,7 @@ class CloudFront:
     def aws_cloudfront_cache_policy(self, specific_cache_policy_id):
         logger.debug(f"Processing CloudFront Cache Policies...")
 
-        response = self.aws_clients.cloudfront_client.list_cache_policies(
+        response = self.provider_instance.aws_clients.cloudfront_client.list_cache_policies(
             Type="custom")
         if "CachePolicyList" in response and "Items" in response["CachePolicyList"]:
             for cache_policy_summary in response["CachePolicyList"]["Items"]:
@@ -302,7 +285,7 @@ class CloudFront:
         logger.debug(
             f"Processing CloudFront Field-Level Encryption Configs...")
 
-        response = self.aws_clients.cloudfront_client.list_field_level_encryption_configs()
+        response = self.provider_instance.aws_clients.cloudfront_client.list_field_level_encryption_configs()
         if "FieldLevelEncryptionList" in response and "Items" in response["FieldLevelEncryptionList"]:
             for config_summary in response["FieldLevelEncryptionList"]["Items"]:
                 config_id = config_summary["Id"]
@@ -320,7 +303,7 @@ class CloudFront:
         logger.debug(
             f"Processing CloudFront Field-Level Encryption Profiles...")
 
-        response = self.aws_clients.cloudfront_client.list_field_level_encryption_profiles()
+        response = self.provider_instance.aws_clients.cloudfront_client.list_field_level_encryption_profiles()
         if "FieldLevelEncryptionProfileList" in response and "Items" in response["FieldLevelEncryptionProfileList"]:
             for profile_summary in response["FieldLevelEncryptionProfileList"]["Items"]:
                 profile_id = profile_summary["Id"]
@@ -339,7 +322,7 @@ class CloudFront:
         logger.debug(f"Processing CloudFront Functions...")
 
         # List all functions and find the one that matches the provided ARN
-        response = self.aws_clients.cloudfront_client.list_functions()
+        response = self.provider_instance.aws_clients.cloudfront_client.list_functions()
         if "FunctionList" in response:
             for function_summary in response["FunctionList"]["Items"]:
                 current_function_arn = function_summary["FunctionMetadata"]["FunctionARN"]
@@ -366,7 +349,7 @@ class CloudFront:
     def aws_cloudfront_key_group(self, key_group_id):
         logger.debug(f"Processing CloudFront Key Group: {key_group_id}")
 
-        response = self.aws_clients.cloudfront_client.get_key_group(
+        response = self.provider_instance.aws_clients.cloudfront_client.get_key_group(
             Id=key_group_id)
         if "KeyGroup" in response:
             key_group_name = response["KeyGroup"]["KeyGroupName"]
@@ -382,7 +365,7 @@ class CloudFront:
     def aws_cloudfront_monitoring_subscription(self, target_distribution_id):
         logger.debug(f"Processing CloudFront Monitoring Subscriptions...")
 
-        paginator = self.aws_clients.cloudfront_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.cloudfront_client.get_paginator(
             "list_distributions")
         for page in paginator.paginate():
             for distribution_summary in page["DistributionList"]["Items"]:
@@ -395,7 +378,7 @@ class CloudFront:
                 distribution_arn = distribution_summary["ARN"]
 
                 try:
-                    monitoring_subscription = self.aws_clients.cloudfront_client.get_monitoring_subscription(
+                    monitoring_subscription = self.provider_instance.aws_clients.cloudfront_client.get_monitoring_subscription(
                         DistributionId=distribution_id)["MonitoringSubscription"]
 
                     if monitoring_subscription.get("RealtimeMetricsSubscriptionConfig"):
@@ -420,7 +403,7 @@ class CloudFront:
     def aws_cloudfront_origin_access_identity(self, identity_id):
         logger.debug(f"Processing CloudFront Origin Access Identities...")
 
-        paginator = self.aws_clients.cloudfront_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.cloudfront_client.get_paginator(
             "list_cloud_front_origin_access_identities")
         for page in paginator.paginate():
             for oai_summary in page["CloudFrontOriginAccessIdentityList"]["Items"]:
@@ -445,7 +428,7 @@ class CloudFront:
     def aws_cloudfront_origin_access_control(self):
         logger.debug(f"Processing CloudFront Origin Access Identities...")
 
-        paginator = self.aws_clients.cloudfront_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.cloudfront_client.get_paginator(
             "list_origin_access_controls")
         for page in paginator.paginate():
             for oai_summary in page["OriginAccessControlList"]["Items"]:
@@ -465,7 +448,7 @@ class CloudFront:
 
         # Fetch custom origin request policy IDs
         custom_policy_ids = []
-        response = self.aws_clients.cloudfront_client.list_origin_request_policies(
+        response = self.provider_instance.aws_clients.cloudfront_client.list_origin_request_policies(
             Type="custom")
         if "OriginRequestPolicyList" in response and "Items" in response["OriginRequestPolicyList"]:
             for policy in response["OriginRequestPolicyList"]["Items"]:
@@ -478,7 +461,7 @@ class CloudFront:
             return
 
         try:
-            policy_response = self.aws_clients.cloudfront_client.get_origin_request_policy(
+            policy_response = self.provider_instance.aws_clients.cloudfront_client.get_origin_request_policy(
                 Id=specific_policy_id)
             policy = policy_response["OriginRequestPolicy"]
 
@@ -500,7 +483,7 @@ class CloudFront:
 
     def aws_cloudfront_public_key(self):
         logger.debug(f"Processing CloudFront Public Keys...")
-        paginator = self.aws_clients.cloudfront_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.cloudfront_client.get_paginator(
             "list_public_keys")
 
         for page in paginator.paginate():
@@ -509,7 +492,7 @@ class CloudFront:
                 logger.debug(
                     f"Processing CloudFront Public Key: {public_key_id}")
 
-                public_key = self.aws_clients.cloudfront_client.get_public_key(
+                public_key = self.provider_instance.aws_clients.cloudfront_client.get_public_key(
                     Id=public_key_id)["PublicKey"]
                 attributes = {
                     "id": public_key_id,
@@ -523,7 +506,7 @@ class CloudFront:
     def aws_cloudfront_public_key(self):
         logger.debug(f"Processing CloudFront Public Keys...")
 
-        response = self.aws_clients.cloudfront_client.list_public_keys()
+        response = self.provider_instance.aws_clients.cloudfront_client.list_public_keys()
 
         for public_key in response.get("PublicKeyList", {}).get("Items", []):
             public_key_id = public_key["Id"]
@@ -541,7 +524,7 @@ class CloudFront:
     def aws_cloudfront_realtime_log_config(self):
         logger.debug(f"Processing CloudFront Realtime Log Configs...")
 
-        response = self.aws_clients.cloudfront_client.list_realtime_log_configs()
+        response = self.provider_instance.aws_clients.cloudfront_client.list_realtime_log_configs()
 
         if "RealtimeLogConfigs" in response and "Items" in response["RealtimeLogConfigs"]:
             for log_config in response["RealtimeLogConfigs"]["Items"]:
@@ -564,7 +547,7 @@ class CloudFront:
 
         # Fetch custom response headers policy IDs
         custom_policy_ids = []
-        response = self.aws_clients.cloudfront_client.list_response_headers_policies(
+        response = self.provider_instance.aws_clients.cloudfront_client.list_response_headers_policies(
             Type="custom")
         if "ResponseHeadersPolicyList" in response and "Items" in response["ResponseHeadersPolicyList"]:
             for policy in response["ResponseHeadersPolicyList"]["Items"]:
@@ -577,7 +560,7 @@ class CloudFront:
             return
 
         try:
-            policy_response = self.aws_clients.cloudfront_client.get_response_headers_policy(
+            policy_response = self.provider_instance.aws_clients.cloudfront_client.get_response_headers_policy(
                 Id=specific_policy_id)
             policy = policy_response["ResponseHeadersPolicy"]
 

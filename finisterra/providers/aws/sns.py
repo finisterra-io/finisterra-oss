@@ -6,35 +6,22 @@ logger = logging.getLogger('finisterra')
 
 
 class SNS:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
     def sns(self):
         self.hcl.prepare_folder()
@@ -42,24 +29,24 @@ class SNS:
         self.aws_sns_topic()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_sns_platform_application(self):
         logger.debug("Processing SNS Platform Applications...")
 
-        paginator = self.aws_clients.sns_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.sns_client.get_paginator(
             "list_platform_applications")
         for page in paginator.paginate():
             for platform_application in page.get("PlatformApplications", []):
@@ -78,7 +65,7 @@ class SNS:
         logger.debug("Processing SNS SMS Preferences...")
 
         try:
-            preferences = self.aws_clients.sns_client.get_sms_attributes()[
+            preferences = self.provider_instance.aws_clients.sns_client.get_sms_attributes()[
                 "attributes"]
             attributes = {key: value for key, value in preferences.items()}
 
@@ -91,18 +78,18 @@ class SNS:
         resource_type = "aws_sns_topic"
         logger.debug("Processing SNS Topics...")
 
-        paginator = self.aws_clients.sns_client.get_paginator("list_topics")
+        paginator = self.provider_instance.aws_clients.sns_client.get_paginator("list_topics")
         total = 0
         for page in paginator.paginate():
             total += len(page.get("Topics", []))
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for topic in page.get("Topics", []):
                 arn = topic["TopicArn"]
                 name = arn.split(":")[-1]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{name}[/]")
 
                 # if name != 'xxxxx':
@@ -113,7 +100,7 @@ class SNS:
 
                 ftstack = "sns"
                 try:
-                    tags_response = self.aws_clients.sns_client.list_tags_for_resource(
+                    tags_response = self.provider_instance.aws_clients.sns_client.list_tags_for_resource(
                         ResourceArn=arn)
                     tags = tags_response.get('Tags', [])
                     for tag in tags:
@@ -142,7 +129,7 @@ class SNS:
         name = arn.split(":")[-1]
 
         try:
-            policy = self.aws_clients.sns_client.get_topic_attributes(
+            policy = self.provider_instance.aws_clients.sns_client.get_topic_attributes(
                 TopicArn=arn)["Attributes"].get("Policy")
             if policy:
                 attributes = {
@@ -162,7 +149,7 @@ class SNS:
         name = arn.split(":")[-1]
 
         try:
-            policy = self.aws_clients.sns_client.get_topic_attributes(
+            policy = self.provider_instance.aws_clients.sns_client.get_topic_attributes(
                 TopicArn=arn)["Attributes"].get("DataProtectionPolicy")
             if policy:
                 attributes = {
@@ -179,7 +166,7 @@ class SNS:
     def aws_sns_topic_subscription(self, topic_arn):
         logger.debug("Processing SNS Topic Subscriptions...")
 
-        paginator = self.aws_clients.sns_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.sns_client.get_paginator(
             "list_subscriptions")
         for page in paginator.paginate():
             for subscription in page.get("Subscriptions", []):

@@ -8,38 +8,24 @@ logger = logging.getLogger('finisterra')
 
 
 class MSK:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
 
     def get_vpc_id(self, sg_ids):
         if not sg_ids:
@@ -49,7 +35,7 @@ class MSK:
         first_sg_id = sg_ids[0]
 
         # Describe the security group to get its VPC ID
-        response = self.aws_clients.ec2_client.describe_security_groups(GroupIds=[
+        response = self.provider_instance.aws_clients.ec2_client.describe_security_groups(GroupIds=[
             first_sg_id])
 
         # Extract and return the VPC ID
@@ -57,7 +43,7 @@ class MSK:
         return vpc_id
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -79,47 +65,47 @@ class MSK:
         self.aws_msk_cluster()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_msk_cluster(self):
         resource_type = "aws_msk_cluster"
         logger.debug("Processing MSK Clusters...")
 
         # Pagination for list_clusters, if applicable
-        paginator = self.aws_clients.msk_client.get_paginator("list_clusters")
+        paginator = self.provider_instance.aws_clients.msk_client.get_paginator("list_clusters")
         page_iterator = paginator.paginate()
         total = 0
         for page in page_iterator:
             total += len(page["ClusterInfoList"])
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in page_iterator:
             for cluster_info in page["ClusterInfoList"]:
                 cluster_arn = cluster_info["ClusterArn"]
                 cluster_name = cluster_info["ClusterName"]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
                 logger.debug(f"Processing MSK Cluster: {cluster_name}")
                 id = cluster_arn
 
                 ftstack = "msk"
                 try:
-                    tags_response = self.aws_clients.msk_client.list_tags_for_resource(
+                    tags_response = self.provider_instance.aws_clients.msk_client.list_tags_for_resource(
                         ResourceArn=cluster_arn)
                     tags = tags_response.get('Tags', {})
                     if tags.get('ftstack', 'msk') != 'msk':
@@ -138,7 +124,7 @@ class MSK:
                 self.hcl.add_stack(resource_type, id, ftstack)
 
                 # Extracting the Security Group IDs for the MSK Cluster
-                cluster_details = self.aws_clients.msk_client.describe_cluster(
+                cluster_details = self.provider_instance.aws_clients.msk_client.describe_cluster(
                     ClusterArn=cluster_arn
                 )
 
@@ -159,7 +145,7 @@ class MSK:
                 subnet_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["ClientSubnets"]
                 if subnet_ids:
                     subnet_names = get_subnet_names(
-                        self.aws_clients, subnet_ids)
+                        self.provider_instance.aws_clients, subnet_ids)
                     if subnet_names:
                         self.hcl.add_additional_data(
                             resource_type, id, "subnet_names", subnet_names)
@@ -174,7 +160,7 @@ class MSK:
             f"Processing SCRAM Secret Associations for Cluster {cluster_arn}...")
 
         # Not all MSK methods might support pagination, so ensure this one does.
-        secrets = self.aws_clients.msk_client.list_scram_secrets(
+        secrets = self.provider_instance.aws_clients.msk_client.list_scram_secrets(
             ClusterArn=cluster_arn
         )
 
@@ -196,7 +182,7 @@ class MSK:
         logger.debug(
             f"Processing AppAutoScaling Targets for MSK Cluster ARN {cluster_arn}...")
 
-        paginator = self.aws_clients.appautoscaling_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.appautoscaling_client.get_paginator(
             "describe_scalable_targets")
         page_iterator = paginator.paginate(
             ServiceNamespace='kafka',
@@ -227,7 +213,7 @@ class MSK:
         logger.debug(
             f"Processing AppAutoScaling Policies for MSK Cluster ARN {cluster_arn}...")
 
-        paginator = self.aws_clients.appautoscaling_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.appautoscaling_client.get_paginator(
             "describe_scaling_policies")
         page_iterator = paginator.paginate(
             ServiceNamespace='kafka',
@@ -261,7 +247,7 @@ class MSK:
         logger.debug(
             f"Processing MSK Configuration for Cluster {cluster_arn}...")
 
-        cluster_details = self.aws_clients.msk_client.describe_cluster(
+        cluster_details = self.provider_instance.aws_clients.msk_client.describe_cluster(
             ClusterArn=cluster_arn
         )
 
@@ -272,7 +258,7 @@ class MSK:
         configuration_arn = cluster_details["ClusterInfo"]["CurrentBrokerSoftwareInfo"]["ConfigurationArn"]
 
         # Get the configuration details using the configuration ARN
-        configuration = self.aws_clients.msk_client.describe_configuration(
+        configuration = self.provider_instance.aws_clients.msk_client.describe_configuration(
             Arn=configuration_arn
         )
 
@@ -293,7 +279,7 @@ class MSK:
     #     logger.debug("Processing Security Groups...")
 
     #     # Create a response dictionary to collect responses for all security groups
-    #     response = self.aws_clients.ec2_client.describe_security_groups(
+    #     response = self.provider_instance.aws_clients.ec2_client.describe_security_groups(
     #         GroupIds=security_group_ids
     #     )
 

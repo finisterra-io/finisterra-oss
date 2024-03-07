@@ -12,46 +12,29 @@ logger = logging.getLogger('finisterra')
 
 
 class ECS:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                 region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
+        self.logs_instance = Logs(self.provider_instance, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.target_group_instance = TargetGroup(self.provider_instance, self.hcl)
 
     def get_subnet_names(self, network_configuration):
         if network_configuration:
@@ -60,7 +43,7 @@ class ECS:
             subnets = awsvpcConfiguration.get("subnets")
             subnet_names = []
             for subnet_id in subnets:
-                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
                                                                         subnet_id])
 
                 # Check if 'Subnets' key exists and it's not empty
@@ -96,11 +79,11 @@ class ECS:
             if subnets:
                 # get the vpc id for the first subnet
                 subnet_id = subnets[0]
-                response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+                response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
                                                                         subnet_id])
                 vpc_id = response['Subnets'][0]['VpcId']
             if vpc_id:
-                response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
                                                                      vpc_id])
                 if not response or 'Vpcs' not in response or not response['Vpcs']:
                     # Handle this case as required, for example:
@@ -120,37 +103,37 @@ class ECS:
         self.aws_ecs_cluster()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_ecs_cluster(self):
         resource_type = "aws_ecs_cluster"
         logger.debug("Processing ECS Clusters...")
 
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+        clusters_arns = self.provider_instance.aws_clients.ecs_client.list_clusters()[
             "clusterArns"]
-        clusters = self.aws_clients.ecs_client.describe_clusters(
+        clusters = self.provider_instance.aws_clients.ecs_client.describe_clusters(
             clusters=clusters_arns, include=["CONFIGURATIONS"])["clusters"]
 
         if clusters:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
 
         for cluster in clusters:
             cluster_name = cluster["clusterName"]
             cluster_arn = cluster["clusterArn"]
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
 
             # if cluster_name == "xxx":
@@ -161,7 +144,7 @@ class ECS:
 
             ftstack = "ecs"
             try:
-                tags_response = self.aws_clients.ecs_client.list_tags_for_resource(
+                tags_response = self.provider_instance.aws_clients.ecs_client.list_tags_for_resource(
                     resourceArn=cluster_arn)
                 tags = tags_response.get('tags', [])
                 for tag in tags:
@@ -216,9 +199,9 @@ class ECS:
         logger.debug(
             "Processing ECS Cluster Capacity Providers for the specified cluster...")
 
-        cluster_arns = self.aws_clients.ecs_client.list_clusters()[
+        cluster_arns = self.provider_instance.aws_clients.ecs_client.list_clusters()[
             "clusterArns"]
-        clusters = self.aws_clients.ecs_client.describe_clusters(
+        clusters = self.provider_instance.aws_clients.ecs_client.describe_clusters(
             clusters=cluster_arns)["clusters"]
 
         for cluster in clusters:
@@ -244,9 +227,9 @@ class ECS:
         logger.debug(
             f"Processing ECS Capacity Providers for cluster: {cluster_name}...")
 
-        cluster_arns = self.aws_clients.ecs_client.list_clusters()[
+        cluster_arns = self.provider_instance.aws_clients.ecs_client.list_clusters()[
             "clusterArns"]
-        clusters = self.aws_clients.ecs_client.describe_clusters(
+        clusters = self.provider_instance.aws_clients.ecs_client.describe_clusters(
             clusters=cluster_arns)["clusters"]
 
         for cluster in clusters:
@@ -254,7 +237,7 @@ class ECS:
                 capacity_providers = cluster.get('capacityProviders', [])
 
                 for provider_name in capacity_providers:
-                    provider_details = self.aws_clients.ecs_client.describe_capacity_providers(
+                    provider_details = self.provider_instance.aws_clients.ecs_client.describe_capacity_providers(
                         capacityProviders=[provider_name])["capacityProviders"][0]
 
                     auto_scaling_group_provider = provider_details.get(
@@ -282,15 +265,15 @@ class ECS:
         resource_type = "aws_ecs_service"
         logger.debug(f"Processing ECS Services for cluster: {cluster_name}...")
 
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+        clusters_arns = self.provider_instance.aws_clients.ecs_client.list_clusters()[
             "clusterArns"]
-        clusters = self.aws_clients.ecs_client.describe_clusters(
+        clusters = self.provider_instance.aws_clients.ecs_client.describe_clusters(
             clusters=clusters_arns)["clusters"]
 
         for cluster in clusters:
             if cluster['clusterName'] == cluster_name:
                 cluster_arn = cluster['clusterArn']
-                paginator = self.aws_clients.ecs_client.get_paginator(
+                paginator = self.provider_instance.aws_clients.ecs_client.get_paginator(
                     'list_services')
 
                 for page in paginator.paginate(cluster=cluster_arn):
@@ -299,7 +282,7 @@ class ECS:
                         logger.debug(
                             f"  No services found for cluster. {cluster_name}")
                         continue
-                    services = self.aws_clients.ecs_client.describe_services(
+                    services = self.provider_instance.aws_clients.ecs_client.describe_services(
                         cluster=cluster_arn, services=services_arns)["services"]
 
                     for service in services:
@@ -386,14 +369,14 @@ class ECS:
                             registry_arn = serviceRegistry.get('registryArn')
                             registry_id = registry_arn.split('/')[-1]
                             # Fetching service details using registry_id
-                            cloudmap = self.aws_clients.cloudmap_client.get_service(Id=registry_id)[
+                            cloudmap = self.provider_instance.aws_clients.cloudmap_client.get_service(Id=registry_id)[
                                 'Service']
                             if cloudmap:
                                 registry_name = cloudmap['Name']
                                 if registry_name:
                                     self.hcl.add_additional_data(
                                         "aws_service_discovery_service", registry_arn, "registry_name", registry_name)
-                                    namespace = self.aws_clients.cloudmap_client.get_namespace(
+                                    namespace = self.provider_instance.aws_clients.cloudmap_client.get_namespace(
                                         Id=cloudmap['NamespaceId'])['Namespace']
                                     namespace_name = namespace['Name']
                                     if namespace_name:
@@ -407,7 +390,7 @@ class ECS:
         logger.debug(
             f"Processing ECS Task Definition: {task_definition_arn}...")
 
-        task_definition = self.aws_clients.ecs_client.describe_task_definition(
+        task_definition = self.provider_instance.aws_clients.ecs_client.describe_task_definition(
             taskDefinition=task_definition_arn)["taskDefinition"]
 
         family = task_definition['family']
@@ -437,7 +420,7 @@ class ECS:
             f"Processing AppAutoScaling target for ECS service: {service_name} in cluster: {cluster_name}...")
 
         try:
-            response = self.aws_clients.appautoscaling_client.describe_scalable_targets(
+            response = self.provider_instance.aws_clients.appautoscaling_client.describe_scalable_targets(
                 ServiceNamespace=service_namespace,
                 ResourceIds=[resource_id]
             )
@@ -479,7 +462,7 @@ class ECS:
             f"Processing AppAutoScaling policies for resource: {resource_id}...")
 
         try:
-            response = self.aws_clients.appautoscaling_client.describe_scaling_policies(
+            response = self.provider_instance.aws_clients.appautoscaling_client.describe_scaling_policies(
                 ServiceNamespace=service_namespace,
                 ResourceId=resource_id
             )
@@ -508,7 +491,7 @@ class ECS:
             f"Processing AppAutoScaling scheduled actions for resource: {resource_id}...")
 
         try:
-            response = self.aws_clients.appautoscaling_client.describe_scheduled_actions(
+            response = self.provider_instance.aws_clients.appautoscaling_client.describe_scheduled_actions(
                 ServiceNamespace=service_namespace,
                 ResourceId=resource_id
             )
@@ -535,7 +518,7 @@ class ECS:
     def aws_ecs_account_setting_default(self):
         logger.debug("Processing ECS Account Setting Defaults...")
 
-        settings = self.aws_clients.ecs_client.list_account_settings()[
+        settings = self.provider_instance.aws_clients.ecs_client.list_account_settings()[
             "settings"]
         for setting in settings:
             name = setting["name"]
@@ -554,19 +537,19 @@ class ECS:
         logger.debug("Processing ECS Tags...")
 
         # Process tags for ECS clusters
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+        clusters_arns = self.provider_instance.aws_clients.ecs_client.list_clusters()[
             "clusterArns"]
         for cluster_arn in clusters_arns:
-            cluster = self.aws_clients.ecs_client.describe_clusters(
+            cluster = self.provider_instance.aws_clients.ecs_client.describe_clusters(
                 clusters=[cluster_arn])["clusters"][0]
             cluster_name = cluster["clusterName"]
             self.process_tags_for_resource(
                 cluster_name, cluster_arn, "aws_ecs_tag")
 
             # Process tags for ECS services
-            services_arns = self.aws_clients.ecs_client.list_services(
+            services_arns = self.provider_instance.aws_clients.ecs_client.list_services(
                 cluster=cluster_arn)["serviceArns"]
-            services = self.aws_clients.ecs_client.describe_services(
+            services = self.provider_instance.aws_clients.ecs_client.describe_services(
                 cluster=cluster_arn, services=services_arns)["services"]
             for service in services:
                 service_name = service["serviceName"]
@@ -575,9 +558,9 @@ class ECS:
                     service_name, service_arn, "aws_ecs_tag")
 
             # Process tags for ECS tasks and task definitions
-            tasks_arns = self.aws_clients.ecs_client.list_tasks(
+            tasks_arns = self.provider_instance.aws_clients.ecs_client.list_tasks(
                 cluster=cluster_arn)["taskArns"]
-            tasks = self.aws_clients.ecs_client.describe_tasks(
+            tasks = self.provider_instance.aws_clients.ecs_client.describe_tasks(
                 cluster=cluster_arn, tasks=tasks_arns)["tasks"]
             for task in tasks:
                 task_arn = task["taskArn"]
@@ -588,7 +571,7 @@ class ECS:
                     "/")[-1], task_definition_arn, "aws_ecs_tag")
 
     def process_tags_for_resource(self, resource_name, resource_arn, resource_type):
-        tags = self.aws_clients.ecs_client.list_tags_for_resource(
+        tags = self.provider_instance.aws_clients.ecs_client.list_tags_for_resource(
             resourceArn=resource_arn)["tags"]
         for tag in tags:
             key = tag["key"]
@@ -611,21 +594,21 @@ class ECS:
     def aws_ecs_task_set(self):
         logger.debug("Processing ECS Task Sets...")
 
-        clusters_arns = self.aws_clients.ecs_client.list_clusters()[
+        clusters_arns = self.provider_instance.aws_clients.ecs_client.list_clusters()[
             "clusterArns"]
         for cluster_arn in clusters_arns:
-            services_arns = self.aws_clients.ecs_client.list_services(
+            services_arns = self.provider_instance.aws_clients.ecs_client.list_services(
                 cluster=cluster_arn)["serviceArns"]
-            services = self.aws_clients.ecs_client.describe_services(
+            services = self.provider_instance.aws_clients.ecs_client.describe_services(
                 cluster=cluster_arn, services=services_arns)["services"]
 
             for service in services:
                 service_name = service["serviceName"]
-                task_sets = self.aws_clients.ecs_client.list_task_sets(
+                task_sets = self.provider_instance.aws_clients.ecs_client.list_task_sets(
                     cluster=cluster_arn, service=service_name)["taskSets"]
 
                 for task_set_arn in task_sets:
-                    task_set = self.aws_clients.ecs_client.describe_task_sets(
+                    task_set = self.provider_instance.aws_clients.ecs_client.describe_task_sets(
                         cluster=cluster_arn, service=service_name, taskSets=[task_set_arn])["taskSets"][0]
                     task_set_id = task_set["id"]
 
@@ -645,7 +628,7 @@ class ECS:
             f"Processing Load Balancer Target Group with ARN: {target_group_arn}")
 
         # Describe the specific target group using the provided ARN
-        response = self.aws_clients.elbv2_client.describe_target_groups(
+        response = self.provider_instance.aws_clients.elbv2_client.describe_target_groups(
             TargetGroupArns=[target_group_arn]
         )
 
@@ -670,21 +653,21 @@ class ECS:
         logger.debug("Processing Load Balancer Listener Rules for Target Group ARN:",
                      target_group_arn)
 
-        load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
+        load_balancers = self.provider_instance.aws_clients.elbv2_client.describe_load_balancers()[
             "LoadBalancers"]
 
         for lb in load_balancers:
             lb_arn = lb["LoadBalancerArn"]
             # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
-            listeners = self.aws_clients.elbv2_client.describe_listeners(
+            listeners = self.provider_instance.aws_clients.elbv2_client.describe_listeners(
                 LoadBalancerArn=lb_arn)["Listeners"]
 
             for listener in listeners:
                 listener_arn = listener["ListenerArn"]
                 # logger.debug(f"Processing Load Balancer Listener: {listener_arn}")
 
-                rules = self.aws_clients.elbv2_client.describe_rules(
+                rules = self.provider_instance.aws_clients.elbv2_client.describe_rules(
                     ListenerArn=listener_arn)["Rules"]
 
                 for rule in rules:
@@ -713,11 +696,11 @@ class ECS:
 
         # Get all Load Balancers
         load_balancer_arns = [lb["LoadBalancerArn"]
-                              for lb in self.aws_clients.elbv2_client.describe_load_balancers()["LoadBalancers"]]
+                              for lb in self.provider_instance.aws_clients.elbv2_client.describe_load_balancers()["LoadBalancers"]]
 
         # Get all Listeners for the Load Balancers
         for lb_arn in load_balancer_arns:
-            paginator = self.aws_clients.elbv2_client.get_paginator(
+            paginator = self.provider_instance.aws_clients.elbv2_client.get_paginator(
                 "describe_listeners")
             for page in paginator.paginate(LoadBalancerArn=lb_arn):
                 for listener in page["Listeners"]:

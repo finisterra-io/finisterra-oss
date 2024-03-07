@@ -7,35 +7,23 @@ logger = logging.getLogger('finisterra')
 
 
 class IAM:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
     def iam(self):
         self.hcl.prepare_folder()
@@ -43,19 +31,19 @@ class IAM:
         self.aws_iam_role()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_iam_role(self, role_name=None, ftstack=None):
         resource_type = "aws_iam_role"
@@ -70,7 +58,7 @@ class IAM:
 
             # Fetch and process the specific role
             try:
-                role = self.aws_clients.iam_client.get_role(
+                role = self.provider_instance.aws_clients.iam_client.get_role(
                     RoleName=role_name)["Role"]
                 self.process_iam_role(role, ftstack)
             except Exception as e:
@@ -78,16 +66,16 @@ class IAM:
             return
 
         # Code to process all roles if no specific role_name is provided
-        paginator = self.aws_clients.iam_client.get_paginator("list_roles")
+        paginator = self.provider_instance.aws_clients.iam_client.get_paginator("list_roles")
         total = 0
         for page in paginator.paginate():
             total += len(page["Roles"])
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for role in page["Roles"]:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{role['RoleName']}[/]")
                 self.process_iam_role(role, ftstack)
 
@@ -122,7 +110,7 @@ class IAM:
 
     def aws_iam_instance_profile(self, role_name):
         logger.debug("Processing IAM Instance Profiles...")
-        paginator = self.aws_clients.iam_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.iam_client.get_paginator(
             "list_instance_profiles")
 
         for page in paginator.paginate():
@@ -151,7 +139,7 @@ class IAM:
         logger.debug(
             f"Processing IAM Role Policy Attachments for {role_name}...")
 
-        policy_paginator = self.aws_clients.iam_client.get_paginator(
+        policy_paginator = self.provider_instance.aws_clients.iam_client.get_paginator(
             "list_attached_role_policies")
 
         for policy_page in policy_paginator.paginate(RoleName=role_name):

@@ -8,39 +8,25 @@ logger = logging.getLogger('finisterra')
 
 
 class TargetGroup:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        # self.elbv2_instance = ELBV2(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
+        self.acm_instance = ACM(self.provider_instance, self.hcl)
+        # self.elbv2_instance = ELBV2(self.provider_instance.progress,  self.provider_instance.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
         #                             region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
 
         self.load_balancers = None
@@ -48,7 +34,7 @@ class TargetGroup:
 
     def get_vpc_name(self, vpc_id):
         try:
-            response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+            response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
                                                                  vpc_id])
             if not response or 'Vpcs' not in response or not response['Vpcs']:
                 # Handle this case as required, for example:
@@ -69,25 +55,25 @@ class TargetGroup:
         self.aws_lb_target_group()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_lb_target_group(self, target_group_arn=None, ftstack=None):
         logger.debug("Processing Load Balancer Target Groups")
         resource_type = "aws_lb_target_group"
 
-        paginator = self.aws_clients.elbv2_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.elbv2_client.get_paginator(
             'describe_target_groups')
         response_iterator = paginator.paginate()
         total = 0
@@ -95,7 +81,7 @@ class TargetGroup:
             total += len(response.get("TargetGroups", []))
 
         if total > 0 and not target_group_arn:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for response in response_iterator:
@@ -107,7 +93,7 @@ class TargetGroup:
                     continue
 
                 if not target_group_arn:
-                    self.progress.update(
+                    self.provider_instance.progress.update(
                         self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{tg_name}[/]")
 
                 # if tg_name != "xxxx":
@@ -148,14 +134,14 @@ class TargetGroup:
 
                 # # Check if the target group is used in any loadbalancer default actions
                 # if not self.load_balancers:
-                #     self.load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
+                #     self.load_balancers = self.provider_instance.aws_clients.elbv2_client.describe_load_balancers()[
                 #         "LoadBalancers"]
                 # for lb in self.load_balancers:
                 #     lb_arn = lb["LoadBalancerArn"]
                 #     # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
                 #     if lb_arn not in self.listeners:
-                #         self.listeners[lb_arn] = self.aws_clients.elbv2_client.describe_listeners(
+                #         self.listeners[lb_arn] = self.provider_instance.aws_clients.elbv2_client.describe_listeners(
                 #             LoadBalancerArn=lb_arn)["Listeners"]
 
                 #     for listener in self.listeners[lb_arn]:
@@ -169,7 +155,7 @@ class TargetGroup:
         logger.debug("Processing Load Balancer Listener Rules")
 
         if not self.load_balancers:
-            self.load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
+            self.load_balancers = self.provider_instance.aws_clients.elbv2_client.describe_load_balancers()[
                 "LoadBalancers"]
 
         for lb in self.load_balancers:
@@ -177,14 +163,14 @@ class TargetGroup:
             # logger.debug(f"Processing Load Balancer: {lb_arn}")
 
             if lb_arn not in self.listeners:
-                self.listeners[lb_arn] = self.aws_clients.elbv2_client.describe_listeners(
+                self.listeners[lb_arn] = self.provider_instance.aws_clients.elbv2_client.describe_listeners(
                     LoadBalancerArn=lb_arn)["Listeners"]
 
             for listener in self.listeners[lb_arn]:
                 listener_arn = listener["ListenerArn"]
                 # logger.debug(f"Processing Load Balancer Listener: {listener_arn}")
 
-                rules = self.aws_clients.elbv2_client.describe_rules(
+                rules = self.provider_instance.aws_clients.elbv2_client.describe_rules(
                     ListenerArn=listener_arn)["Rules"]
 
                 for rule in rules:
@@ -225,7 +211,7 @@ class TargetGroup:
             "aws_lb_listener", listener_arn.split("/")[-1], attributes)
 
         # describe the listener and get me the list of all the acm arns used in the listener
-        listener = self.aws_clients.elbv2_client.describe_listeners(
+        listener = self.provider_instance.aws_clients.elbv2_client.describe_listeners(
             ListenerArns=[listener_arn])
         if listener:
             certificates = listener['Listeners'][0]['Certificates']

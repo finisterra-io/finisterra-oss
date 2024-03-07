@@ -17,45 +17,30 @@ logger = logging.getLogger('finisterra')
 
 
 class AwsLambda:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.logs_instance = Logs(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                  s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
+        self.logs_instance = Logs(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -77,19 +62,19 @@ class AwsLambda:
         self.aws_lambda_function()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_lambda_function(self, selected_function_name=None, ftstack=None):
         resource_type = "aws_lambda_function"
@@ -105,19 +90,19 @@ class AwsLambda:
             return
 
         total = 0
-        paginator = self.aws_clients.lambda_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.lambda_client.get_paginator(
             'list_functions')
         for page in paginator.paginate():
             for function in page['Functions']:
                 total += 1
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for function in page['Functions']:
                 function_name = function['FunctionName']
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{function_name}[/]")
                 self.process_single_lambda_function(function_name, ftstack)
 
@@ -129,14 +114,14 @@ class AwsLambda:
 
         logger.debug(f"Processing Lambda Function: {function_name}")
 
-        function_details = self.aws_clients.lambda_client.get_function(
+        function_details = self.provider_instance.aws_clients.lambda_client.get_function(
             FunctionName=function_name)
         function_arn = function_details["Configuration"]["FunctionArn"]
 
         if not ftstack:
             ftstack = "aws_lambda"
             try:
-                tags = self.aws_clients.lambda_client.list_tags(
+                tags = self.provider_instance.aws_clients.lambda_client.list_tags(
                     Resource=function_arn)['Tags']
                 if tags.get('ftstack', 'aws_lambda') != 'aws_lambda':
                     ftstack = "stack_" + tags.get('ftstack', 'aws_lambda')
@@ -203,7 +188,7 @@ class AwsLambda:
                 if vpc_name:
                     self.hcl.add_additional_data(
                         resource_type, function_arn, "vpc_name", vpc_name)
-                subnet_names = get_subnet_names(self.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, function_arn, "subnet_names", subnet_names)
@@ -222,12 +207,12 @@ class AwsLambda:
     def aws_lambda_alias(self):
         logger.debug(f"Processing Lambda Aliases...")
 
-        functions = self.aws_clients.lambda_client.list_functions()[
+        functions = self.provider_instance.aws_clients.lambda_client.list_functions()[
             "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
-            aliases = self.aws_clients.lambda_client.list_aliases(
+            aliases = self.provider_instance.aws_clients.lambda_client.list_aliases(
                 FunctionName=function_name)["Aliases"]
             for alias in aliases:
                 alias_name = alias["Name"]
@@ -246,7 +231,7 @@ class AwsLambda:
     def aws_lambda_code_signing_config(self):
         logger.debug(f"Processing Lambda Code Signing Configs...")
 
-        paginator = self.aws_clients.lambda_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.lambda_client.get_paginator(
             "list_code_signing_configs")
 
         for page in paginator.paginate():
@@ -269,12 +254,12 @@ class AwsLambda:
     def aws_lambda_event_source_mapping(self):
         logger.debug(f"Processing Lambda Event Source Mappings...")
 
-        functions = self.aws_clients.lambda_client.list_functions()[
+        functions = self.provider_instance.aws_clients.lambda_client.list_functions()[
             "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
-            event_source_mappings = self.aws_clients.lambda_client.list_event_source_mappings(
+            event_source_mappings = self.provider_instance.aws_clients.lambda_client.list_event_source_mappings(
                 FunctionName=function_name)["EventSourceMappings"]
 
             for mapping in event_source_mappings:
@@ -293,13 +278,13 @@ class AwsLambda:
     def aws_lambda_function_event_invoke_config(self):
         logger.debug(f"Processing Lambda Function Event Invoke Configs...")
 
-        functions = self.aws_clients.lambda_client.list_functions()[
+        functions = self.provider_instance.aws_clients.lambda_client.list_functions()[
             "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
             try:
-                event_invoke_config = self.aws_clients.lambda_client.get_function_event_invoke_config(
+                event_invoke_config = self.provider_instance.aws_clients.lambda_client.get_function_event_invoke_config(
                     FunctionName=function_name)
                 logger.debug(
                     f"Processing Event Invoke Config for Lambda Function: {function_name}")
@@ -322,13 +307,13 @@ class AwsLambda:
     def aws_lambda_function_url(self):
         logger.debug(f"Processing Lambda Function URLs...")
 
-        functions = self.aws_clients.lambda_client.list_functions()[
+        functions = self.provider_instance.aws_clients.lambda_client.list_functions()[
             "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
             qualifier = "$LATEST"
-            region = self.region
+            region = self.provider_instance.region
             arn = function["FunctionArn"]
             url = f"https://{arn.split(':')[4]}.lambda.{region}.amazonaws.com/2015-03-31/functions/{arn}/invocations"
             logger.debug(
@@ -346,11 +331,11 @@ class AwsLambda:
     def aws_lambda_layer_version(self):
         logger.debug(f"Processing Lambda Layer Versions...")
 
-        layers = self.aws_clients.lambda_client.list_layers()["Layers"]
+        layers = self.provider_instance.aws_clients.lambda_client.list_layers()["Layers"]
 
         for layer in layers:
             layer_name = layer["LayerName"]
-            layer_versions = self.aws_clients.lambda_client.list_layer_versions(LayerName=layer_name)[
+            layer_versions = self.provider_instance.aws_clients.lambda_client.list_layer_versions(LayerName=layer_name)[
                 "LayerVersions"]
 
             for layer_version in layer_versions:
@@ -366,7 +351,7 @@ class AwsLambda:
                 }
 
                 layer_version_permission_arns = []
-                policy = self.aws_clients.lambda_client.get_layer_version_policy(
+                policy = self.provider_instance.aws_clients.lambda_client.get_layer_version_policy(
                     LayerName=layer_name, VersionNumber=version)["Policy"]
 
                 for statement in policy["Statement"]:
@@ -379,12 +364,12 @@ class AwsLambda:
 
     def aws_lambda_layer_version_permission(self):
         logger.debug(f"Processing Lambda Layer Version Permissions...")
-        paginator = self.aws_clients.lambda_client.get_paginator("list_layers")
+        paginator = self.provider_instance.aws_clients.lambda_client.get_paginator("list_layers")
         page_iterator = paginator.paginate()
         for page in page_iterator:
             for layer in page["Layers"]:
                 layer_version_arn = layer["LatestMatchingVersion"]["LayerVersionArn"]
-                layer_version_permission_arns = [p["Principal"] for p in self.aws_clients.lambda_client.get_layer_version_policy(
+                layer_version_permission_arns = [p["Principal"] for p in self.provider_instance.aws_clients.lambda_client.get_layer_version_policy(
                     LayerName=layer["LayerName"],
                     VersionNumber=layer["LatestMatchingVersion"]["Version"],
                 )["Policy"]["Statement"]]
@@ -403,13 +388,13 @@ class AwsLambda:
     def aws_lambda_permission(self):
         logger.debug(f"Processing Lambda Permissions...")
 
-        functions = self.aws_clients.lambda_client.list_functions()[
+        functions = self.provider_instance.aws_clients.lambda_client.list_functions()[
             "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
             try:
-                policy_response = self.aws_clients.lambda_client.get_policy(
+                policy_response = self.provider_instance.aws_clients.lambda_client.get_policy(
                     FunctionName=function_name)
                 policy = json.loads(policy_response["Policy"])
 
@@ -425,7 +410,7 @@ class AwsLambda:
                     }
                     self.hcl.process_resource(
                         "aws_lambda_permission", f"{function_name.replace('-', '_')}_permission_{statement_id}", attributes)
-            except self.aws_clients.lambda_client.exceptions.ResourceNotFoundException:
+            except self.provider_instance.aws_clients.lambda_client.exceptions.ResourceNotFoundException:
                 logger.debug(
                     f"  Skipping Lambda Function: {function_name} because no resource policy found")
 
@@ -433,13 +418,13 @@ class AwsLambda:
         logger.debug(
             f"Processing Lambda Provisioned Concurrency Configurations...")
 
-        functions = self.aws_clients.lambda_client.list_functions()[
+        functions = self.provider_instance.aws_clients.lambda_client.list_functions()[
             "Functions"]
 
         for function in functions:
             function_name = function["FunctionName"]
             try:
-                concurrency_configs = self.aws_clients.lambda_client.list_provisioned_concurrency_configs(
+                concurrency_configs = self.provider_instance.aws_clients.lambda_client.list_provisioned_concurrency_configs(
                     FunctionName=function_name)["ProvisionedConcurrencyConfigs"]
 
                 for config in concurrency_configs:
@@ -456,6 +441,6 @@ class AwsLambda:
                     }
                     self.hcl.process_resource("aws_lambda_provisioned_concurrency_config",
                                               f"{function_name.replace('-', '_')}_provisioned_concurrency_{version}", attributes)
-            except self.aws_clients.lambda_client.exceptions.ResourceNotFoundException:
+            except self.provider_instance.aws_clients.lambda_client.exceptions.ResourceNotFoundException:
                 logger.debug(
                     f"  No provisioned concurrency configuration found for Lambda Function: {function_name}")

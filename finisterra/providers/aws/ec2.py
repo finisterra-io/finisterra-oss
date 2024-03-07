@@ -11,44 +11,26 @@ logger = logging.getLogger('finisterra')
 
 
 class EC2:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.aws_account_id = aws_account_id
-        self.additional_ips_count = 0
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
 
     def decode_base64(self, encoded_str):
         if encoded_str is not None:
@@ -61,7 +43,7 @@ class EC2:
             return "No data to decode."
 
     def ec2_get_user_data(self, instance_id):
-        response = self.aws_clients.ec2_client.describe_instance_attribute(
+        response = self.provider_instance.aws_clients.ec2_client.describe_instance_attribute(
             InstanceId=instance_id,
             Attribute='userData'
         )
@@ -72,7 +54,7 @@ class EC2:
 
     def get_subnet_name_ec2(self, subnet_id):
         subnet_name = ""
-        response = self.aws_clients.ec2_client.describe_subnets(SubnetIds=[
+        response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
                                                                 subnet_id])
 
         # Check if 'Subnets' key exists and it's not empty
@@ -94,7 +76,7 @@ class EC2:
         if not volume_id:
             return None
 
-        response = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[
+        response = self.provider_instance.aws_clients.ec2_client.describe_volumes(VolumeIds=[
                                                                 volume_id])
 
         # Check if the volume exists and has attachments
@@ -105,10 +87,10 @@ class EC2:
 
     def get_kms_alias(self, kms_key_id):
         value = ""
-        response = self.aws_clients.kms_client.list_aliases()
+        response = self.provider_instance.aws_clients.kms_client.list_aliases()
         aliases = response.get('Aliases', [])
         while 'NextMarker' in response:
-            response = self.aws_clients.kms_client.list_aliases(
+            response = self.provider_instance.aws_clients.kms_client.list_aliases(
                 Marker=response['NextMarker'])
             aliases.extend(response.get('Aliases', []))
         for alias in aliases:
@@ -123,24 +105,24 @@ class EC2:
         self.aws_instance()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
-                f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]No resources found[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_ami(self):
         logger.debug(f"Processing AMIs...")
 
-        images = self.aws_clients.ec2_client.describe_images(Owners=["self"])[
+        images = self.provider_instance.aws_clients.ec2_client.describe_images(Owners=["self"])[
             "Images"]
 
         for image in images:
@@ -161,13 +143,13 @@ class EC2:
     def aws_ami_launch_permission(self):
         logger.debug(f"Processing AMI Launch Permissions...")
 
-        images = self.aws_clients.ec2_client.describe_images(Owners=["self"])[
+        images = self.provider_instance.aws_clients.ec2_client.describe_images(Owners=["self"])[
             "Images"]
 
         for image in images:
             image_id = image["ImageId"]
 
-            launch_permissions = self.aws_clients.ec2_client.describe_image_attribute(
+            launch_permissions = self.provider_instance.aws_clients.ec2_client.describe_image_attribute(
                 ImageId=image_id, Attribute="launchPermission")["LaunchPermissions"]
 
             for permission in launch_permissions:
@@ -188,7 +170,7 @@ class EC2:
     def aws_ec2_capacity_reservation(self):
         logger.debug(f"Processing EC2 Capacity Reservations...")
 
-        capacity_reservations = self.aws_clients.ec2_client.describe_capacity_reservations()[
+        capacity_reservations = self.provider_instance.aws_clients.ec2_client.describe_capacity_reservations()[
             "CapacityReservations"]
 
         for reservation in capacity_reservations:
@@ -214,7 +196,7 @@ class EC2:
     def aws_ec2_host(self):
         logger.debug(f"Processing EC2 Dedicated Hosts...")
 
-        hosts = self.aws_clients.ec2_client.describe_hosts()["Hosts"]
+        hosts = self.provider_instance.aws_clients.ec2_client.describe_hosts()["Hosts"]
 
         for host in hosts:
             host_id = host["HostId"]
@@ -237,7 +219,7 @@ class EC2:
     def aws_ec2_tag(self):
         logger.debug(f"Processing EC2 Tags...")
 
-        resources = self.aws_clients.ec2_client.describe_tags()
+        resources = self.provider_instance.aws_clients.ec2_client.describe_tags()
         for resource in resources["Tags"]:
             resource_id = resource["ResourceId"]
             resource_type = resource["ResourceType"]
@@ -259,7 +241,7 @@ class EC2:
     def aws_eip(self, allocation_id):
         logger.debug(f"Processing Elastic IP: {allocation_id}")
 
-        eips = self.aws_clients.ec2_client.describe_addresses(
+        eips = self.provider_instance.aws_clients.ec2_client.describe_addresses(
             AllocationIds=[allocation_id])
         if not eips["Addresses"]:
             logger.debug(
@@ -288,7 +270,7 @@ class EC2:
     def aws_eip_association(self):
         logger.debug(f"Processing Elastic IP Associations...")
 
-        eips = self.aws_clients.ec2_client.describe_addresses()
+        eips = self.provider_instance.aws_clients.ec2_client.describe_addresses()
         for eip in eips["Addresses"]:
             if "AssociationId" in eip:
                 association_id = eip["AssociationId"]
@@ -313,7 +295,7 @@ class EC2:
                     "aws_eip_association", association_id.replace("-", "_"), attributes)
 
     def is_managed_by_auto_scaling_group(self, instance_id):
-        response = self.aws_clients.autoscaling_client.describe_auto_scaling_instances(InstanceIds=[
+        response = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_instances(InstanceIds=[
             instance_id])
         return bool(response["AutoScalingInstances"])
 
@@ -321,21 +303,25 @@ class EC2:
         resource_type = "aws_instance"
         # logger.debug(f"Processing EC2 Instances...")
 
-        instances = self.aws_clients.ec2_client.describe_instances()
+        if self.provider_instance.filters:
+            instances = self.provider_instance.aws_clients.ec2_client.describe_instances(
+                Filters=self.provider_instance.filters)
+        else:
+            instances = self.provider_instance.aws_clients.ec2_client.describe_instances()
         total = 0
         for reservation in instances["Reservations"]:
             total += len(reservation["Instances"])
-        if total > 0:
-            self.task = self.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        self.task = self.provider_instance.progress.add_task(
+            f"[cyan]Processing {self.__class__.__name__}...", total=total)
+        
         for reservation in instances["Reservations"]:
             for instance in reservation["Instances"]:
                 instance_id = instance["InstanceId"]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")
 
                 if self.is_managed_by_auto_scaling_group(instance_id):
-                    logger.debug(
+                    logger.info(
                         f"  Skipping EC2 Instance (managed by Auto Scaling group): {instance_id}")
                     continue
 
@@ -343,7 +329,7 @@ class EC2:
                 eks_tags = [tag for tag in instance.get(
                     "Tags", []) if tag["Key"].startswith("kubernetes.io/cluster/")]
                 if eks_tags:
-                    logger.debug(
+                    logger.info(
                         f"  Skipping EC2 Instance (managed by EKS): {instance_id}")
                     continue
 
@@ -355,7 +341,7 @@ class EC2:
 
                 ftstack = "ec2"
                 try:
-                    tags_response = self.aws_clients.ec2_client.describe_tags(
+                    tags_response = self.provider_instance.aws_clients.ec2_client.describe_tags(
                         Filters=[{'Name': 'resource-id',
                                   'Values': [instance_id]}]
                     )
@@ -378,7 +364,7 @@ class EC2:
                         f" RootDeviceName: instance['RootDeviceName']")
 
                     # Get the KMS key for the root device
-                    response = self.aws_clients.ec2_client.describe_volumes(Filters=[{
+                    response = self.provider_instance.aws_clients.ec2_client.describe_volumes(Filters=[{
                         'Name': 'attachment.instance-id',
                         'Values': [instance_id]
                     }])
@@ -424,7 +410,7 @@ class EC2:
                         self.hcl.additional_data[resource_type][id]["subnet_name"] = subnet_name
 
                 # Process all EIPs associated with the instance
-                eips_associated = self.aws_clients.ec2_client.describe_addresses(Filters=[{
+                eips_associated = self.provider_instance.aws_clients.ec2_client.describe_addresses(Filters=[{
                     'Name': 'instance-id',
                     'Values': [instance_id]
                 }])
@@ -440,7 +426,7 @@ class EC2:
                     self.aws_volume_attachment(instance_id, block_device)
 
                     # Get the KMS key for the volume
-                    response = self.aws_clients.ec2_client.describe_volumes(
+                    response = self.provider_instance.aws_clients.ec2_client.describe_volumes(
                         VolumeIds=[block_device["Ebs"]["VolumeId"]])
                     for volume in response['Volumes']:
                         if 'KmsKeyId' in volume:
@@ -475,7 +461,7 @@ class EC2:
             f"Processing IAM Instance Profile: {iam_instance_profile_id}")
 
         try:
-            response = self.aws_clients.iam_client.get_instance_profile(
+            response = self.provider_instance.aws_clients.iam_client.get_instance_profile(
                 InstanceProfileName=iam_instance_profile_id)
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchEntity':
@@ -496,7 +482,7 @@ class EC2:
         resource_type = "aws_ebs_volume"
         logger.debug(f"Processing EBS Volume: {volume_id}")
 
-        volume = self.aws_clients.ec2_client.describe_volumes(VolumeIds=[
+        volume = self.provider_instance.aws_clients.ec2_client.describe_volumes(VolumeIds=[
                                                               volume_id])
 
         if not volume["Volumes"]:
@@ -550,7 +536,7 @@ class EC2:
     def aws_network_interface(self, network_interface_id):
         logger.debug(f"Processing Network Interface: {network_interface_id}")
 
-        network_interface = self.aws_clients.ec2_client.describe_network_interfaces(
+        network_interface = self.provider_instance.aws_clients.ec2_client.describe_network_interfaces(
             NetworkInterfaceIds=[network_interface_id])
 
         if not network_interface["NetworkInterfaces"]:
@@ -606,7 +592,7 @@ class EC2:
     def aws_key_pair(self):
         logger.debug(f"Processing EC2 Key Pairs...")
 
-        key_pairs = self.aws_clients.ec2_client.describe_key_pairs(
+        key_pairs = self.provider_instance.aws_clients.ec2_client.describe_key_pairs(
             IncludePublicKey=True)["KeyPairs"]
         for key_pair in key_pairs:
             key_pair_name = key_pair["KeyName"]
@@ -624,7 +610,7 @@ class EC2:
     def aws_launch_template(self):
         logger.debug(f"Processing EC2 Launch Templates...")
 
-        launch_templates = self.aws_clients.ec2_client.describe_launch_templates()[
+        launch_templates = self.provider_instance.aws_clients.ec2_client.describe_launch_templates()[
             "LaunchTemplates"]
         for launch_template in launch_templates:
             launch_template_id = launch_template["LaunchTemplateId"]
@@ -643,7 +629,7 @@ class EC2:
     def aws_placement_group(self):
         logger.debug(f"Processing EC2 Placement Groups...")
 
-        placement_groups = self.aws_clients.ec2_client.describe_placement_groups()[
+        placement_groups = self.provider_instance.aws_clients.ec2_client.describe_placement_groups()[
             "PlacementGroups"]
         for placement_group in placement_groups:
             placement_group_name = placement_group["GroupName"]
@@ -661,7 +647,7 @@ class EC2:
         logger.debug(f"Processing EC2 Spot Datafeed Subscriptions...")
 
         try:
-            spot_datafeed_subscription = self.aws_clients.ec2_client.describe_spot_datafeed_subscription()
+            spot_datafeed_subscription = self.provider_instance.aws_clients.ec2_client.describe_spot_datafeed_subscription()
             subscription = spot_datafeed_subscription["SpotDatafeedSubscription"]
 
             bucket_id = subscription["Bucket"]
@@ -674,7 +660,7 @@ class EC2:
             }
             self.hcl.process_resource(
                 "aws_spot_datafeed_subscription", bucket_id.replace("-", "_"), attributes)
-        except self.aws_clients.ec2_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.ec2_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "InvalidSpotDatafeed.NotFound":
                 logger.debug(f"  No Spot Datafeed Subscriptions found")
             else:
@@ -683,7 +669,7 @@ class EC2:
     def aws_spot_fleet_request(self):
         logger.debug(f"Processing EC2 Spot Fleet Requests...")
 
-        spot_fleet_requests = self.aws_clients.ec2_client.describe_spot_fleet_requests()[
+        spot_fleet_requests = self.provider_instance.aws_clients.ec2_client.describe_spot_fleet_requests()[
             "SpotFleetRequestConfigs"]
         for spot_fleet_request in spot_fleet_requests:
             request_id = spot_fleet_request["SpotFleetRequestId"]
@@ -701,7 +687,7 @@ class EC2:
     def aws_spot_instance_request(self):
         logger.debug(f"Processing EC2 Spot Instance Requests...")
 
-        spot_instance_requests = self.aws_clients.ec2_client.describe_spot_instance_requests()[
+        spot_instance_requests = self.provider_instance.aws_clients.ec2_client.describe_spot_instance_requests()[
             "SpotInstanceRequests"]
         for spot_instance_request in spot_instance_requests:
             request_id = spot_instance_request["SpotInstanceRequestId"]

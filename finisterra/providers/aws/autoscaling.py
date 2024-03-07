@@ -10,42 +10,27 @@ logger = logging.getLogger('finisterra')
 
 
 class AutoScaling:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
 
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                     region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.launchtemplate_instance = LaunchTemplate(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(self.provider_instance, self.hcl)
 
     def autoscaling(self):
         self.hcl.prepare_folder()
@@ -53,24 +38,24 @@ class AutoScaling:
         self.aws_autoscaling_group()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_autoscaling_attachment(self):
         logger.debug(f"Processing AutoScaling Attachments...")
 
-        as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
+        as_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
 
         for as_group in as_groups:
@@ -92,11 +77,11 @@ class AutoScaling:
         resource_type = "aws_autoscaling_group"
         # logger.debug(f"Processing AutoScaling Groups...")
 
-        as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
+        as_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
 
         if len(as_groups) > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(as_groups))
 
         for as_group in as_groups:
@@ -114,7 +99,7 @@ class AutoScaling:
             if is_elasticbeanstalk or is_eks:
                 logger.debug(
                     f"  Skipping Elastic Beanstalk or EKS AutoScaling Group: {as_group_name}")
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{as_group_name}[/]")
                 continue
 
@@ -165,18 +150,18 @@ class AutoScaling:
 
             subnet_ids = as_group.get("VPCZoneIdentifier", "").split(",")
             if subnet_ids:
-                subnet_names = get_subnet_names(self.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, as_group_name, "subnet_names", subnet_names)
 
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{as_group_name}[/]")
 
     def aws_autoscaling_group_tag(self):
         logger.debug(f"Processing AutoScaling Group Tags...")
 
-        as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
+        as_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
 
         for as_group in as_groups:
@@ -201,12 +186,12 @@ class AutoScaling:
     def aws_autoscaling_lifecycle_hook(self):
         logger.debug(f"Processing AutoScaling Lifecycle Hooks...")
 
-        as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
+        as_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
 
         for as_group in as_groups:
             as_group_name = as_group["AutoScalingGroupName"]
-            hooks = self.aws_clients.autoscaling_client.describe_lifecycle_hooks(
+            hooks = self.provider_instance.aws_clients.autoscaling_client.describe_lifecycle_hooks(
                 AutoScalingGroupName=as_group_name)["LifecycleHooks"]
 
             for hook in hooks:
@@ -239,7 +224,7 @@ class AutoScaling:
     def aws_autoscaling_notification(self):
         logger.debug(f"Processing AutoScaling Notifications...")
 
-        as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
+        as_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
 
         notification_types = [
@@ -274,7 +259,7 @@ class AutoScaling:
                     "aws_autoscaling_notification", resource_name.replace("-", "_"), attributes)
 
     def get_sns_topic_arns_for_autoscaling_group(self, as_group_name):
-        response = self.aws_clients.autoscaling_client.describe_notification_configurations(
+        response = self.provider_instance.aws_clients.autoscaling_client.describe_notification_configurations(
             AutoScalingGroupNames=[as_group_name])
         sns_topic_arns = [config['TopicARN']
                           for config in response['NotificationConfigurations']]
@@ -286,7 +271,7 @@ class AutoScaling:
 
         # Retrieving policies for the specified AutoScaling group
         try:
-            response = self.aws_clients.autoscaling_client.describe_policies(
+            response = self.provider_instance.aws_clients.autoscaling_client.describe_policies(
                 AutoScalingGroupName=as_group_name)
         except Exception as e:
             logger.error(
@@ -335,12 +320,12 @@ class AutoScaling:
     def aws_autoscaling_schedule(self):
         logger.debug(f"Processing AutoScaling Schedules...")
 
-        as_groups = self.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
+        as_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()[
             "AutoScalingGroups"]
 
         for as_group in as_groups:
             as_group_name = as_group["AutoScalingGroupName"]
-            scheduled_actions = self.aws_clients.autoscaling_client.describe_scheduled_actions(
+            scheduled_actions = self.provider_instance.aws_clients.autoscaling_client.describe_scheduled_actions(
                 AutoScalingGroupName=as_group_name)["ScheduledUpdateGroupActions"]
 
             for action in scheduled_actions:
@@ -375,7 +360,7 @@ class AutoScaling:
         logger.debug(f"Processing Launch Configuration: {id}")
 
         try:
-            response = self.aws_clients.autoscaling_client.describe_launch_configurations(
+            response = self.provider_instance.aws_clients.autoscaling_client.describe_launch_configurations(
                 LaunchConfigurationNames=[id])
         except Exception as e:
             logger.error(
@@ -424,7 +409,7 @@ class AutoScaling:
 
         try:
             # Retrieve specific alarm
-            alarm = self.aws_clients.cloudwatch_client.describe_alarms(
+            alarm = self.provider_instance.aws_clients.cloudwatch_client.describe_alarms(
                 AlarmNames=[alarm_name])
         except Exception as e:
             logger.debug(

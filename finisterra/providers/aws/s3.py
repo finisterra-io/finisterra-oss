@@ -9,57 +9,43 @@ logger = logging.getLogger('finisterra')
 
 
 class S3:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.iam_role_instance = IAM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version,
-                                     schema_data, region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
 
     def s3(self):
         self.hcl.prepare_folder()
         self.aws_s3_bucket()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_s3_bucket(self, selected_s3_bucket=None, ftstack=None):
         resource_name = "aws_s3_bucket"
@@ -79,35 +65,35 @@ class S3:
                     raise e
             return
 
-        response = self.aws_clients.s3_client.list_buckets()
+        response = self.provider_instance.aws_clients.s3_client.list_buckets()
         all_buckets = response["Buckets"]
         while response.get('NextContinuationToken'):
-            response = self.aws_clients.s3_client.list_buckets(
+            response = self.provider_instance.aws_clients.s3_client.list_buckets(
                 ContinuationToken=response['NextContinuationToken']
             )
             all_buckets.extend(response["Buckets"])
 
         if len(all_buckets) > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets))
         for bucket in all_buckets:
             bucket_name = bucket["Name"]
-            self.progress.update(
+            self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{bucket_name}[/]")
 
             try:
-                bucket_location_response = self.aws_clients.s3_client.get_bucket_location(
+                bucket_location_response = self.provider_instance.aws_clients.s3_client.get_bucket_location(
                     Bucket=bucket_name)
                 bucket_region = bucket_location_response['LocationConstraint']
                 if bucket_region is None:
                     bucket_region = 'us-east-1'
 
-                if bucket_region == self.region:
+                if bucket_region == self.provider_instance.region:
                     self.process_single_s3_bucket(bucket_name, ftstack)
             except ClientError as e:
                 # logger.error(f"  Access Denied: {e.response['Error']['Message']}")
                 pass
-        # self.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Collected[/]")
+        # self.provider_instance.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Collected[/]")
 
     def process_single_s3_bucket(self, bucket_name, ftstack=None):
         logger.debug(f"Processing S3 Bucket: {bucket_name}")
@@ -117,7 +103,7 @@ class S3:
         #     return
 
         # Retrieve the region of the bucket
-        bucket_location_response = self.aws_clients.s3_client.get_bucket_location(
+        bucket_location_response = self.provider_instance.aws_clients.s3_client.get_bucket_location(
             Bucket=bucket_name)
         bucket_region = bucket_location_response['LocationConstraint']
 
@@ -125,8 +111,8 @@ class S3:
         if bucket_region is None:
             bucket_region = 'us-east-1'
 
-        # Skip processing if the bucket's region does not match self.region
-        if bucket_region != self.region:
+        # Skip processing if the bucket's region does not match self.provider_instance.region
+        if bucket_region != self.provider_instance.region:
             logger.debug(
                 f"  Skipping S3 Bucket (different region): {bucket_name}")
             return
@@ -135,7 +121,7 @@ class S3:
         if not ftstack:
             ftstack = "s3"
             try:
-                response = self.aws_clients.s3_client.get_bucket_tagging(
+                response = self.provider_instance.aws_clients.s3_client.get_bucket_tagging(
                     Bucket=bucket_name)
                 tags = response.get('TagSet', {})
                 for tag in tags:
@@ -160,7 +146,7 @@ class S3:
         self.hcl.add_stack(resource_type, id, ftstack)
 
         # Add calls to various aws_s3_bucket_* functions
-        if "gov" not in self.region:
+        if "gov" not in self.provider_instance.region:
             self.aws_s3_bucket_accelerate_configuration(bucket_name)
             self.aws_s3_bucket_intelligent_tiering_configuration(bucket_name)
 
@@ -186,7 +172,7 @@ class S3:
         logger.debug(f"Processing S3 Bucket Accelerate Configurations...")
 
         try:
-            accelerate_config = self.aws_clients.s3_client.get_bucket_accelerate_configuration(
+            accelerate_config = self.provider_instance.aws_clients.s3_client.get_bucket_accelerate_configuration(
                 Bucket=bucket_name)
             status = accelerate_config.get("Status", None)
             if status:
@@ -204,7 +190,7 @@ class S3:
             else:
                 logger.debug(
                     f"  No Accelerate Configuration found for S3 Bucket: {bucket_name}")
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchAccelerateConfiguration":
                 logger.debug(
                     f"  No Accelerate Configuration found for S3 Bucket: {bucket_name}")
@@ -215,12 +201,12 @@ class S3:
         logger.debug(f"Processing S3 Bucket ACLs...")
 
         # Get the Canonical User ID of your AWS account
-        account_canonical_id = self.aws_clients.s3_client.list_buckets()[
+        account_canonical_id = self.provider_instance.aws_clients.s3_client.list_buckets()[
             'Owner']['ID']
 
         # Try to get the object ownership control of the bucket
         try:
-            ownership_controls = self.aws_clients.s3_client.get_bucket_ownership_controls(
+            ownership_controls = self.provider_instance.aws_clients.s3_client.get_bucket_ownership_controls(
                 Bucket=bucket_name)
             object_ownership = ownership_controls['OwnershipControls']['Rules'][0]['ObjectOwnership']
         except ClientError as e:
@@ -233,7 +219,7 @@ class S3:
                 # If some other error occurred, re-raise the exception
                 raise
 
-        acl = self.aws_clients.s3_client.get_bucket_acl(Bucket=bucket_name)
+        acl = self.provider_instance.aws_clients.s3_client.get_bucket_acl(Bucket=bucket_name)
 
         # Check if the bucket's owner is someone external
         bucket_owner_canonical_id = acl['Owner']['ID']
@@ -254,7 +240,7 @@ class S3:
     def aws_s3_bucket_analytics_configuration(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Analytics Configurations...")
 
-        analytics_configs = self.aws_clients.s3_client.list_bucket_analytics_configurations(
+        analytics_configs = self.provider_instance.aws_clients.s3_client.list_bucket_analytics_configurations(
             Bucket=bucket_name)
 
         if "AnalyticsConfigurationList" not in analytics_configs:
@@ -282,7 +268,7 @@ class S3:
         logger.debug(f"Processing S3 Bucket CORS Configurations...")
 
         try:
-            cors = self.aws_clients.s3_client.get_bucket_cors(
+            cors = self.provider_instance.aws_clients.s3_client.get_bucket_cors(
                 Bucket=bucket_name)
             logger.debug(
                 f"Processing S3 Bucket CORS Configuration: {bucket_name}")
@@ -294,7 +280,7 @@ class S3:
             }
             self.hcl.process_resource(
                 "aws_s3_bucket_cors_configuration", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchCORSConfiguration":
                 logger.debug(
                     f"  No CORS Configuration for bucket: {bucket_name}")
@@ -305,7 +291,7 @@ class S3:
         logger.debug(
             f"Processing S3 Bucket Intelligent Tiering Configurations...")
 
-        intelligent_tiering_configs = self.aws_clients.s3_client.list_bucket_intelligent_tiering_configurations(
+        intelligent_tiering_configs = self.provider_instance.aws_clients.s3_client.list_bucket_intelligent_tiering_configurations(
             Bucket=bucket_name)
 
         if "IntelligentTieringConfigurationList" not in intelligent_tiering_configs:
@@ -330,7 +316,7 @@ class S3:
     def aws_s3_bucket_inventory(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Inventories...")
 
-        inventory_configs = self.aws_clients.s3_client.list_bucket_inventory_configurations(
+        inventory_configs = self.provider_instance.aws_clients.s3_client.list_bucket_inventory_configurations(
             Bucket=bucket_name)
 
         if "InventoryConfigurationList" not in inventory_configs:
@@ -357,7 +343,7 @@ class S3:
     def aws_s3_bucket_lifecycle_configuration(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Lifecycle Configurations...")
         try:
-            lifecycle = self.aws_clients.s3_client.get_bucket_lifecycle_configuration(
+            lifecycle = self.provider_instance.aws_clients.s3_client.get_bucket_lifecycle_configuration(
                 Bucket=bucket_name)
             logger.debug(
                 f"Processing S3 Bucket Lifecycle Configuration: {bucket_name}")
@@ -377,7 +363,7 @@ class S3:
 
     def aws_s3_bucket_logging(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Logging...")
-        logging = self.aws_clients.s3_client.get_bucket_logging(
+        logging = self.provider_instance.aws_clients.s3_client.get_bucket_logging(
             Bucket=bucket_name)
         if "LoggingEnabled" in logging:
             target_bucket = logging["LoggingEnabled"]["TargetBucket"]
@@ -394,7 +380,7 @@ class S3:
 
     def aws_s3_bucket_metric(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Metrics...")
-        metrics = self.aws_clients.s3_client.list_bucket_metrics_configurations(
+        metrics = self.provider_instance.aws_clients.s3_client.list_bucket_metrics_configurations(
             Bucket=bucket_name)
         if "MetricsConfigurationList" not in metrics:
             return
@@ -413,7 +399,7 @@ class S3:
 
     def aws_s3_bucket_notification(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Notifications...")
-        notifications = self.aws_clients.s3_client.get_bucket_notification_configuration(
+        notifications = self.provider_instance.aws_clients.s3_client.get_bucket_notification_configuration(
             Bucket=bucket_name)
         for event in notifications.keys():
             if event != "ResponseMetadata":
@@ -429,7 +415,7 @@ class S3:
 
     def aws_s3_bucket_object(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Objects...")
-        objects = self.aws_clients.s3_client.list_objects(Bucket=bucket_name)
+        objects = self.provider_instance.aws_clients.s3_client.list_objects(Bucket=bucket_name)
         for obj in objects.get("Contents", []):
             key = obj["Key"]
             logger.debug(
@@ -445,7 +431,7 @@ class S3:
     def aws_s3_bucket_object_lock_configuration(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Object Lock Configurations...")
         try:
-            object_lock_configuration = self.aws_clients.s3_client.get_object_lock_configuration(
+            object_lock_configuration = self.provider_instance.aws_clients.s3_client.get_object_lock_configuration(
                 Bucket=bucket_name)
             config = object_lock_configuration.get(
                 "ObjectLockConfiguration", {})
@@ -459,7 +445,7 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_object_lock_configuration", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "ObjectLockConfigurationNotFoundError":
                 raise
             else:
@@ -469,7 +455,7 @@ class S3:
     def aws_s3_bucket_ownership_controls(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Ownership Controls...")
         try:
-            ownership_controls = self.aws_clients.s3_client.get_bucket_ownership_controls(
+            ownership_controls = self.provider_instance.aws_clients.s3_client.get_bucket_ownership_controls(
                 Bucket=bucket_name)
             controls = ownership_controls.get("OwnershipControls", {})
             if controls:
@@ -482,7 +468,7 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_ownership_controls", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "OwnershipControlsNotFoundError":
                 raise
             else:
@@ -492,7 +478,7 @@ class S3:
     def aws_s3_bucket_policy(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Policies...")
         try:
-            bucket_policy = self.aws_clients.s3_client.get_bucket_policy(
+            bucket_policy = self.provider_instance.aws_clients.s3_client.get_bucket_policy(
                 Bucket=bucket_name)
             policy = bucket_policy.get("Policy")
             if policy:
@@ -504,14 +490,14 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_policy", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "NoSuchBucketPolicy":
                 raise
 
     def aws_s3_bucket_public_access_block(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Public Access Blocks...")
         try:
-            public_access_block = self.aws_clients.s3_client.get_public_access_block(
+            public_access_block = self.provider_instance.aws_clients.s3_client.get_public_access_block(
                 Bucket=bucket_name)
             block_config = public_access_block.get(
                 "PublicAccessBlockConfiguration", {})
@@ -528,7 +514,7 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_public_access_block", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "NoSuchPublicAccessBlockConfiguration":
                 raise
 
@@ -537,7 +523,7 @@ class S3:
         try:
             if not ftstack:
                 ftstack = 's3'
-            replication_configuration = self.aws_clients.s3_client.get_bucket_replication(
+            replication_configuration = self.provider_instance.aws_clients.s3_client.get_bucket_replication(
                 Bucket=bucket_name)
             config = replication_configuration.get(
                 "ReplicationConfiguration")
@@ -557,14 +543,14 @@ class S3:
                     role_name = role.split("/")[-1]
                     self.iam_role_instance.aws_iam_role(role_name, ftstack)
 
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "ReplicationConfigurationNotFoundError":
                 raise
 
     def aws_s3_bucket_request_payment_configuration(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Request Payment Configurations...")
         try:
-            request_payment_configuration = self.aws_clients.s3_client.get_bucket_request_payment(
+            request_payment_configuration = self.provider_instance.aws_clients.s3_client.get_bucket_request_payment(
                 Bucket=bucket_name)
             config = request_payment_configuration.get("Payer")
             if config:
@@ -577,7 +563,7 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_request_payment_configuration", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "NoSuchRequestPaymentConfiguration":
                 raise
 
@@ -585,7 +571,7 @@ class S3:
         logger.debug(
             f"Processing S3 Bucket Server Side Encryption Configurations...")
         try:
-            encryption_configuration = self.aws_clients.s3_client.get_bucket_encryption(
+            encryption_configuration = self.provider_instance.aws_clients.s3_client.get_bucket_encryption(
                 Bucket=bucket_name)
             config = encryption_configuration.get(
                 "ServerSideEncryptionConfiguration")
@@ -599,7 +585,7 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_server_side_encryption_configuration", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "ServerSideEncryptionConfigurationNotFoundError":
                 raise
 
@@ -607,7 +593,7 @@ class S3:
         logger.debug(f"Processing S3 Bucket Versioning Configurations...")
 
         try:
-            versioning_configuration = self.aws_clients.s3_client.get_bucket_versioning(
+            versioning_configuration = self.provider_instance.aws_clients.s3_client.get_bucket_versioning(
                 Bucket=bucket_name)
             config = versioning_configuration.get("Status")
 
@@ -622,7 +608,7 @@ class S3:
                 }
                 self.hcl.process_resource(
                     "aws_s3_bucket_versioning", bucket_name, attributes)
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "NoSuchVersioningConfiguration":
                 raise
 
@@ -630,7 +616,7 @@ class S3:
         logger.debug(f"Processing S3 Bucket Website Configurations...")
 
         try:
-            website_config = self.aws_clients.s3_client.get_bucket_website(
+            website_config = self.provider_instance.aws_clients.s3_client.get_bucket_website(
                 Bucket=bucket_name)
             logger.debug(
                 f"Processing S3 Bucket Website Configuration: {bucket_name}")
@@ -641,7 +627,7 @@ class S3:
             self.hcl.process_resource(
                 "aws_s3_bucket_website_configuration", bucket_name, attributes)
 
-        except self.aws_clients.s3_client.exceptions.ClientError as e:
+        except self.provider_instance.aws_clients.s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchWebsiteConfiguration":
                 pass
                 logger.debug(

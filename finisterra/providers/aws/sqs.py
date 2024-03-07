@@ -7,35 +7,22 @@ logger = logging.getLogger('finisterra')
 
 
 class SQS:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
     def sqs(self):
         self.hcl.prepare_folder()
@@ -43,36 +30,36 @@ class SQS:
         self.aws_sqs_queue()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_sqs_queue(self):
         resource_type = "aws_sqs_queue"
         logger.debug("Processing SQS Queues...")
 
-        paginator = self.aws_clients.sqs_client.get_paginator("list_queues")
+        paginator = self.provider_instance.aws_clients.sqs_client.get_paginator("list_queues")
         total = 0
         for page in paginator.paginate():
             total += len(page.get("QueueUrls", []))
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for queue_url in page.get("QueueUrls", []):
                 queue_name = queue_url.split("/")[-1]
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{queue_name}[/]")
 
                 # if queue_name != 'xxxxx':
@@ -83,7 +70,7 @@ class SQS:
 
                 fstack = "sqs"
                 try:
-                    tags_response = self.aws_clients.sqs_client.list_queue_tags(
+                    tags_response = self.provider_instance.aws_clients.sqs_client.list_queue_tags(
                         QueueUrl=queue_url)
                     tags = tags_response.get('Tags', {})
                     if tags.get('ftstack', 'sqs') != 'sqs':
@@ -102,7 +89,7 @@ class SQS:
                 self.aws_sqs_queue_policy(queue_url)
 
                 # Get the redrive policy for the queue
-                response = self.aws_clients.sqs_client.get_queue_attributes(
+                response = self.provider_instance.aws_clients.sqs_client.get_queue_attributes(
                     QueueUrl=queue_url,
                     AttributeNames=['RedrivePolicy']
                 )
@@ -116,7 +103,7 @@ class SQS:
                         deadLetterTargetArn = redrive_policy['deadLetterTargetArn'].split(
                             ":")[-1]
                         try:
-                            dlq_url = self.aws_clients.sqs_client.get_queue_url(
+                            dlq_url = self.provider_instance.aws_clients.sqs_client.get_queue_url(
                                 QueueName=redrive_policy['deadLetterTargetArn'].split(":")[-1])
                             self.hcl.add_additional_data(
                                 resource_type, dlq_url['QueueUrl'], "parent_url", queue_url)
@@ -135,7 +122,7 @@ class SQS:
         logger.debug("Processing SQS Queue Policies...")
 
         queue_name = queue_url.split("/")[-1]
-        response = self.aws_clients.sqs_client.get_queue_attributes(
+        response = self.provider_instance.aws_clients.sqs_client.get_queue_attributes(
             QueueUrl=queue_url, AttributeNames=["Policy"])
 
         if "Attributes" in response and "Policy" in response["Attributes"]:
@@ -156,7 +143,7 @@ class SQS:
         logger.debug("Processing SQS Queue Redrive Policies...")
 
         queue_name = queue_url.split("/")[-1]
-        response = self.aws_clients.sqs_client.get_queue_attributes(
+        response = self.provider_instance.aws_clients.sqs_client.get_queue_attributes(
             QueueUrl=queue_url,
             AttributeNames=['RedrivePolicy']
         )
@@ -181,7 +168,7 @@ class SQS:
         logger.debug("Processing SQS Queue Redrive Allow Policies...")
 
         queue_name = queue_url.split("/")[-1]
-        response = self.aws_clients.sqs_client.get_queue_attributes(
+        response = self.provider_instance.aws_clients.sqs_client.get_queue_attributes(
             QueueUrl=queue_url,
             # AttributeNames=['RedriveAllowPolicy']
         )

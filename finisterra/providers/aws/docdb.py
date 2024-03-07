@@ -9,43 +9,28 @@ logger = logging.getLogger('finisterra')
 
 
 class DocDb:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.kms_instance = KMS(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.kms_instance = KMS(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -67,25 +52,25 @@ class DocDb:
         self.aws_docdb_cluster()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_docdb_cluster(self):
         resource_type = "aws_docdb_cluster"
         # logger.debug(f"Processing DocumentDB Clusters...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_db_clusters")
         total = 0
         for page in paginator.paginate():
@@ -94,7 +79,7 @@ class DocDb:
                     total += 1
 
         if total > 0:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
         for page in paginator.paginate():
@@ -104,12 +89,12 @@ class DocDb:
                         f"Processing DocumentDB Cluster: {db_cluster['DBClusterIdentifier']}")
 
                     id = db_cluster["DBClusterIdentifier"]
-                    self.progress.update(
+                    self.provider_instance.progress.update(
                         self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{id}[/]")
 
                     ftstack = "docdb"
                     try:
-                        response = self.aws_clients.docdb_client.list_tags_for_resource(
+                        response = self.provider_instance.aws_clients.docdb_client.list_tags_for_resource(
                             ResourceName=db_cluster["DBClusterArn"])
                         tags = response.get('TagList', [])
                         for tag in tags:
@@ -146,7 +131,7 @@ class DocDb:
     def aws_docdb_cluster_instance(self, db_cluster):
         logger.debug(f"Processing DocumentDB Cluster Instances...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_db_instances")
         for page in paginator.paginate():
             for db_instance in page["DBInstances"]:
@@ -183,7 +168,7 @@ class DocDb:
     def aws_docdb_cluster_parameter_group(self, parameter_group_name):
         logger.debug(f"Processing DocumentDB Cluster Parameter Groups...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_db_cluster_parameter_groups")
         for page in paginator.paginate():
             for parameter_group in page["DBClusterParameterGroups"]:
@@ -206,7 +191,7 @@ class DocDb:
         resource_type = "aws_docdb_subnet_group"
         logger.debug(f"Processing DocumentDB Subnet Groups...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_db_subnet_groups")
         for page in paginator.paginate():
             for subnet_group in page["DBSubnetGroups"]:
@@ -231,7 +216,7 @@ class DocDb:
                             resource_type, subnet_group["DBSubnetGroupName"].replace("-", "_"), attributes)
 
                         subnet_names = get_subnet_names(
-                            self.aws_clients, subnet_ids)
+                            self.provider_instance.aws_clients, subnet_ids)
                         if subnet_names:
                             if resource_type not in self.hcl.additional_data:
                                 self.hcl.additional_data[resource_type] = {}
@@ -261,7 +246,7 @@ class DocDb:
     def aws_docdb_cluster_snapshot(self):
         logger.debug(f"Processing DocumentDB Cluster Snapshots...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_db_cluster_snapshots")
         for page in paginator.paginate():
             for snapshot in page["DBClusterSnapshots"]:
@@ -286,7 +271,7 @@ class DocDb:
     def aws_docdb_event_subscription(self):
         logger.debug(f"Processing DocumentDB Event Subscriptions...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_event_subscriptions")
         for page in paginator.paginate():
             for subscription in page["EventSubscriptionsList"]:
@@ -307,7 +292,7 @@ class DocDb:
     def aws_docdb_global_cluster(self):
         logger.debug(f"Processing DocumentDB Global Clusters...")
 
-        paginator = self.aws_clients.docdb_client.get_paginator(
+        paginator = self.provider_instance.aws_clients.docdb_client.get_paginator(
             "describe_db_clusters")
         for page in paginator.paginate():
             for cluster in page["DBClusters"]:

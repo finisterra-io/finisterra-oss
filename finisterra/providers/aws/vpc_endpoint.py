@@ -8,41 +8,27 @@ logger = logging.getLogger('finisterra')
 
 
 class VPCEndPoint:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -64,19 +50,19 @@ class VPCEndPoint:
         self.aws_vpc_endpoint()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_vpc_endpoint(self, vpce_id=None, ftstack=None):
         resource_type = "aws_vpc_endpoint"
@@ -88,14 +74,14 @@ class VPCEndPoint:
                         f"  Skipping VPC Endpoint: {vpce_id} - already processed")
                     return
             if vpce_id is None:
-                endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+                endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints()[
                     "VpcEndpoints"]
             else:
-                endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints(
+                endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints(
                     VpcEndpointIds=[vpce_id])["VpcEndpoints"]
 
             if len(endpoints) > 0 and not vpce_id:
-                self.task = self.progress.add_task(
+                self.task = self.provider_instance.progress.add_task(
                     f"[cyan]Processing {self.__class__.__name__}...", total=len(endpoints))
             for endpoint in endpoints:
                 endpoint_id = endpoint["VpcEndpointId"]
@@ -139,13 +125,13 @@ class VPCEndPoint:
                 subnet_ids = endpoint.get("SubnetIds", [])
                 if subnet_ids:
                     subnet_names = get_subnet_names(
-                        self.aws_clients, subnet_ids)
+                        self.provider_instance.aws_clients, subnet_ids)
                     if subnet_names:
                         self.hcl.add_additional_data(
                             resource_type, endpoint_id, "subnet_names", subnet_names)
 
                 if not vpce_id:
-                    self.progress.update(
+                    self.provider_instance.progress.update(
                         self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{endpoint_id}[/]")
 
             if not endpoints:
@@ -158,7 +144,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_connection_accepter(self):
         logger.debug("Processing VPC Endpoint Connection Accepters...")
-        vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+        vpc_endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
         for endpoint in vpc_endpoints:
@@ -181,7 +167,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_connection_notification(self):
         logger.debug("Processing VPC Endpoint Connection Notifications...")
-        connection_notifications = self.aws_clients.ec2_client.describe_vpc_endpoint_connection_notifications()[
+        connection_notifications = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoint_connection_notifications()[
             "ConnectionNotificationSet"]
 
         for notification in connection_notifications:
@@ -205,7 +191,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_policy(self):
         logger.debug("Processing VPC Endpoint Policies...")
-        vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+        vpc_endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
         for endpoint in vpc_endpoints:
@@ -226,7 +212,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_route_table_association(self):
         logger.debug("Processing VPC Endpoint Route Table Associations...")
-        vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+        vpc_endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
         for endpoint in vpc_endpoints:
@@ -248,7 +234,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_security_group_association(self):
         logger.debug("Processing VPC Endpoint Security Group Associations...")
-        vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+        vpc_endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
         for endpoint in vpc_endpoints:
@@ -271,7 +257,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_service(self):
         logger.debug("Processing VPC Endpoint Services...")
-        vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_services()[
+        vpc_endpoint_services = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoint_services()[
             "ServiceDetails"]
 
         for service in vpc_endpoint_services:
@@ -298,7 +284,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_service_allowed_principal(self):
         logger.debug("Processing VPC Endpoint Service Allowed Principals...")
-        vpc_endpoint_services = self.aws_clients.ec2_client.describe_vpc_endpoint_service_configurations()[
+        vpc_endpoint_services = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoint_service_configurations()[
             "ServiceConfigurations"]
 
         for service in vpc_endpoint_services:
@@ -320,7 +306,7 @@ class VPCEndPoint:
 
     def aws_vpc_endpoint_subnet_association(self):
         logger.debug("Processing VPC Endpoint Subnet Associations...")
-        vpc_endpoints = self.aws_clients.ec2_client.describe_vpc_endpoints()[
+        vpc_endpoints = self.provider_instance.aws_clients.ec2_client.describe_vpc_endpoints()[
             "VpcEndpoints"]
 
         for endpoint in vpc_endpoints:

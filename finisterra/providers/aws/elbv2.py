@@ -11,49 +11,32 @@ logger = logging.getLogger('finisterra')
 
 
 class ELBV2:
-    def __init__(self, progress, aws_clients, script_dir, provider_name, provider_name_short,
-                 provider_source, provider_version, schema_data, region, s3Bucket,
-                 dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, hcl=None):
-        self.progress = progress
-
-        self.aws_clients = aws_clients
-        self.transform_rules = {}
-        self.provider_name = provider_name
-        self.script_dir = script_dir
-        self.schema_data = schema_data
-        self.region = region
-        self.aws_account_id = aws_account_id
-
-        self.workspace_id = workspace_id
-        self.modules = modules
+    def __init__(self, provider_instance, hcl=None):
+        self.provider_instance=provider_instance
         if not hcl:
-            self.hcl = HCL(self.schema_data)
+            self.hcl = HCL(self.provider_instance.schema_data)
         else:
             self.hcl = hcl
 
-        self.hcl.region = region
-        self.hcl.output_dir = output_dir
-        self.hcl.account_id = aws_account_id
+        self.hcl.region = self.provider_instance.region
+        self.hcl.output_dir = self.provider_instance.output_dir
+        self.hcl.account_id = self.provider_instance.aws_account_id
 
-        self.hcl.provider_name = provider_name
-        self.hcl.provider_name_short = provider_name_short
-        self.hcl.provider_source = provider_source
-        self.hcl.provider_version = provider_version
-        self.hcl.account_name = account_name
+        self.hcl.provider_name = self.provider_instance.provider_name
+        self.hcl.provider_name_short = self.provider_instance.provider_name_short
+        self.hcl.provider_source = self.provider_instance.provider_source
+        self.hcl.provider_version = self.provider_instance.provider_version
+        self.hcl.account_name = self.provider_instance.account_name
 
         self.listeners = {}
 
-        self.security_group_instance = SECURITY_GROUP(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                      region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.acm_instance = ACM(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                                s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.s3_instance = S3(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data, region,
-                              s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
-        self.target_group_instance = TargetGroup(self.progress,  self.aws_clients, script_dir, provider_name, provider_name_short, provider_source, provider_version, schema_data,
-                                                 region, s3Bucket, dynamoDBTable, state_key, workspace_id, modules, aws_account_id, output_dir, account_name, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.acm_instance = ACM(self.provider_instance, self.hcl)
+        self.s3_instance = S3(self.provider_instance, self.hcl)
+        self.target_group_instance = TargetGroup(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -75,19 +58,19 @@ class ELBV2:
         self.aws_lb()
         self.hcl.module = inspect.currentframe().f_code.co_name
         if self.hcl.count_state():
-            self.progress.update(
-                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.progress.tasks[self.task].total+1)
+            self.provider_instance.progress.update(
+                self.task, description=f"[cyan]{self.__class__.__name__} [bold]Refreshing state[/]", total=self.provider_instance.progress.tasks[self.task].total+1)
             self.hcl.refresh_state()
             if self.hcl.request_tf_code():
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Code Generated[/]")
             else:
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[orange3]{self.__class__.__name__} [bold]No code generated[/]")
         else:
-            self.task = self.progress.add_task(
+            self.task = self.provider_instance.progress.add_task(
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
-            self.progress.update(self.task, advance=1)
+            self.provider_instance.progress.update(self.task, advance=1)
 
     def aws_lb(self, selected_lb_arn=None, ftstack=None):
         resource_type = "aws_lb"
@@ -100,10 +83,10 @@ class ELBV2:
                 return
 
         if selected_lb_arn:
-            load_balancers = self.aws_clients.elbv2_client.describe_load_balancers(LoadBalancerArns=[selected_lb_arn])[
+            load_balancers = self.provider_instance.aws_clients.elbv2_client.describe_load_balancers(LoadBalancerArns=[selected_lb_arn])[
                 "LoadBalancers"]
         else:
-            load_balancers = self.aws_clients.elbv2_client.describe_load_balancers()[
+            load_balancers = self.provider_instance.aws_clients.elbv2_client.describe_load_balancers()[
                 "LoadBalancers"]
 
         self.task = None
@@ -114,7 +97,7 @@ class ELBV2:
             lb_name = lb["LoadBalancerName"]
 
             # Check tags of the load balancer
-            tags_response = self.aws_clients.elbv2_client.describe_tags(ResourceArns=[
+            tags_response = self.provider_instance.aws_clients.elbv2_client.describe_tags(ResourceArns=[
                                                                         lb_arn])
             tags = tags_response["TagDescriptions"][0]["Tags"]
 
@@ -138,7 +121,7 @@ class ELBV2:
             lb_name = lb["LoadBalancerName"]
 
             # Check tags of the load balancer
-            tags_response = self.aws_clients.elbv2_client.describe_tags(ResourceArns=[
+            tags_response = self.provider_instance.aws_clients.elbv2_client.describe_tags(ResourceArns=[
                                                                         lb_arn])
             tags = tags_response["TagDescriptions"][0]["Tags"]
 
@@ -160,10 +143,10 @@ class ELBV2:
 
             if not selected_lb_arn:
                 if not self.task:
-                    self.task = self.progress.add_task(
+                    self.task = self.provider_instance.progress.add_task(
                         f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
-                self.progress.update(
+                self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{lb['LoadBalancerName']}[/]")
 
             if not ftstack:
@@ -185,7 +168,7 @@ class ELBV2:
 
             AvailabilityZones = lb.get("AvailabilityZones", [])
             if AvailabilityZones:
-                subnets = get_subnet_names(self.aws_clients,
+                subnets = get_subnet_names(self.provider_instance.aws_clients,
                                            [az["SubnetId"] for az in AvailabilityZones])
                 if subnets:
                     if resource_type not in self.hcl.additional_data:
@@ -214,7 +197,7 @@ class ELBV2:
             for sg in security_group_ids:
                 self.security_group_instance.aws_security_group(sg, ftstack)
 
-            access_logs = self.aws_clients.elbv2_client.describe_load_balancer_attributes(
+            access_logs = self.provider_instance.aws_clients.elbv2_client.describe_load_balancer_attributes(
                 LoadBalancerArn=lb_arn
             )['Attributes']
 
@@ -233,7 +216,7 @@ class ELBV2:
         logger.debug("Processing Load Balancer Listeners...")
 
         for lb_arn in load_balancer_arns:
-            paginator = self.aws_clients.elbv2_client.get_paginator(
+            paginator = self.provider_instance.aws_clients.elbv2_client.get_paginator(
                 "describe_listeners")
             for page in paginator.paginate(LoadBalancerArn=lb_arn):
                 for listener in page["Listeners"]:
@@ -264,7 +247,7 @@ class ELBV2:
         logger.debug("Processing Load Balancer Listener Certificates...")
 
         for listener_arn in listener_arns:
-            listener_certificates = self.aws_clients.elbv2_client.describe_listener_certificates(
+            listener_certificates = self.provider_instance.aws_clients.elbv2_client.describe_listener_certificates(
                 ListenerArn=listener_arn)
 
             if "Certificates" in listener_certificates:
