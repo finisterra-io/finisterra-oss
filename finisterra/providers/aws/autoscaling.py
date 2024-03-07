@@ -11,7 +11,7 @@ logger = logging.getLogger('finisterra')
 
 class AutoScaling:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -28,9 +28,11 @@ class AutoScaling:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
-        self.launchtemplate_instance = LaunchTemplate(self.provider_instance, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(
+            self.provider_instance, self.hcl)
 
     def autoscaling(self):
         self.hcl.prepare_folder()
@@ -150,7 +152,8 @@ class AutoScaling:
 
             subnet_ids = as_group.get("VPCZoneIdentifier", "").split(",")
             if subnet_ids:
-                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(
+                    self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, as_group_name, "subnet_names", subnet_names)
@@ -399,7 +402,7 @@ class AutoScaling:
             self.hcl.add_additional_data(
                 "aws_launch_configuration", lc_name, "user_data", attributes["user_data"])
 
-            self.user_data[lc_name] = attributes["user_data"]
+            # self.user_data[lc_name] = attributes["user_data"]
 
         self.hcl.process_resource(
             "aws_launch_configuration", lc_name.replace("-", "_"), attributes)

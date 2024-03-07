@@ -8,7 +8,7 @@ logger = logging.getLogger('finisterra')
 
 class SQS:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -48,7 +48,8 @@ class SQS:
         resource_type = "aws_sqs_queue"
         logger.debug("Processing SQS Queues...")
 
-        paginator = self.provider_instance.aws_clients.sqs_client.get_paginator("list_queues")
+        paginator = self.provider_instance.aws_clients.sqs_client.get_paginator(
+            "list_queues")
         total = 0
         for page in paginator.paginate():
             total += len(page.get("QueueUrls", []))
@@ -109,7 +110,6 @@ class SQS:
                                 resource_type, dlq_url['QueueUrl'], "parent_url", queue_url)
                             self.hcl.add_additional_data(
                                 resource_type, dlq_url['QueueUrl'], "is_dlq", True)
-                            self.dlq_list[dlq_url['QueueUrl']] = queue_url
                         except Exception as e:
                             logger.error("Error occurred: ", e)
                             continue

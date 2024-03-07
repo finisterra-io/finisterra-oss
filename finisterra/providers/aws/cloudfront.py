@@ -16,7 +16,7 @@ def cors_config_transform(value):
 
 class CloudFront:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -89,172 +89,186 @@ class CloudFront:
 
         paginator = self.provider_instance.aws_clients.cloudfront_client.get_paginator(
             "list_distributions")
-        total = 0
-        for page in paginator.paginate():
-            distribution_list = page.get("DistributionList")
-            if not distribution_list:
-                continue
-            total += len(distribution_list.get("Items", []))
 
+        # Fetch all distributions first
+        all_distributions = []
+        for page in paginator.paginate():
+            distribution_list = page.get("DistributionList", {})
+            items = distribution_list.get("Items", [])
+            all_distributions.extend(items)
+
+        # If filters are specified, proceed to fetch tags for each distribution and filter
+        if self.provider_instance.filters:
+            filtered_distributions = []
+            for dist in all_distributions:
+                distribution_id = dist['Id']
+                tags_response = self.provider_instance.aws_clients.cloudfront_client.list_tags_for_resource(
+                    Resource=f'arn:aws:cloudfront::{self.provider_instance.aws_account_id}:distribution/{distribution_id}')
+                tags = {tag['Key']: tag['Value']
+                        for tag in tags_response['Tags']['Items']}
+
+                # Check if distribution matches all filter conditions
+                match_all_conditions = all(
+                    any(tags.get(f['Name'].replace('tag:', ''),
+                        '') == value for value in f['Values'])
+                    for f in self.provider_instance.filters
+                )
+
+                if match_all_conditions:
+                    filtered_distributions.append(dist)
+            distributions_to_process = filtered_distributions
+        else:
+            distributions_to_process = all_distributions
+
+        total = len(distributions_to_process)
         if total > 0:
             self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        for page in paginator.paginate():
-            distribution_list = page.get("DistributionList")
-            if not distribution_list:
-                logger.debug(f"No DistributionList in page")
-                continue
 
-            items = distribution_list.get("Items")
-            if not items:
-                logger.debug(f"No Items in DistributionList")
-                continue
+        for distribution_summary in distributions_to_process:
+            distribution_id = distribution_summary["Id"]
+            self.provider_instance.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{distribution_id}[/]")
 
-            for distribution_summary in items:
-                distribution_id = distribution_summary["Id"]
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{distribution_id}[/]")
+            # logger.debug(f"Processing CloudFront Distribution: {distribution_id}")
 
-                # if distribution_id != "xxxxx":
-                #     continue
+            logger.debug(
+                f"Processing CloudFront Distribution: {distribution_id}")
 
-                logger.debug(
-                    f"Processing CloudFront Distribution: {distribution_id}")
+            ftstack = "cloudfront"
+            try:
+                response = self.provider_instance.aws_clients.cloudfront_client.list_tags_for_resource(
+                    Resource=distribution_summary["ARN"])
+                tags = response.get('Tags', {}).get('Items', [])
+                for tag in tags:
+                    if tag['Key'] == 'ftstack':
+                        if tag['Value'] != 'cloudfront':
+                            ftstack = "stack_"+tag['Value']
+                        break
+            except Exception as e:
+                logger.error("Error occurred: ", e)
 
-                ftstack = "cloudfront"
-                try:
-                    response = self.provider_instance.aws_clients.cloudfront_client.list_tags_for_resource(
-                        Resource=distribution_summary["ARN"])
-                    tags = response.get('Tags', {}).get('Items', [])
-                    for tag in tags:
-                        if tag['Key'] == 'ftstack':
-                            if tag['Value'] != 'cloudfront':
-                                ftstack = "stack_"+tag['Value']
-                            break
-                except Exception as e:
-                    logger.error("Error occurred: ", e)
+            id = distribution_id
 
-                id = distribution_id
+            attributes = {
+                "id": id,
+                "arn": distribution_summary["ARN"],
+                "domain_name": distribution_summary["DomainName"],
+            }
 
-                attributes = {
-                    "id": id,
-                    "arn": distribution_summary["ARN"],
-                    "domain_name": distribution_summary["DomainName"],
-                }
+            self.hcl.process_resource(
+                resource_type, distribution_id.replace("-", "_"), attributes)
 
-                self.hcl.process_resource(
-                    resource_type, distribution_id.replace("-", "_"), attributes)
+            self.hcl.add_stack(resource_type, id, ftstack)
 
-                self.hcl.add_stack(resource_type, id, ftstack)
+            # Fetch distribution configuration
+            try:
+                dist_config_response = self.provider_instance.aws_clients.cloudfront_client.get_distribution_config(
+                    Id=distribution_id)
 
-                # Fetch distribution configuration
-                try:
-                    dist_config_response = self.provider_instance.aws_clients.cloudfront_client.get_distribution_config(
-                        Id=distribution_id)
+                dist_config = dist_config_response.get(
+                    'DistributionConfig', {})
 
-                    dist_config = dist_config_response.get(
-                        'DistributionConfig', {})
+                viewer_certificate = dist_config.get(
+                    'ViewerCertificate', {})
 
-                    viewer_certificate = dist_config.get(
-                        'ViewerCertificate', {})
+                if viewer_certificate:
+                    ACMCertificateArn = viewer_certificate.get(
+                        'ACMCertificateArn')
+                    if ACMCertificateArn:
+                        self.acm_instance.aws_acm_certificate(
+                            ACMCertificateArn, ftstack)
 
-                    if viewer_certificate:
-                        ACMCertificateArn = viewer_certificate.get(
-                            'ACMCertificateArn')
-                        if ACMCertificateArn:
-                            self.acm_instance.aws_acm_certificate(
-                                ACMCertificateArn, ftstack)
+                logger_config = dist_config.get('Logging', {})
+                if logger_config:
+                    bucket = logger_config.get('Bucket')
+                    if bucket:
+                        # get the bucket name from the bucket domain
+                        bucket = bucket.split('.')[0]
+                        self.s3_instance.aws_s3_bucket(bucket, ftstack)
 
-                    logger_config = dist_config.get('Logging', {})
-                    if logger_config:
-                        bucket = logger_config.get('Bucket')
-                        if bucket:
-                            # get the bucket name from the bucket domain
-                            bucket = bucket.split('.')[0]
-                            self.s3_instance.aws_s3_bucket(bucket, ftstack)
+                # Process cache behaviors and associated policies
+                all_behaviors = dist_config.get(
+                    'CacheBehaviors', {}).get('Items', [])
+                # Include default cache behavior
+                all_behaviors.append(
+                    dist_config.get('DefaultCacheBehavior'))
 
-                    # Process cache behaviors and associated policies
-                    all_behaviors = dist_config.get(
-                        'CacheBehaviors', {}).get('Items', [])
-                    # Include default cache behavior
-                    all_behaviors.append(
-                        dist_config.get('DefaultCacheBehavior'))
-
-                    for behavior in all_behaviors:
-                        if behavior:
-                            cache_policy_id = behavior.get('CachePolicyId')
-                            if cache_policy_id:
-                                self.aws_cloudfront_cache_policy(
-                                    cache_policy_id)
-                                self.hcl.add_stack(
-                                    "aws_cloudfront_cache_policy", cache_policy_id, ftstack)
-
-                            response_headers_policy_id = behavior.get(
-                                'ResponseHeadersPolicyId')
-                            if response_headers_policy_id:
-                                self.aws_cloudfront_response_headers_policy(
-                                    response_headers_policy_id)
-                                self.hcl.add_stack(
-                                    "aws_cloudfront_response_headers_policy", response_headers_policy_id, ftstack)
-
-                            origin_request_policy_id = behavior.get(
-                                'OriginRequestPolicyId')
-                            if origin_request_policy_id:
-                                self.aws_cloudfront_origin_request_policy(
-                                    origin_request_policy_id)
-                                self.hcl.add_stack(
-                                    "aws_cloudfront_origin_request_policy", origin_request_policy_id, ftstack)
-
-                            lambda_function_associations = behavior.get(
-                                'LambdaFunctionAssociations', {})
-                            if lambda_function_associations:
-                                for lambda_function_association in lambda_function_associations.get('Items', []):
-                                    lambda_arn = lambda_function_association.get(
-                                        'LambdaFunctionARN')
-                                    if lambda_arn:
-                                        lambda_name = lambda_arn.split(":function:")[
-                                            1].split(":")[0]
-                                        self.aws_lambda_instance.aws_lambda_function(
-                                            lambda_name, ftstack)
-
-                            function_association = behavior.get(
-                                'FunctionAssociations', {})
-                            if function_association:
-                                for function_association in function_association.get('Items', []):
-                                    function_arn = function_association.get(
-                                        'FunctionARN')
-                                    if function_arn:
-                                        self.aws_cloudfront_function(
-                                            function_arn, ftstack)
-
-                  # Check if ACL ID is associated with the CloudFront distribution
-                    acl_arn = dist_config.get('WebACLId')
-                    if acl_arn:
-                        acl_id = acl_arn.split("/")[-1]
-                        self.wafv2_instance.aws_wafv2_web_acl(acl_id, ftstack)
-
-                except Exception as e:
-                    logger.error(
-                        f"Error occurred while processing distribution {distribution_id}: {e}")
-                    continue
-
-                # Retrieve identity_id
-                origins = distribution_summary.get(
-                    "Origins", {}).get("Items", [])
-                for origin in origins:
-                    s3_origin_config = origin.get("S3OriginConfig")
-                    if s3_origin_config:
-                        identity_id = s3_origin_config.get(
-                            "OriginAccessIdentity")
-                        if identity_id:
-                            # Call aws_cloudfront_origin_access_identity function filtered by the identity_id
-                            identity_id = identity_id.split("/")[-1]
-                            self.aws_cloudfront_origin_access_identity(
-                                identity_id)
+                for behavior in all_behaviors:
+                    if behavior:
+                        cache_policy_id = behavior.get('CachePolicyId')
+                        if cache_policy_id:
+                            self.aws_cloudfront_cache_policy(
+                                cache_policy_id)
                             self.hcl.add_stack(
-                                "aws_cloudfront_origin_access_identity", identity_id, ftstack)
+                                "aws_cloudfront_cache_policy", cache_policy_id, ftstack)
 
-                self.aws_cloudfront_monitoring_subscription(distribution_id)
+                        response_headers_policy_id = behavior.get(
+                            'ResponseHeadersPolicyId')
+                        if response_headers_policy_id:
+                            self.aws_cloudfront_response_headers_policy(
+                                response_headers_policy_id)
+                            self.hcl.add_stack(
+                                "aws_cloudfront_response_headers_policy", response_headers_policy_id, ftstack)
+
+                        origin_request_policy_id = behavior.get(
+                            'OriginRequestPolicyId')
+                        if origin_request_policy_id:
+                            self.aws_cloudfront_origin_request_policy(
+                                origin_request_policy_id)
+                            self.hcl.add_stack(
+                                "aws_cloudfront_origin_request_policy", origin_request_policy_id, ftstack)
+
+                        lambda_function_associations = behavior.get(
+                            'LambdaFunctionAssociations', {})
+                        if lambda_function_associations:
+                            for lambda_function_association in lambda_function_associations.get('Items', []):
+                                lambda_arn = lambda_function_association.get(
+                                    'LambdaFunctionARN')
+                                if lambda_arn:
+                                    lambda_name = lambda_arn.split(":function:")[
+                                        1].split(":")[0]
+                                    self.aws_lambda_instance.aws_lambda_function(
+                                        lambda_name, ftstack)
+
+                        function_association = behavior.get(
+                            'FunctionAssociations', {})
+                        if function_association:
+                            for function_association in function_association.get('Items', []):
+                                function_arn = function_association.get(
+                                    'FunctionARN')
+                                if function_arn:
+                                    self.aws_cloudfront_function(
+                                        function_arn, ftstack)
+
+                # Check if ACL ID is associated with the CloudFront distribution
+                acl_arn = dist_config.get('WebACLId')
+                if acl_arn:
+                    acl_id = acl_arn.split("/")[-1]
+                    self.wafv2_instance.aws_wafv2_web_acl(acl_id, ftstack)
+
+            except Exception as e:
+                logger.error(
+                    f"Error occurred while processing distribution {distribution_id}: {e}")
+                continue
+
+            # Retrieve identity_id
+            origins = distribution_summary.get(
+                "Origins", {}).get("Items", [])
+            for origin in origins:
+                s3_origin_config = origin.get("S3OriginConfig")
+                if s3_origin_config:
+                    identity_id = s3_origin_config.get(
+                        "OriginAccessIdentity")
+                    if identity_id:
+                        # Call aws_cloudfront_origin_access_identity function filtered by the identity_id
+                        identity_id = identity_id.split("/")[-1]
+                        self.aws_cloudfront_origin_access_identity(
+                            identity_id)
+                        self.hcl.add_stack(
+                            "aws_cloudfront_origin_access_identity", identity_id, ftstack)
+
+            self.aws_cloudfront_monitoring_subscription(distribution_id)
 
     def aws_cloudfront_cache_policy(self, specific_cache_policy_id):
         logger.debug(f"Processing CloudFront Cache Policies...")
