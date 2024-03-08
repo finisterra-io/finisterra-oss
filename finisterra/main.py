@@ -198,7 +198,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         all_provider_methods = [
             'vpc',
             'acm',
-            # 'apigateway',
+            'apigateway',
             'autoscaling',
             'cloudmap',
             'cloudfront',
