@@ -10,7 +10,7 @@ logger = logging.getLogger('finisterra')
 
 class S3:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -52,14 +52,13 @@ class S3:
 
         if selected_s3_bucket and ftstack:
             if self.hcl.id_resource_processed(resource_name, selected_s3_bucket, ftstack):
-                logger.debug(
-                    f"  Skipping S3 Bucket: {selected_s3_bucket} - already processed")
+                # logger.debug(f"Skipping S3 Bucket: {selected_s3_bucket} - already processed")
                 return
             try:
                 self.process_single_s3_bucket(selected_s3_bucket, ftstack)
             except ClientError as e:
                 if e.response['Error']['Code'] == 'AccessDenied':
-                    # logger.error(f"  Access Denied: {e.response['Error']['Message']}")
+                    # logger.error(f"Access Denied: {e.response['Error']['Message']}")
                     pass
                 else:
                     raise e
@@ -67,16 +66,39 @@ class S3:
 
         response = self.provider_instance.aws_clients.s3_client.list_buckets()
         all_buckets = response["Buckets"]
-        while response.get('NextContinuationToken'):
-            response = self.provider_instance.aws_clients.s3_client.list_buckets(
-                ContinuationToken=response['NextContinuationToken']
-            )
-            all_buckets.extend(response["Buckets"])
 
-        if len(all_buckets) > 0:
-            self.task = self.provider_instance.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=len(all_buckets))
+        filtered_buckets = []
         for bucket in all_buckets:
+            bucket_name = bucket["Name"]
+            try:
+                # Attempt to fetch tags for each bucket
+                tag_set = self.provider_instance.aws_clients.s3_client.get_bucket_tagging(
+                    Bucket=bucket_name)['TagSet']
+                bucket_tags = {tag['Key']: tag['Value'] for tag in tag_set}
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchTagSet':
+                    bucket_tags = {}
+                elif e.response['Error']['Code'] in ['AccessDenied', 'NoSuchBucket']:
+                    # Skip buckets that cannot be accessed or don't exist
+                    continue
+                else:
+                    raise e  # Re-raise if it's a different kind of error
+
+            # Check if bucket matches all filter conditions
+            match_all_conditions = all(
+                any(bucket_tags.get(f['Name'].replace(
+                    'tag:', ''), '') == value for value in f['Values'])
+                for f in self.provider_instance.filters
+            ) if self.provider_instance.filters else True
+
+            if match_all_conditions:
+                filtered_buckets.append(bucket)
+
+        if len(filtered_buckets) > 0:
+            self.task = self.provider_instance.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=len(filtered_buckets))
+
+        for bucket in filtered_buckets:
             bucket_name = bucket["Name"]
             self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{bucket_name}[/]")
@@ -84,16 +106,14 @@ class S3:
             try:
                 bucket_location_response = self.provider_instance.aws_clients.s3_client.get_bucket_location(
                     Bucket=bucket_name)
-                bucket_region = bucket_location_response['LocationConstraint']
-                if bucket_region is None:
-                    bucket_region = 'us-east-1'
+                bucket_region = bucket_location_response.get(
+                    'LocationConstraint', 'us-east-1') or 'us-east-1'
 
                 if bucket_region == self.provider_instance.region:
                     self.process_single_s3_bucket(bucket_name, ftstack)
             except ClientError as e:
-                # logger.error(f"  Access Denied: {e.response['Error']['Message']}")
+                # logger.error(f"Access Denied: {e.response['Error']['Message']}")
                 pass
-        # self.provider_instance.progress.update(self.task, advance=1, description=f"[green]{self.__class__.__name__} [bold]Collected[/]")
 
     def process_single_s3_bucket(self, bucket_name, ftstack=None):
         logger.debug(f"Processing S3 Bucket: {bucket_name}")
@@ -219,7 +239,8 @@ class S3:
                 # If some other error occurred, re-raise the exception
                 raise
 
-        acl = self.provider_instance.aws_clients.s3_client.get_bucket_acl(Bucket=bucket_name)
+        acl = self.provider_instance.aws_clients.s3_client.get_bucket_acl(
+            Bucket=bucket_name)
 
         # Check if the bucket's owner is someone external
         bucket_owner_canonical_id = acl['Owner']['ID']
@@ -415,7 +436,8 @@ class S3:
 
     def aws_s3_bucket_object(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Objects...")
-        objects = self.provider_instance.aws_clients.s3_client.list_objects(Bucket=bucket_name)
+        objects = self.provider_instance.aws_clients.s3_client.list_objects(
+            Bucket=bucket_name)
         for obj in objects.get("Contents", []):
             key = obj["Key"]
             logger.debug(
