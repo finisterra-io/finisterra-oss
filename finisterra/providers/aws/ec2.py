@@ -12,7 +12,7 @@ logger = logging.getLogger('finisterra')
 
 class EC2:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -28,7 +28,8 @@ class EC2:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
 
@@ -55,7 +56,7 @@ class EC2:
     def get_subnet_name_ec2(self, subnet_id):
         subnet_name = ""
         response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                subnet_id])
+            subnet_id])
 
         # Check if 'Subnets' key exists and it's not empty
         if not response or 'Subnets' not in response or not response['Subnets']:
@@ -77,7 +78,7 @@ class EC2:
             return None
 
         response = self.provider_instance.aws_clients.ec2_client.describe_volumes(VolumeIds=[
-                                                                volume_id])
+            volume_id])
 
         # Check if the volume exists and has attachments
         if response["Volumes"] and response["Volumes"][0]["Attachments"]:
@@ -196,7 +197,8 @@ class EC2:
     def aws_ec2_host(self):
         logger.debug(f"Processing EC2 Dedicated Hosts...")
 
-        hosts = self.provider_instance.aws_clients.ec2_client.describe_hosts()["Hosts"]
+        hosts = self.provider_instance.aws_clients.ec2_client.describe_hosts()[
+            "Hosts"]
 
         for host in hosts:
             host_id = host["HostId"]
@@ -313,7 +315,8 @@ class EC2:
             total += len(reservation["Instances"])
         self.task = self.provider_instance.progress.add_task(
             f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        
+
+        instance_name = ""
         for reservation in instances["Reservations"]:
             for instance in reservation["Instances"]:
                 instance_id = instance["InstanceId"]
@@ -347,6 +350,9 @@ class EC2:
                     )
                     tags = tags_response.get('Tags', [])
                     for tag in tags:
+                        if tag['Key'] == 'Name':
+                            instance_name = tag['Value']
+                            break
                         if tag['Key'] == 'ftstack':
                             if tag['Value'] != 'ec2':
                                 ftstack = "stack_"+tag['Value']
@@ -359,17 +365,19 @@ class EC2:
                 }
 
                 # Call root_block_device.kms_key_id
+                root_device = ""
                 if "RootDeviceName" in instance:
                     logger.debug(
-                        f" RootDeviceName: instance['RootDeviceName']")
-
+                        f" RootDeviceName: {instance['RootDeviceName']}")
+                    root_device = instance["RootDeviceName"]
                     # Get the KMS key for the root device
                     response = self.provider_instance.aws_clients.ec2_client.describe_volumes(Filters=[{
                         'Name': 'attachment.instance-id',
                         'Values': [instance_id]
                     }])
                     for volume in response['Volumes']:
-                        if volume['Attachments'][0]['Device'] == instance["RootDeviceName"]:
+                        device = volume['Attachments'][0]['Device']
+                        if device == instance["RootDeviceName"]:
                             if 'KmsKeyId' in volume:
                                 keyArn = volume['KmsKeyId']
                                 type = self.kms_instance.aws_kms_key(
@@ -387,8 +395,10 @@ class EC2:
                     self.aws_iam_instance_profile(
                         iam_instance_profile_id, ftstack)
 
+                if not instance_name:
+                    instance_name = id
                 self.hcl.process_resource(
-                    resource_type, instance_id.replace("-", "_"), attributes)
+                    resource_type, instance_name, attributes)
                 self.hcl.add_stack(resource_type, id, ftstack)
 
                 ec2_get_user_data = self.ec2_get_user_data(instance_id)
@@ -419,6 +429,8 @@ class EC2:
 
                 # Process all EBS volumes associated with the instance
                 for block_device in instance.get("BlockDeviceMappings", []):
+                    if root_device == block_device["DeviceName"]:
+                        continue
                     volume_id = block_device["Ebs"]["VolumeId"]
                     self.aws_ebs_volume(volume_id)
 
@@ -483,7 +495,7 @@ class EC2:
         logger.debug(f"Processing EBS Volume: {volume_id}")
 
         volume = self.provider_instance.aws_clients.ec2_client.describe_volumes(VolumeIds=[
-                                                              volume_id])
+            volume_id])
 
         if not volume["Volumes"]:
             logger.debug(f"  No EBS Volume found for Volume ID: {volume_id}")

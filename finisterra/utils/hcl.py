@@ -87,7 +87,8 @@ class HCL:
         def replace(match):
             char = match.group(0)
             # Default to hex code representation
-            return ascii_map.get(char, f'_{ord(char):02X}_')
+            return "_"
+            # return ascii_map.get(char, f'_{ord(char):02X}_')
 
         # Replace using a regular expression and the replace function
         output_string = re.sub(r'\s|[-.]|\W', replace, input_string)
