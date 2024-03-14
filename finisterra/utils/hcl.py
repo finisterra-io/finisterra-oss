@@ -193,6 +193,8 @@ class HCL:
             else:
                 logger.debug(
                     f'{resource} State count {prev_resources_count[resource]} -> {resources_count[resource]}')
+        logger.debug(
+            f"State file refreshed {os.path.join(self.script_dir, 'terraform.tfstate')}")
 
     def create_folder(self, folder):
         if os.path.exists(folder):

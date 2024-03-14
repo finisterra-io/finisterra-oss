@@ -4,6 +4,25 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger('finisterra')
 
 
+def get_vpc_name(aws_clients, vpc_id):
+    response = aws_clients.ec2_client.describe_vpcs(VpcIds=[
+        vpc_id])
+
+    if not response or 'Vpcs' not in response or not response['Vpcs']:
+        # Handle this case as required, for example:
+        logger.debug(f"No VPC information found for VPC ID: {vpc_id}")
+        return None
+
+    vpc_tags = response['Vpcs'][0].get('Tags', [])
+    vpc_name = next((tag['Value']
+                    for tag in vpc_tags if tag['Key'] == 'Name'), None)
+
+    if vpc_name is None:
+        logger.debug(f"No 'Name' tag found for VPC ID: {vpc_id}")
+
+    return vpc_name
+
+
 def get_subnet_names(aws_clients, subnet_ids):
     subnet_names = []
     for subnet_id in subnet_ids:
@@ -36,6 +55,26 @@ def get_subnet_names(aws_clients, subnet_ids):
             logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
 
     return subnet_names
+
+
+def get_subnet_name(aws_clients, subnet_id):
+    response = aws_clients.ec2_client.describe_subnets(SubnetIds=[
+        subnet_id])
+
+    if not response or 'Subnets' not in response or not response['Subnets']:
+        # Handle this case as required, for example:
+        logger.debug(f"No subnet information found for Subnet ID: {subnet_id}")
+        return None
+
+    subnet_tags = response['Subnets'][0].get('Tags', [])
+    subnet_name = next(
+        (tag['Value'] for tag in subnet_tags if tag['Key'] == 'Name'), None)
+
+    if subnet_name is None:
+        logger.debug(f"No 'Name' tag found for Subnet ID: {subnet_id}")
+
+    return subnet_name
+
 
 def parse_filters(filters_str):
     """

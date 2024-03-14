@@ -229,6 +229,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'elasticsearch',
             'codeartifact',
             'launchtemplate',
+            'client_vpn',
         ]
 
     if execute:

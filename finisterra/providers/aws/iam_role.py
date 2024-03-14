@@ -8,7 +8,7 @@ logger = logging.getLogger('finisterra')
 
 class IAM:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -66,7 +66,8 @@ class IAM:
             return
 
         # Code to process all roles if no specific role_name is provided
-        paginator = self.provider_instance.aws_clients.iam_client.get_paginator("list_roles")
+        paginator = self.provider_instance.aws_clients.iam_client.get_paginator(
+            "list_roles")
         total = 0
         for page in paginator.paginate():
             total += len(page["Roles"])
@@ -181,4 +182,53 @@ class IAM:
             resource_type, policy_name, attributes)
         if not ftstack:
             ftstack = "iam"
+        self.hcl.add_stack(resource_type, id, ftstack)
+
+    def aws_iam_saml_provider(self, provider_arn=None, ftstack=None):
+        resource_type = "aws_iam_saml_provider"
+        logger.debug("Processing IAM SAML Providers...")
+
+        # If provider_arn is provided, process only that specific SAML provider
+        if provider_arn:
+            if ftstack and self.hcl.id_resource_processed(resource_type, provider_arn, ftstack):
+                logger.debug(
+                    f"  Skipping IAM SAML Provider: {provider_arn} - already processed")
+                return
+
+            # Fetch and process the specific SAML provider
+            try:
+                saml_provider = self.provider_instance.aws_clients.iam_client.get_saml_provider(
+                    SAMLProviderArn=provider_arn)
+                self.process_iam_saml_provider(saml_provider, ftstack)
+            except Exception as e:
+                logger.debug(
+                    f"Error fetching IAM SAML Provider {provider_arn}: {e}")
+            return
+
+        # Code to process all SAML providers if no specific provider_arn is provided
+        paginator = self.provider_instance.aws_clients.iam_client.get_paginator(
+            "list_saml_providers")
+        for page in paginator.paginate():
+            for provider in page["SAMLProviderList"]:
+                try:
+                    saml_provider = self.provider_instance.aws_clients.iam_client.get_saml_provider(
+                        SAMLProviderArn=provider["Arn"])
+                    self.process_iam_saml_provider(saml_provider, ftstack)
+                except Exception as e:
+                    logger.debug(
+                        f"Error fetching IAM SAML Provider {provider['Arn']}: {e}")
+
+    def process_iam_saml_provider(self, saml_provider, ftstack=None):
+        resource_type = "aws_iam_saml_provider"
+        saml_provider_arn = saml_provider["SAMLProviderArn"]
+        logger.debug(f"Processing IAM SAML Provider: {saml_provider_arn}")
+        # Assuming the ARN format allows us to extract an identifier this way
+        id = saml_provider_arn
+
+        attributes = {
+            "id": id,
+        }
+        self.hcl.process_resource(resource_type, id, attributes)
+        if not ftstack:
+            ftstack = "saml"
         self.hcl.add_stack(resource_type, id, ftstack)

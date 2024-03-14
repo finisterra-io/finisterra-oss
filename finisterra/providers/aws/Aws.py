@@ -42,6 +42,7 @@ from ...providers.aws.elasticsearch import Elasticsearch
 from ...providers.aws.aws_clients import AwsClients
 from ...providers.aws.codeartifact import CodeArtifact
 from ...providers.aws.launchtemplate import LaunchTemplate
+from ...providers.aws.client_vpn import ClientVPN
 from ...providers.aws.utils import parse_filters
 
 logger = logging.getLogger('finisterra')
@@ -327,4 +328,9 @@ class Aws:
     def launchtemplate(self):
         instance = LaunchTemplate(self)
         instance.launchtemplate()
+        return instance.hcl.unique_ftstacks
+
+    def client_vpn(self):
+        instance = ClientVPN(self)
+        instance.client_vpn()
         return instance.hcl.unique_ftstacks
