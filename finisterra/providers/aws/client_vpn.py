@@ -5,6 +5,8 @@ import inspect
 from ...providers.aws.utils import get_vpc_name, get_subnet_name
 from ...providers.aws.iam_role import IAM
 from ...providers.aws.security_group import SECURITY_GROUP
+import ipaddress
+
 
 logger = logging.getLogger('finisterra')
 
@@ -60,7 +62,7 @@ class ClientVPN:
         if vpn_endpoint_id:
             if ftstack and self.hcl.id_resource_processed(resource_type, vpn_endpoint_id, ftstack):
                 logger.debug(
-                    f"  Skipping EC2 Client VPN Endpoint: {vpn_endpoint_id} - already processed")
+                    f"Skipping EC2 Client VPN Endpoint: {vpn_endpoint_id} - already processed")
                 return
 
             # Fetch and process the specific Client VPN Endpoint
@@ -77,13 +79,20 @@ class ClientVPN:
         # Process all Client VPN Endpoints if no specific vpn_endpoint_id is provided
         paginator = self.provider_instance.aws_clients.ec2_client.get_paginator(
             "describe_client_vpn_endpoints")
+
+        # Update to paginate with filters if available
+        if self.provider_instance.filters:
+            pages = paginator.paginate(Filters=self.provider_instance.filters)
+        else:
+            pages = paginator.paginate()
+
         total = 0
-        for page in paginator.paginate():
+        for page in pages:
             total += len(page["ClientVpnEndpoints"])
         if total > 0:
             self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        for page in paginator.paginate():
+        for page in pages:
             for vpn_endpoint in page["ClientVpnEndpoints"]:
                 self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{vpn_endpoint['ClientVpnEndpointId']}[/]")
@@ -110,7 +119,8 @@ class ClientVPN:
 
         self.aws_ec2_client_vpn_network_association(vpn_endpoint_id)
         self.aws_ec2_client_vpn_authorization_rule(vpn_endpoint_id)
-        self.aws_ec2_client_vpn_route(vpn_endpoint_id)
+        self.aws_ec2_client_vpn_route(
+            vpn_endpoint_id, vpn_endpoint["ClientCidrBlock"])
 
         AuthenticationOptions = vpn_endpoint.get("AuthenticationOptions")
         for auth in AuthenticationOptions:
@@ -176,16 +186,26 @@ class ClientVPN:
                 self.hcl.process_resource(
                     "aws_ec2_client_vpn_authorization_rule", id, attributes)
 
-    def aws_ec2_client_vpn_route(self, client_vpn_endpoint_id):
+    def aws_ec2_client_vpn_route(self, client_vpn_endpoint_id, client_cidr_block):
         logger.debug("Processing EC2 Client VPN Routes...")
         # Use describe_client_vpn_routes to get routes associated with the client_vpn_endpoint_id
         paginator = self.provider_instance.aws_clients.ec2_client.get_paginator(
             "describe_client_vpn_routes")
 
+        client_network = ipaddress.ip_network(client_cidr_block)
+
         for page in paginator.paginate(ClientVpnEndpointId=client_vpn_endpoint_id):
             for route in page["Routes"]:
+                destination_network = ipaddress.ip_network(
+                    route["DestinationCidr"])
+
+                # Skip routes within the client VPN CIDR block
+                if destination_network.overlaps(client_network):
+                    logger.debug(
+                        f"Skipping EC2 Client VPN Route for CIDR {route['DestinationCidr']} as it overlaps with the client CIDR block {client_cidr_block}")
+                    continue
+
                 # Use the RouteId directly if available; otherwise, create a composite identifier
-                # AWS documentation is not clear about RouteId being always available, so check and decide
                 target_subnet = route.get("TargetSubnet")
                 route_id = route.get(
                     "RouteId", f"{client_vpn_endpoint_id},{target_subnet},{route['DestinationCidr']}")
