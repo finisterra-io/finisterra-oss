@@ -3,6 +3,8 @@ import json
 import logging
 import inspect
 from ...providers.aws.utils import get_vpc_name, get_subnet_name
+from ...providers.aws.iam_role import IAM
+from ...providers.aws.security_group import SECURITY_GROUP
 
 logger = logging.getLogger('finisterra')
 
@@ -25,6 +27,10 @@ class ClientVPN:
         self.hcl.provider_source = self.provider_instance.provider_source
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
+
+        self.iam_role_instance = IAM(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
 
     def client_vpn(self):
         self.hcl.prepare_folder()
@@ -105,6 +111,21 @@ class ClientVPN:
         self.aws_ec2_client_vpn_network_association(vpn_endpoint_id)
         self.aws_ec2_client_vpn_authorization_rule(vpn_endpoint_id)
         self.aws_ec2_client_vpn_route(vpn_endpoint_id)
+
+        AuthenticationOptions = vpn_endpoint.get("AuthenticationOptions")
+        for auth in AuthenticationOptions:
+            FederatedAuthentication = auth.get("FederatedAuthentication")
+            if FederatedAuthentication:
+                SamlProviderArn = FederatedAuthentication.get(
+                    "SamlProviderArn")
+                if SamlProviderArn:
+                    self.iam_role_instance.aws_iam_saml_provider(
+                        SamlProviderArn, ftstack)
+
+        security_groups = vpn_endpoint.get("SecurityGroupIds")
+        for sg in security_groups:
+            self.security_group_instance.aws_security_group(
+                sg, ftstack)
 
     def aws_ec2_client_vpn_network_association(self, client_vpn_endpoint_id):
         logger.debug("Processing EC2 Client VPN Network Associations...")

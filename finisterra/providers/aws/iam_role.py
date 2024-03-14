@@ -197,9 +197,7 @@ class IAM:
 
             # Fetch and process the specific SAML provider
             try:
-                saml_provider = self.provider_instance.aws_clients.iam_client.get_saml_provider(
-                    SAMLProviderArn=provider_arn)
-                self.process_iam_saml_provider(saml_provider, ftstack)
+                self.process_iam_saml_provider(provider_arn, ftstack)
             except Exception as e:
                 logger.debug(
                     f"Error fetching IAM SAML Provider {provider_arn}: {e}")
@@ -211,19 +209,18 @@ class IAM:
         for page in paginator.paginate():
             for provider in page["SAMLProviderList"]:
                 try:
-                    saml_provider = self.provider_instance.aws_clients.iam_client.get_saml_provider(
-                        SAMLProviderArn=provider["Arn"])
-                    self.process_iam_saml_provider(saml_provider, ftstack)
+                    self.process_iam_saml_provider(provider["Arn"], ftstack)
                 except Exception as e:
                     logger.debug(
                         f"Error fetching IAM SAML Provider {provider['Arn']}: {e}")
 
-    def process_iam_saml_provider(self, saml_provider, ftstack=None):
+    def process_iam_saml_provider(self, provider_arn, ftstack=None):
         resource_type = "aws_iam_saml_provider"
-        saml_provider_arn = saml_provider["SAMLProviderArn"]
-        logger.debug(f"Processing IAM SAML Provider: {saml_provider_arn}")
+        # saml_provider = self.provider_instance.aws_clients.iam_client.get_saml_provider(
+        #     SAMLProviderArn=provider_arn)
+        logger.debug(f"Processing IAM SAML Provider: {provider_arn}")
         # Assuming the ARN format allows us to extract an identifier this way
-        id = saml_provider_arn
+        id = provider_arn
 
         attributes = {
             "id": id,
