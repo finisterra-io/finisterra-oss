@@ -18,6 +18,8 @@ from .providers.cloudflare.Cloudflare import Cloudflare
 from .utils.auth import auth
 from .utils.tf_plan import execute_terraform_plan, print_tf_plan
 from .utils.os_installs import install_gh
+from .utils.github import is_valid_github_repo
+
 
 from rich.progress import Progress
 from rich.progress import TimeElapsedColumn
@@ -62,8 +64,9 @@ def execute_provider_method(provider, method_name):
 @click.option('--token', '-t', default=None, help='Token')
 @click.option('--cache-dir', '-c', default=None, help='Cache directory to save the terraform providers schema')
 @click.option('--filters', '-f', default=None, help='Filters to apply to the resources')
-@click.option('--github-repo', '-gh', default=None, help='GitHub repository to push the generated code')
-def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir, filters, github_repo):
+@click.option('--github-push', '-gh', is_flag=True, default=False, help='Push the generated code to a GitHub')
+@click.option('--stack-name', '-s', default=None, help='Stack name')
+def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir, filters, github_push, stack_name):
     if output_dir:
         output_dir = os.path.abspath(output_dir)
     if not os.environ.get('FT_PROCESS_DEPENDENCIES'):
@@ -77,6 +80,12 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
 
     if token:
         os.environ['FT_API_TOKEN'] = token
+
+    if github_push:
+        if not is_valid_github_repo(output_dir):
+            logger.error(
+                "Error: The output directory is not a valid GitHub repository.")
+            exit()
 
     progress = Progress(
         SpinnerColumn(spinner_name="dots"),
@@ -254,12 +263,18 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 print_tf_plan(counts, updates, ftstack)
                 console.print('-' * 50)
 
+        if github_push:
+            install_gh()
+
         for ftstack in ftstacks:
             generated_path = os.path.join(base_dir, ftstack)
+            if stack_name:
+                stack_path = os.path.join(base_dir, stack_name)
+                os.makedirs(stack_path, exist_ok=True)
+                shutil.move(generated_path, stack_path)
+                generated_path = stack_path
+                logger.info(f"Terraform code created at: {stack_path}")
             logger.info(f"Terraform code created at: {generated_path}")
-
-        if github_repo:
-            install_gh()
 
 
 def setup_logger():
