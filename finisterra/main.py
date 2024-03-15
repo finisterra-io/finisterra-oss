@@ -3,10 +3,8 @@ import click
 import boto3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import shutil
-import subprocess
 import logging
 from rich.logging import RichHandler
-import time
 import tempfile
 
 
@@ -18,7 +16,8 @@ from .providers.aws.Aws import Aws
 from .providers.cloudflare.Cloudflare import Cloudflare
 
 from .utils.auth import auth
-from .utils.tf_plan import count_resources_by_action_and_collect_changes, print_tf_plan
+from .utils.tf_plan import execute_terraform_plan, print_tf_plan
+from .utils.os_installs import install_gh
 
 from rich.progress import Progress
 from rich.progress import TimeElapsedColumn
@@ -54,50 +53,6 @@ def execute_provider_method(provider, method_name):
         return set()
 
 
-def execute_terraform_plan(output_dir, ftstack):
-    # Define the working directory for this ftstack
-    cwd = os.path.join(output_dir, "tf_code", ftstack)
-
-    max_retries = 1  # Maximum number of retries
-    retry_count = 0  # Initial retry count
-
-    while retry_count <= max_retries:
-        try:
-            console.print(
-                f"[cyan]Running Terraform plan on the generated code for {ftstack}...[/cyan]")
-            # Run terraform init with the specified working directory
-            subprocess.run(["terragrunt", "init", "-no-color"], cwd=cwd, check=True,
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            # Run terraform plan with the specified working directory
-            plan_file_name = os.path.join(cwd, f"{ftstack}_plan")
-            subprocess.run(["terragrunt", "plan", "-no-color", "-out", plan_file_name],
-                           cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            # Run terraform show with the specified working directory
-            json_file_name = os.path.join(cwd, f"{ftstack}_plan.json")
-            subprocess.run(f"terragrunt show -json {plan_file_name} > {json_file_name}",
-                           shell=True, cwd=cwd, check=True, stderr=subprocess.PIPE)
-            # Read and process the Terraform plan JSON
-            with open(json_file_name) as f:
-                counts, updates = count_resources_by_action_and_collect_changes(
-                    f.read())
-            # clean up the plan files
-            os.remove(plan_file_name)
-            os.remove(json_file_name)
-            return (counts, updates, ftstack)
-        except FileNotFoundError as e:
-            return None
-        except subprocess.CalledProcessError as e:
-            console.print(
-                f"[red]Error in Terraform operation for {ftstack}: {e.stderr.decode('utf-8')}[/red]")
-            if retry_count < max_retries:
-                retry_count += 1
-                console.print(
-                    f"[yellow]Retrying Terraform init and plan for {ftstack} in 10 seconds...[/yellow]")
-                time.sleep(10)  # Wait for 10 seconds before retrying
-            else:
-                return None
-
-
 @click.command()
 @click.option('--provider', '-p', default="aws", help='Provider name')
 @click.option('--module', '-m', required=True, help='Module name(s), separated by commas or "all" for all modules')
@@ -107,7 +62,8 @@ def execute_terraform_plan(output_dir, ftstack):
 @click.option('--token', '-t', default=None, help='Token')
 @click.option('--cache-dir', '-c', default=None, help='Cache directory to save the terraform providers schema')
 @click.option('--filters', '-f', default=None, help='Filters to apply to the resources')
-def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir, filters):
+@click.option('--github-repo', '-gh', default=None, help='GitHub repository to push the generated code')
+def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir, filters, github_repo):
     if output_dir:
         output_dir = os.path.abspath(output_dir)
     if not os.environ.get('FT_PROCESS_DEPENDENCIES'):
@@ -277,7 +233,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             results = []  # Initialize a list to store results
             with ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 future_to_ftstack = {executor.submit(
-                    execute_terraform_plan, output_dir, ftstack): ftstack for ftstack in ftstacks}
+                    execute_terraform_plan, console, output_dir, ftstack): ftstack for ftstack in ftstacks}
                 for future in as_completed(future_to_ftstack):
                     result = future.result()
                     if result:
@@ -301,6 +257,9 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         for ftstack in ftstacks:
             generated_path = os.path.join(base_dir, ftstack)
             logger.info(f"Terraform code created at: {generated_path}")
+
+        if github_repo:
+            install_gh()
 
 
 def setup_logger():

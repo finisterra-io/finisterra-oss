@@ -1,7 +1,10 @@
 import json
-from deepdiff import DeepDiff  # Make sure to install deepdiff first
+from deepdiff import DeepDiff
 from rich.console import Console
 import logging
+import os
+import subprocess
+import time
 
 logger = logging.getLogger('finisterra')
 
@@ -166,13 +169,46 @@ def print_tf_plan(counts, updates, module):
     counts = print_detailed_changes(counts, updates)
     print_summary(counts, module)
 
-# # Example usage:
-# if __name__ == "__main__":
-#     with open('/tmp/ncm/tf_code/eks/eks_plan.json', 'r') as file:
-#         terraform_plan = file.read()
 
-#     counts, updates = count_resources_by_action_and_collect_changes(
-#         terraform_plan)
+def execute_terraform_plan(console, output_dir, ftstack):
+    # Define the working directory for this ftstack
+    cwd = os.path.join(output_dir, "tf_code", ftstack)
 
-#     print_summary(counts, "Module")
-#     print_detailed_changes(updates)
+    max_retries = 1  # Maximum number of retries
+    retry_count = 0  # Initial retry count
+
+    while retry_count <= max_retries:
+        try:
+            console.print(
+                f"[cyan]Running Terraform plan on the generated code for {ftstack}...[/cyan]")
+            # Run terraform init with the specified working directory
+            subprocess.run(["terragrunt", "init", "-no-color"], cwd=cwd, check=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Run terraform plan with the specified working directory
+            plan_file_name = os.path.join(cwd, f"{ftstack}_plan")
+            subprocess.run(["terragrunt", "plan", "-no-color", "-out", plan_file_name],
+                           cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Run terraform show with the specified working directory
+            json_file_name = os.path.join(cwd, f"{ftstack}_plan.json")
+            subprocess.run(f"terragrunt show -json {plan_file_name} > {json_file_name}",
+                           shell=True, cwd=cwd, check=True, stderr=subprocess.PIPE)
+            # Read and process the Terraform plan JSON
+            with open(json_file_name) as f:
+                counts, updates = count_resources_by_action_and_collect_changes(
+                    f.read())
+            # clean up the plan files
+            os.remove(plan_file_name)
+            os.remove(json_file_name)
+            return (counts, updates, ftstack)
+        except FileNotFoundError as e:
+            return None
+        except subprocess.CalledProcessError as e:
+            console.print(
+                f"[red]Error in Terraform operation for {ftstack}: {e.stderr.decode('utf-8')}[/red]")
+            if retry_count < max_retries:
+                retry_count += 1
+                console.print(
+                    f"[yellow]Retrying Terraform init and plan for {ftstack} in 10 seconds...[/yellow]")
+                time.sleep(10)  # Wait for 10 seconds before retrying
+            else:
+                return None

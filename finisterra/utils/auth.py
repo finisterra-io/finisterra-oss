@@ -69,11 +69,19 @@ def auth(payload):
     api_host = os.environ.get('FT_API_HOST', 'api.finisterra.io')
     api_port = os.environ.get('FT_API_PORT', 443)
     api_path = '/auth/'
-    logger.debug(f"Authenticating with {api_host}:{api_port}...")
-    conn = http.client.HTTPSConnection(
-        api_host, api_port) if api_port == 443 else http.client.HTTPConnection(api_host, api_port)
-    headers = {'Content-Type': 'application/json',
-               "Authorization": "Bearer " + api_token}
+
+    if api_port == 443:
+        logger.debug(f"Authenticating with https://{api_host}:{api_port}")
+        conn = http.client.HTTPSConnection(api_host)
+    else:
+        logger.debug(f"Authenticating with http://{api_host}:{api_port}")
+        conn = http.client.HTTPConnection(api_host, api_port)
+
+    headers = {
+        'Content-Type': 'application/json',
+        "Authorization": "Bearer " + api_token,
+        "Connection": "close"
+    }
     payload_json = json.dumps(payload, default=list)
     logger.debug("Validating token...")
     conn.request('POST', api_path, body=payload_json, headers=headers)
