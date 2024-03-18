@@ -17,8 +17,7 @@ from .providers.cloudflare.Cloudflare import Cloudflare
 
 from .utils.auth import auth
 from .utils.tf_plan import execute_terraform_plan, print_tf_plan
-from .utils.os_installs import install_gh
-from .utils.github import is_valid_github_repo
+from .utils.github import is_valid_github_repo, install_gh, gh_push_onboarding, create_aws_gh_role
 
 
 from rich.progress import Progress
@@ -86,6 +85,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             logger.error(
                 "Error: The output directory is not a valid GitHub repository.")
             exit()
+        install_gh()
 
     progress = Progress(
         SpinnerColumn(spinner_name="dots"),
@@ -101,11 +101,13 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
     execute = False
 
     if provider == "cloudflare":
+        account_id = ""
+        region = "global"
         auth_payload = {
             "provider": provider,
             "module": module,
-            "account_id": "",
-            "region": "global"
+            "account_id": account_id,
+            "region": region
         }
         auth(auth_payload)
         execute = True
@@ -125,8 +127,8 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
         aws_session_token = os.getenv('AWS_SESSION_TOKEN')
         aws_profile = os.getenv('AWS_PROFILE')
-        aws_region = os.getenv('AWS_REGION')
-        if not aws_region:
+        region = os.getenv('AWS_REGION')
+        if not region:
             logger.error("AWS_REGION environment variable is not defined.")
             exit()
 
@@ -137,27 +139,27 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
                 aws_session_token=aws_session_token,
-                region_name=aws_region
+                region_name=region
             )
 
         sts = session.client('sts')
-        aws_account_id = sts.get_caller_identity()['Account']
+        account_id = sts.get_caller_identity()['Account']
 
         auth_payload = {
             "provider": provider,
             "module": module,
-            "account_id": aws_account_id,
-            "region": aws_region
+            "account_id": account_id,
+            "region": region
         }
         auth(auth_payload)
 
-        s3Bucket = f'ft-{aws_account_id}-{aws_region}-tfstate'
-        dynamoDBTable = f'ft-{aws_account_id}-{aws_region}-tfstate-lock'
-        stateKey = f'finisterra/generated/aws/{aws_account_id}/{aws_region}/{module}'
+        s3Bucket = f'ft-{account_id}-{region}-tfstate'
+        dynamoDBTable = f'ft-{account_id}-{region}-tfstate-lock'
+        stateKey = f'finisterra/generated/aws/{account_id}/{region}/{module}'
         script_dir = script_dir = tempfile.mkdtemp()
 
         provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable,
-                                stateKey, aws_account_id, aws_region, output_dir, filters)
+                                stateKey, account_id, region, output_dir, filters)
 
         # Define all provider methods for execution
         all_provider_methods = [
@@ -197,6 +199,9 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'client_vpn',
         ]
 
+        if github_push:
+            create_aws_gh_role(output_dir)
+
     if execute:
         with progress:
             logger.info(f"Fetching {provider} resources...")
@@ -231,6 +236,24 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 ftstacks = ftstacks.union(result)
 
         base_dir = os.path.join(output_dir, "tf_code")
+        for ftstack in ftstacks:
+            generated_path = os.path.join(base_dir, ftstack)
+            if stack_name:
+                stack_path = os.path.join(base_dir, stack_name)
+                os.makedirs(stack_path, exist_ok=True)
+                for item in os.listdir(generated_path):
+                    item_path = os.path.join(generated_path, item)
+                    destination_path = os.path.join(stack_path, item)
+                    try:
+                        shutil.move(item_path, destination_path)
+                    except shutil.Error:
+                        pass
+                shutil.rmtree(generated_path)
+                generated_path = stack_path
+
+        if stack_name:
+            ftstacks = [stack_name]
+
         if run_plan and ftstacks:
             # check if the output directory exists
             os.chdir(os.path.join(output_dir, "tf_code"))
@@ -263,18 +286,13 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 print_tf_plan(counts, updates, ftstack)
                 console.print('-' * 50)
 
-        if github_push:
-            install_gh()
-
         for ftstack in ftstacks:
             generated_path = os.path.join(base_dir, ftstack)
-            if stack_name:
-                stack_path = os.path.join(base_dir, stack_name)
-                os.makedirs(stack_path, exist_ok=True)
-                shutil.move(generated_path, stack_path)
-                generated_path = stack_path
-                logger.info(f"Terraform code created at: {stack_path}")
             logger.info(f"Terraform code created at: {generated_path}")
+
+        if github_push:
+            if not gh_push_onboarding(output_dir, provider, account_id, region):
+                exit()
 
 
 def setup_logger():
