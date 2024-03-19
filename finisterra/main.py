@@ -17,7 +17,7 @@ from .providers.cloudflare.Cloudflare import Cloudflare
 
 from .utils.auth import auth
 from .utils.tf_plan import execute_terraform_plan, print_tf_plan
-from .utils.github import is_valid_github_repo, install_gh, gh_push_onboarding, create_aws_gh_role
+from .utils.github import GithubUtils
 
 
 from rich.progress import Progress
@@ -63,11 +63,17 @@ def execute_provider_method(provider, method_name):
 @click.option('--token', '-t', default=None, help='Token')
 @click.option('--cache-dir', '-c', default=None, help='Cache directory to save the terraform providers schema')
 @click.option('--filters', '-f', default=None, help='Filters to apply to the resources')
-@click.option('--github-push', '-gh', is_flag=True, default=False, help='Push the generated code to a GitHub')
+@click.option('--github-push-repo', '-ghr', default=None, help='Push to GitHub repository')
 @click.option('--stack-name', '-s', default=None, help='Stack name')
-def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir, filters, github_push, stack_name):
+def main(provider, module, output_dir, process_dependencies, run_plan, token, cache_dir, filters, github_push_repo, stack_name):
+
+    if github_push_repo and output_dir != os.getcwd():
+        raise click.UsageError(
+            "Cannot specify '--output_dir' when '--github-push-repo' is provided. Please remove the '--output_dir' option.")
+
     if output_dir:
         output_dir = os.path.abspath(output_dir)
+
     if not os.environ.get('FT_PROCESS_DEPENDENCIES'):
         os.environ['FT_PROCESS_DEPENDENCIES'] = str(process_dependencies)
 
@@ -80,12 +86,13 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
     if token:
         os.environ['FT_API_TOKEN'] = token
 
-    if github_push:
-        if not is_valid_github_repo(output_dir):
-            logger.error(
-                "Error: The output directory is not a valid GitHub repository.")
-            exit()
-        install_gh()
+    if github_push_repo:
+        github_utils = GithubUtils(github_push_repo)
+        output_dir = tempfile.mkdtemp()
+        # Install the Github App
+        github_utils.install_gh()
+        # Validate Repository permissions
+        github_utils.validate_github_repo()
 
     progress = Progress(
         SpinnerColumn(spinner_name="dots"),
@@ -112,7 +119,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         auth(auth_payload)
         execute = True
 
-        script_dir = script_dir = tempfile.mkdtemp()
+        script_dir = tempfile.mkdtemp()
         provider_instance = Cloudflare(
             progress, script_dir, output_dir, filters)
 
@@ -199,8 +206,8 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'client_vpn',
         ]
 
-        if github_push:
-            create_aws_gh_role(output_dir)
+        if github_push_repo:
+            github_utils.create_aws_gh_role()
 
     if execute:
         with progress:
@@ -286,13 +293,17 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 print_tf_plan(counts, updates, ftstack)
                 console.print('-' * 50)
 
+        if github_push_repo:
+            if not github_utils.gh_push_onboarding(provider, account_id, region):
+                exit()
+
         for ftstack in ftstacks:
             generated_path = os.path.join(base_dir, ftstack)
-            logger.info(f"Terraform code created at: {generated_path}")
-
-        if github_push:
-            if not gh_push_onboarding(output_dir, provider, account_id, region):
-                exit()
+            if not github_push_repo:
+                logger.info(f"Terraform code created at: {generated_path}")
+            # else:
+            #     logger.info(
+            #         f"Terraform code pushed to Github repository: {github_push_repo}")
 
 
 def setup_logger():
