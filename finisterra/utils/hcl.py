@@ -346,9 +346,7 @@ class HCL:
                         target_dir, os.path.basename(filename))
                     shutil.copyfile(filename, target_file)
 
-            print(self.script_dir)
-            # shutil.rmtree(temp_dir)
-            # shutil.rmtree(self.script_dir)
+            shutil.rmtree(self.script_dir)
 
         else:
             logger.error(f"{response.status} {response.reason}")
