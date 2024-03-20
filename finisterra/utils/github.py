@@ -306,8 +306,9 @@ class GithubUtils:
             if response.status_code == 200:
                 response_dict = json.loads(response.text)
                 pr_url = response_dict.get('html_url')
-                logger.info(
-                    f"Terraform code successfully pushed to GitHub. Pull request URL: {pr_url}")
+                if pr_url:
+                    logger.info(
+                        f"Terraform code successfully pushed to GitHub. Pull request URL: {pr_url}")
                 return True
             else:
                 logger.error(
