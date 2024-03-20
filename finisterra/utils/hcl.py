@@ -319,8 +319,7 @@ class HCL:
             except UnicodeDecodeError as e:
                 pass
 
-            temp_dir = tempfile.mkdtemp()
-            zip_file_path = os.path.join(temp_dir, 'finisterra.zip')
+            zip_file_path = os.path.join(self.script_dir, 'finisterra.zip')
             with open(zip_file_path, 'wb') as zip_file:
                 zip_file.write(response_data)
 
@@ -347,8 +346,9 @@ class HCL:
                         target_dir, os.path.basename(filename))
                     shutil.copyfile(filename, target_file)
 
-            shutil.rmtree(temp_dir)
-            shutil.rmtree(self.script_dir)
+            print(self.script_dir)
+            # shutil.rmtree(temp_dir)
+            # shutil.rmtree(self.script_dir)
 
         else:
             logger.error(f"{response.status} {response.reason}")

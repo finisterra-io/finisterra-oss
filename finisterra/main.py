@@ -163,7 +163,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         s3Bucket = f'ft-{account_id}-{region}-tfstate'
         dynamoDBTable = f'ft-{account_id}-{region}-tfstate-lock'
         stateKey = f'finisterra/generated/aws/{account_id}/{region}/{module}'
-        script_dir = script_dir = tempfile.mkdtemp()
+        script_dir = tempfile.mkdtemp()
 
         provider_instance = Aws(progress, script_dir, s3Bucket, dynamoDBTable,
                                 stateKey, account_id, region, output_dir, filters)
@@ -294,16 +294,29 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 console.print('-' * 50)
 
         if github_push_repo:
+
             if not github_utils.gh_push_onboarding(provider, account_id, region):
                 exit()
 
-        for ftstack in ftstacks:
-            generated_path = os.path.join(base_dir, ftstack)
-            if not github_push_repo:
-                logger.info(f"Terraform code created at: {generated_path}")
-            # else:
-            #     logger.info(
-            #         f"Terraform code pushed to Github repository: {github_push_repo}")
+            for ftstack in ftstacks:
+                generated_path = os.path.join(base_dir, ftstack)
+                # clean the .terraform* directory from the generated path recursively
+                for root, dirs, files in os.walk(generated_path):
+                    for file in files:
+                        if file.startswith('.terraform'):
+                            os.remove(os.path.join(root, file))
+                    for dir in dirs:
+                        if dir.startswith('.terraform'):
+                            shutil.rmtree(os.path.join(root, dir))
+                branch_name = f"finisterra-{provider}-{account_id}-{region}-{ftstack}"
+                remote_path = f"finisterra/generated/aws/{account_id}/{region}"
+                if not github_utils.gh_push_terraform_code(generated_path, branch_name, remote_path):
+                    exit()
+        else:
+            for ftstack in ftstacks:
+                generated_path = os.path.join(base_dir, ftstack)
+                if not github_push_repo:
+                    logger.info(f"Terraform code created at: {generated_path}")
 
 
 def setup_logger():

@@ -9,6 +9,10 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 from ..providers.aws.aws_clients import AwsClients
+import requests
+import tempfile
+import zipfile
+import glob
 
 
 logger = logging.getLogger('finisterra')
@@ -239,3 +243,73 @@ class GithubUtils:
 
         while not self.check_aws_gh_role():
             time.sleep(5)
+
+    def gh_push_terraform_code(self, generated_path, branch_name, remote_path):
+        logger.debug(
+            f"Pushing Terraform code to GitHub repository: {self.repository_name} {branch_name}")
+        # Create a temporary directory and zip file
+        with tempfile.TemporaryDirectory() as tempdir:
+            zip_path = os.path.join(tempdir, 'code.zip')
+
+            # Zip the contents of the generated_path and the specified terragrunt files
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # First, add the original contents of the generated_path
+                for root, dirs, files in os.walk(generated_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(
+                            file_path, os.path.join(generated_path, '..'))
+                        zipf.write(file_path, arcname)
+
+                # Now, add the terragrunt* files from the directory above the generated_path
+                terragrunt_files = glob.glob(
+                    os.path.join(generated_path, '../terragrunt.hcl'))
+                for file_path in terragrunt_files:
+                    arcname = os.path.relpath(
+                        file_path, os.path.join(generated_path, '..'))
+                    zipf.write(file_path, arcname)
+
+            # Read API token and set up API call
+            api_token = os.environ.get('FT_API_TOKEN')
+            if not api_token:
+                api_token = read_token_from_file()
+            api_host = os.environ.get('FT_API_HOST_WEB', 'api.finisterra.io')
+            api_port = os.environ.get('FT_API_PORT_WEB', 443)
+            route = "api/github/push-code"
+
+            if api_port == 443:
+                url = f"https://{api_host}/{route}"
+            else:
+                url = f"http://{api_host}:{api_port}/{route}"
+
+            headers = {
+                "Authorization": "Bearer " + api_token,
+            }
+
+            files = {
+                'zipFile': ('code.zip', open(zip_path, 'rb'), 'application/zip')
+            }
+
+            data = {
+                "repositoryName": self.repository_name,
+                "branchName": branch_name,
+                "remotePath": remote_path
+            }
+
+            response = requests.post(
+                url, headers=headers, data=data, files=files)
+
+            # Ensure the file is closed after the request
+            files['zipFile'][1].close()
+
+            # Log and check the response
+            if response.status_code == 200:
+                response_dict = json.loads(response.text)
+                pr_url = response_dict.get('html_url')
+                logger.info(
+                    f"Terraform code successfully pushed to GitHub. Pull request URL: {pr_url}")
+                return True
+            else:
+                logger.error(
+                    f"Failed to push Terraform code. Status: {response.status_code}, Response: {response.text}")
+                return False
