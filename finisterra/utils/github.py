@@ -33,7 +33,7 @@ class GithubUtils:
         if not api_token:
             # If not defined, read the token from the file
             api_token = read_token_from_file()
-        api_host = os.environ.get('FT_API_HOST_WEB', 'api.finisterra.io')
+        api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
         api_port = os.environ.get('FT_API_PORT_WEB', 443)
 
         if api_port == 443:
@@ -273,7 +273,7 @@ class GithubUtils:
             api_token = os.environ.get('FT_API_TOKEN')
             if not api_token:
                 api_token = read_token_from_file()
-            api_host = os.environ.get('FT_API_HOST_WEB', 'api.finisterra.io')
+            api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
             api_port = os.environ.get('FT_API_PORT_WEB', 443)
             route = "api/github/push-code"
 

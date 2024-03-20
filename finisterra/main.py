@@ -89,10 +89,6 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
     if github_push_repo:
         github_utils = GithubUtils(github_push_repo)
         output_dir = tempfile.mkdtemp()
-        # Install the Github App
-        github_utils.install_gh()
-        # Validate Repository permissions
-        github_utils.validate_github_repo()
 
     progress = Progress(
         SpinnerColumn(spinner_name="dots"),
@@ -209,6 +205,12 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         if github_push_repo:
             github_utils.create_aws_gh_role()
 
+    if github_push_repo:
+        # Install the Github App
+        github_utils.install_gh()
+        # Validate Repository permissions
+        github_utils.validate_github_repo()
+
     if execute:
         with progress:
             logger.info(f"Fetching {provider} resources...")
@@ -294,7 +296,6 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 console.print('-' * 50)
 
         if github_push_repo:
-
             if not github_utils.gh_push_onboarding(provider, account_id, region):
                 exit()
 
@@ -308,7 +309,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                     for dir in dirs:
                         if dir.startswith('.terraform'):
                             shutil.rmtree(os.path.join(root, dir))
-                branch_name = f"finisterra-{provider}-{account_id}-{region}-{ftstack}"
+                branch_name = f"{ftstack}.{provider}.{account_id}.{region}"
                 remote_path = f"finisterra/generated/aws/{account_id}/{region}"
                 if not github_utils.gh_push_terraform_code(generated_path, branch_name, remote_path):
                     exit()
