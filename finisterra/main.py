@@ -216,9 +216,9 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             logger.info(f"Fetching {provider} resources...")
 
             # Check for invalid modules
-            modules_to_execute = module.split(',')
+            modules_to_execute = set(module.split(','))
             invalid_modules = [mod.strip() for mod in modules_to_execute if mod.strip(
-            ) not in all_provider_methods and mod.lower() != 'all']
+            ).lower() not in all_provider_methods and mod.lower() != 'all']
             if invalid_modules:
                 logger.error(
                     f"Error: Invalid module(s) specified: {', '.join(invalid_modules)}")
