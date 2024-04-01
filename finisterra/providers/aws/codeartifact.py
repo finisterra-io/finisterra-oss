@@ -9,8 +9,8 @@ logger = logging.getLogger('finisterra')
 
 class CodeArtifact:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
-        
+        self.provider_instance = provider_instance
+
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -76,37 +76,50 @@ class CodeArtifact:
             self.process_single_codeartifact_domain(domain_name, ftstack)
             return
 
-        paginator = self.provider_instance.aws_clients.codeartifact_client.get_paginator(
-            'list_domains')
-        total = 0
-        for response in paginator.paginate():
-            total += len(response["domains"])
-        if total > 0:
-            self.task = self.provider_instance.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        for response in paginator.paginate():
-            for domain in response["domains"]:
-                domain_name = domain["name"]
-                domain_arn = domain["arn"]
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{domain_name}[/]")
-                self.process_single_codeartifact_domain(domain_name, ftstack)
+        try:
+            paginator = self.provider_instance.aws_clients.codeartifact_client.get_paginator(
+                'list_domains')
+            total = 0
+            for response in paginator.paginate():
+                total += len(response["domains"])
+            if total > 0:
+                self.task = self.provider_instance.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            for response in paginator.paginate():
+                for domain in response["domains"]:
+                    domain_name = domain["name"]
+                    domain_arn = domain["arn"]
+                    self.provider_instance.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{domain_name}[/]")
+                    self.process_single_codeartifact_domain(
+                        domain_name, ftstack)
 
-                try:
-                    policy = self.provider_instance.aws_clients.codeartifact_client.get_domain_permissions_policy(
-                        domain=domain_name)
-                    if policy["policy"]:
-                        document = policy["policy"]["document"]
-                        self.aws_codeartifact_domain_permissions_policy(
-                            domain_arn)
-                except botocore.exceptions.ClientError as error:
-                    # Ignore ResourceNotFoundException and continue
-                    pass
+                    try:
+                        policy = self.provider_instance.aws_clients.codeartifact_client.get_domain_permissions_policy(
+                            domain=domain_name)
+                        if policy["policy"]:
+                            document = policy["policy"]["document"]
+                            self.aws_codeartifact_domain_permissions_policy(
+                                domain_arn)
+                    except botocore.exceptions.ClientError as error:
+                        # Ignore ResourceNotFoundException and continue
+                        pass
+
+        except Exception as e:
+            # Catch-all for any other exceptions
+            logger.error(f"Unexpected error: {e}")
+            return
 
     def process_single_codeartifact_domain(self, domain_name, ftstack=None):
         resource_type = "aws_codeartifact_domain"
-        domain_info = self.provider_instance.aws_clients.codeartifact_client.describe_domain(
-            domain=domain_name)
+        try:
+            domain_info = self.provider_instance.aws_clients.codeartifact_client.describe_domain(
+                domain=domain_name)
+        except Exception as e:
+            # Catch-all for any other exceptions
+            logger.error(f"Unexpected error: {e}")
+            return
+
         domain_arn = domain_info["domain"]["arn"]
         logger.debug(f"Processing CodeArtifact Domain: {domain_name}")
 

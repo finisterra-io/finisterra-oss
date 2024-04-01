@@ -10,7 +10,7 @@ logger = logging.getLogger('finisterra')
 
 class LaunchTemplate:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -27,7 +27,8 @@ class LaunchTemplate:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
 
     def launchtemplate(self):
@@ -53,7 +54,12 @@ class LaunchTemplate:
         logger.debug("Processing AWS Launch Templates...")
         # If launch_template_id is not provided, process all launch templates
         if launch_template_id is None:
-            all_templates_response = self.provider_instance.aws_clients.ec2_client.describe_launch_templates()
+            try:
+                all_templates_response = self.provider_instance.aws_clients.ec2_client.describe_launch_templates()
+            except Exception as e:
+                # Catch-all for any other exceptions
+                logger.error(f"Unexpected error: {e}")
+                return
             if 'LaunchTemplates' not in all_templates_response or not all_templates_response['LaunchTemplates']:
                 logger.debug("No launch templates found!")
                 return
@@ -74,10 +80,15 @@ class LaunchTemplate:
 
     def process_individual_launch_template(self, launch_template_id, ftstack):
         resource_type = "aws_launch_template"
-        response = self.provider_instance.aws_clients.ec2_client.describe_launch_template_versions(
-            LaunchTemplateId=launch_template_id,
-            Versions=['$Latest']
-        )
+        try:
+            response = self.provider_instance.aws_clients.ec2_client.describe_launch_template_versions(
+                LaunchTemplateId=launch_template_id,
+                Versions=['$Latest']
+            )
+        except Exception as e:
+            # Catch-all for any other exceptions
+            logger.error(f"Unexpected error: {e}")
+            return
 
         # Check if we have the launch template versions in the response
         if 'LaunchTemplateVersions' not in response or not response['LaunchTemplateVersions']:
@@ -132,7 +143,8 @@ class LaunchTemplate:
                     security_group, ftstack)
             subnet_id = network_interface.get("SubnetId")
             if subnet_id:
-                subnet_names = get_subnet_names(self.provider_instance.aws_clients, [subnet_id])
+                subnet_names = get_subnet_names(
+                    self.provider_instance.aws_clients, [subnet_id])
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, id, "subnet_name", subnet_names[0])

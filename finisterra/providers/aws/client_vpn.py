@@ -76,27 +76,33 @@ class ClientVPN:
                     f"Error fetching EC2 Client VPN Endpoint {vpn_endpoint_id}: {e}")
             return
 
-        # Process all Client VPN Endpoints if no specific vpn_endpoint_id is provided
-        paginator = self.provider_instance.aws_clients.ec2_client.get_paginator(
-            "describe_client_vpn_endpoints")
+        try:
+            # Process all Client VPN Endpoints if no specific vpn_endpoint_id is provided
+            paginator = self.provider_instance.aws_clients.ec2_client.get_paginator(
+                "describe_client_vpn_endpoints")
 
-        # Update to paginate with filters if available
-        if self.provider_instance.filters:
-            pages = paginator.paginate(Filters=self.provider_instance.filters)
-        else:
-            pages = paginator.paginate()
+            # Update to paginate with filters if available
+            if self.provider_instance.filters:
+                pages = paginator.paginate(
+                    Filters=self.provider_instance.filters)
+            else:
+                pages = paginator.paginate()
 
-        total = 0
-        for page in pages:
-            total += len(page["ClientVpnEndpoints"])
-        if total > 0:
-            self.task = self.provider_instance.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        for page in pages:
-            for vpn_endpoint in page["ClientVpnEndpoints"]:
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{vpn_endpoint['ClientVpnEndpointId']}[/]")
-                self.process_ec2_client_vpn_endpoint(vpn_endpoint, ftstack)
+            total = 0
+            for page in pages:
+                total += len(page["ClientVpnEndpoints"])
+            if total > 0:
+                self.task = self.provider_instance.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            for page in pages:
+                for vpn_endpoint in page["ClientVpnEndpoints"]:
+                    self.provider_instance.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{vpn_endpoint['ClientVpnEndpointId']}[/]")
+                    self.process_ec2_client_vpn_endpoint(vpn_endpoint, ftstack)
+        except Exception as e:
+            # Catch-all for any other exceptions
+            logger.error(f"Unexpected error: {e}")
+            return
 
     def process_ec2_client_vpn_endpoint(self, vpn_endpoint, ftstack=None):
         resource_type = "aws_ec2_client_vpn_endpoint"

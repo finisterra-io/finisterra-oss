@@ -12,7 +12,7 @@ logger = logging.getLogger('finisterra')
 
 class Apigateway:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -31,7 +31,8 @@ class Apigateway:
 
         self.api_gateway_resource_list = {}
 
-        self.vpc_endpoint_instance = VPCEndPoint(self.provider_instance, self.hcl)
+        self.vpc_endpoint_instance = VPCEndPoint(
+            self.provider_instance, self.hcl)
         self.elbv2_instance = ELBV2(self.provider_instance, self.hcl)
         self.logs_instance = Logs(self.provider_instance, self.hcl)
         self.acm_instance = ACM(self.provider_instance, self.hcl)
@@ -118,7 +119,7 @@ class Apigateway:
                             ftstack = "stack_"+tag_value
                         break
             except Exception as e:
-                logger.error("Error occurred: ", e)
+                logger.error(f"Error occurred: {e}")
 
             attributes = {
                 "id": api_id,

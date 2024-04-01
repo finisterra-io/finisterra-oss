@@ -14,6 +14,7 @@ from rich.traceback import Traceback
 
 from .providers.aws.Aws import Aws
 from .providers.cloudflare.Cloudflare import Cloudflare
+from .providers.pagerduty.PagerDuty import PagerDuty
 
 from .utils.auth import auth
 from .utils.tf_plan import execute_terraform_plan, print_tf_plan
@@ -34,17 +35,8 @@ ftstacks = set()
 
 def execute_provider_method(provider, method_name):
     try:
-        if method_name == "iam":
-            # Special handling for IAM module
-            original_region = provider.region
-            provider.region = "global"
-            method = getattr(provider, method_name)
-            result = method()
-            provider.region = original_region
-        else:
-            # Regular execution for other modules
-            method = getattr(provider, method_name)
-            result = method()
+        method = getattr(provider, method_name)
+        result = method()
         return result
     except Exception as e:
         # Log fail status
@@ -122,6 +114,27 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         # Define all provider methods for execution
         all_provider_methods = [
             'dns',
+        ]
+
+    if provider == "pagerduty":
+        account_id = ""
+        region = "global"
+        auth_payload = {
+            "provider": provider,
+            "module": module,
+            "account_id": account_id,
+            "region": region
+        }
+        auth(auth_payload)
+        execute = True
+
+        script_dir = tempfile.mkdtemp()
+        provider_instance = PagerDuty(
+            progress, script_dir, output_dir, filters)
+
+        # Define all provider methods for execution
+        all_provider_methods = [
+            'user',
         ]
 
     if provider == "aws":

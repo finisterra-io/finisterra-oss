@@ -10,7 +10,7 @@ logger = logging.getLogger('finisterra')
 
 class DocDb:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -26,11 +26,13 @@ class DocDb:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -103,7 +105,7 @@ class DocDb:
                                     ftstack = "docdb_"+tag['Value']
                                 break
                     except Exception as e:
-                        logger.error("Error occurred: ", e)
+                        logger.error(f"Error occurred: {e}")
 
                     attributes = {
                         "id": db_cluster["DBClusterIdentifier"],

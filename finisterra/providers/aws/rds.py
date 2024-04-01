@@ -13,7 +13,7 @@ logger = logging.getLogger('finisterra')
 
 class RDS:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -31,7 +31,8 @@ class RDS:
 
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
         self.logs_instance = Logs(self.provider_instance, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
 
     def get_kms_alias(self, kms_key_id):
@@ -55,7 +56,8 @@ class RDS:
                 raise e
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -78,7 +80,7 @@ class RDS:
             subnet_id = subnet_ids[0]
             # get the vpc id for the subnet_id
             response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
+                subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
                 logger.debug(
@@ -161,7 +163,7 @@ class RDS:
                                 ftstack = "stack_" + tag['Value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": id,
@@ -307,7 +309,8 @@ class RDS:
                 id = db_subnet_group_name
                 subnet_ids = [subnet["SubnetIdentifier"]
                               for subnet in db_subnet_group["Subnets"]]
-                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(
+                    self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, id, "subnet_names",  subnet_names)

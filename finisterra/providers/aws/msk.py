@@ -9,7 +9,7 @@ logger = logging.getLogger('finisterra')
 
 class MSK:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -25,7 +25,8 @@ class MSK:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
 
     def get_vpc_id(self, sg_ids):
         if not sg_ids:
@@ -43,7 +44,8 @@ class MSK:
         return vpc_id
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -83,77 +85,85 @@ class MSK:
         resource_type = "aws_msk_cluster"
         logger.debug("Processing MSK Clusters...")
 
-        # Pagination for list_clusters, if applicable
-        paginator = self.provider_instance.aws_clients.msk_client.get_paginator("list_clusters")
-        page_iterator = paginator.paginate()
-        total = 0
-        for page in page_iterator:
-            total += len(page["ClusterInfoList"])
+        try:
+            # Set up pagination for list_clusters
+            paginator = self.provider_instance.aws_clients.msk_client.get_paginator(
+                "list_clusters")
+            page_iterator = paginator.paginate()
 
-        if total > 0:
-            self.task = self.provider_instance.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            total = 0
+            for page in page_iterator:
+                total += len(page["ClusterInfoList"])
 
-        for page in page_iterator:
-            for cluster_info in page["ClusterInfoList"]:
-                cluster_arn = cluster_info["ClusterArn"]
-                cluster_name = cluster_info["ClusterName"]
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
-                logger.debug(f"Processing MSK Cluster: {cluster_name}")
-                id = cluster_arn
+            if total > 0:
+                self.task = self.provider_instance.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=total)
 
-                ftstack = "msk"
-                try:
-                    tags_response = self.provider_instance.aws_clients.msk_client.list_tags_for_resource(
-                        ResourceArn=cluster_arn)
-                    tags = tags_response.get('Tags', {})
-                    if tags.get('ftstack', 'msk') != 'msk':
-                        ftstack = "stack_"+tags.get('ftstack', 'msk')
-                except Exception as e:
-                    logger.error("Error occurred: ", e)
+            for page in page_iterator:
+                for cluster_info in page["ClusterInfoList"]:
+                    cluster_arn = cluster_info["ClusterArn"]
+                    cluster_name = cluster_info["ClusterName"]
+                    self.provider_instance.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
+                    logger.debug(f"Processing MSK Cluster: {cluster_name}")
+                    id = cluster_arn
 
-                attributes = {
-                    "id": id,
-                    # "arn": cluster_arn,
-                    # "name": cluster_name,
-                }
+                    ftstack = "msk"
+                    try:
+                        tags_response = self.provider_instance.aws_clients.msk_client.list_tags_for_resource(
+                            ResourceArn=cluster_arn)
+                        tags = tags_response.get('Tags', {})
+                        if tags.get('ftstack', 'msk') != 'msk':
+                            ftstack = "stack_"+tags.get('ftstack', 'msk')
+                    except Exception as e:
+                        logger.error(f"Error occurred: {e}")
 
-                self.hcl.process_resource(
-                    resource_type, id, attributes)
-                self.hcl.add_stack(resource_type, id, ftstack)
+                    attributes = {
+                        "id": id,
+                        # "arn": cluster_arn,
+                        # "name": cluster_name,
+                    }
 
-                # Extracting the Security Group IDs for the MSK Cluster
-                cluster_details = self.provider_instance.aws_clients.msk_client.describe_cluster(
-                    ClusterArn=cluster_arn
-                )
+                    self.hcl.process_resource(
+                        resource_type, id, attributes)
+                    self.hcl.add_stack(resource_type, id, ftstack)
 
-                sg_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["SecurityGroups"]
+                    # Extracting the Security Group IDs for the MSK Cluster
+                    cluster_details = self.provider_instance.aws_clients.msk_client.describe_cluster(
+                        ClusterArn=cluster_arn
+                    )
 
-                # Calling aws_security_group function with the extracted SG IDs
-                for sg in sg_ids:
-                    self.security_group_instance.aws_security_group(
-                        sg, ftstack)
-                vpc_id = self.get_vpc_id(sg_ids)
-                if vpc_id:
-                    self.hcl.add_additional_data(
-                        resource_type, id, "vpc_id", vpc_id)
-                    vpc_name = self.get_vpc_name(vpc_id)
-                    if vpc_name:
+                    sg_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["SecurityGroups"]
+
+                    # Calling aws_security_group function with the extracted SG IDs
+                    for sg in sg_ids:
+                        self.security_group_instance.aws_security_group(
+                            sg, ftstack)
+                    vpc_id = self.get_vpc_id(sg_ids)
+                    if vpc_id:
                         self.hcl.add_additional_data(
-                            resource_type, id, "vpc_name", vpc_name)
-                subnet_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["ClientSubnets"]
-                if subnet_ids:
-                    subnet_names = get_subnet_names(
-                        self.provider_instance.aws_clients, subnet_ids)
-                    if subnet_names:
-                        self.hcl.add_additional_data(
-                            resource_type, id, "subnet_names", subnet_names)
+                            resource_type, id, "vpc_id", vpc_id)
+                        vpc_name = self.get_vpc_name(vpc_id)
+                        if vpc_name:
+                            self.hcl.add_additional_data(
+                                resource_type, id, "vpc_name", vpc_name)
+                    subnet_ids = cluster_details["ClusterInfo"]["BrokerNodeGroupInfo"]["ClientSubnets"]
+                    if subnet_ids:
+                        subnet_names = get_subnet_names(
+                            self.provider_instance.aws_clients, subnet_ids)
+                        if subnet_names:
+                            self.hcl.add_additional_data(
+                                resource_type, id, "subnet_names", subnet_names)
 
-                self.aws_msk_configuration(cluster_arn)
-                # self.aws_msk_scram_secret_association(cluster_arn)
-                self.aws_appautoscaling_target(cluster_arn)
-                self.aws_appautoscaling_policy(cluster_arn)
+                    self.aws_msk_configuration(cluster_arn)
+                    # self.aws_msk_scram_secret_association(cluster_arn)
+                    self.aws_appautoscaling_target(cluster_arn)
+                    self.aws_appautoscaling_policy(cluster_arn)
+        except Exception as e:
+            # Handle other potential exceptions
+            logger.error(
+                f"Unexpected error occurred while processing MSK clusters: {e}")
+            return
 
     def aws_msk_scram_secret_association(self, cluster_arn):
         logger.debug(

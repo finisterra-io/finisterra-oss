@@ -8,7 +8,7 @@ logger = logging.getLogger('finisterra')
 
 class ACM:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -100,7 +100,7 @@ class ACM:
                             ftstack = "stack_" + tag['Value']
                         break
             except Exception as e:
-                logger.error("Error occurred: ", e)
+                logger.error(f"Error occurred:  {e}")
 
         id = cert_arn
         attributes = {

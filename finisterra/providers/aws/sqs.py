@@ -77,7 +77,7 @@ class SQS:
                     if tags.get('ftstack', 'sqs') != 'sqs':
                         fstack = "stack_"+tags.get('ftstack', 'sqs')
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": id,
@@ -111,7 +111,7 @@ class SQS:
                             self.hcl.add_additional_data(
                                 resource_type, dlq_url['QueueUrl'], "is_dlq", True)
                         except Exception as e:
-                            logger.error("Error occurred: ", e)
+                            logger.error(f"Error occurred: {e}")
                             continue
 
                 # Call aws_sqs_queue_redrive_policy with the queue_url as an argument

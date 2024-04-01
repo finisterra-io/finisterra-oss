@@ -15,7 +15,7 @@ class IAM:
         else:
             self.hcl = hcl
 
-        self.hcl.region = self.provider_instance.region
+        self.hcl.region = "global"
         self.hcl.output_dir = self.provider_instance.output_dir
         self.hcl.account_id = self.provider_instance.aws_account_id
 

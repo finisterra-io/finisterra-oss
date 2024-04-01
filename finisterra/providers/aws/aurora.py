@@ -13,7 +13,7 @@ logger = logging.getLogger('finisterra')
 
 class Aurora:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -32,7 +32,8 @@ class Aurora:
 
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
         self.logs_instance = Logs(self.provider_instance, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
 
         self.aws_rds_cluster_attrs = {}
@@ -58,7 +59,8 @@ class Aurora:
                 raise e
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -81,7 +83,7 @@ class Aurora:
             subnet_id = subnet_ids[0]
             # get the vpc id for the subnet_id
             response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
+                subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
                 logger.debug(
@@ -474,7 +476,8 @@ class Aurora:
                 id = db_subnet_group_name
                 subnet_ids = [subnet["SubnetIdentifier"]
                               for subnet in db_subnet_group["Subnets"]]
-                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(
+                    self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, id, "subnet_names",  subnet_names)
@@ -512,7 +515,9 @@ class Aurora:
         total = 0
         for page in paginator.paginate():
             for rds_cluster in page.get("DBClusters", []):
-                total += 1
+                engine = rds_cluster.get("Engine", "")
+                if engine.startswith("aurora"):
+                    total += 1
         if total > 0:
             self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
@@ -520,11 +525,12 @@ class Aurora:
             for rds_cluster in page.get("DBClusters", []):
                 engine = rds_cluster.get("Engine", "")
                 rds_cluster_id = rds_cluster["DBClusterIdentifier"]
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rds_cluster_id}[/]")
                 if not engine.startswith("aurora"):
                     continue
                 logger.debug(f"Processing RDS Cluster: {rds_cluster_id}")
+                self.provider_instance.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{rds_cluster_id}[/]")
+
                 cluster_arn = rds_cluster["DBClusterArn"]
 
                 ftstack = "aurora"
@@ -538,7 +544,7 @@ class Aurora:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": cluster_arn,

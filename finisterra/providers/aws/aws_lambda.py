@@ -18,7 +18,7 @@ logger = logging.getLogger('finisterra')
 
 class AwsLambda:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -37,10 +37,12 @@ class AwsLambda:
 
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
         self.logs_instance = Logs(self.provider_instance, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -78,7 +80,7 @@ class AwsLambda:
 
     def aws_lambda_function(self, selected_function_name=None, ftstack=None):
         resource_type = "aws_lambda_function"
-        # logger.debug(f"Processing Lambda Functions...", selected_function_name)
+        # logger.debug(f"Processing Lambda Functions... {selected_function_name}")
 
         if selected_function_name and ftstack:
             if self.hcl.id_resource_processed(resource_type, selected_function_name, ftstack):
@@ -109,13 +111,16 @@ class AwsLambda:
     def process_single_lambda_function(self, function_name, ftstack=None):
         resource_type = "aws_lambda_function"
 
-        # if function_name != 'xxx':
-        #     return
-
         logger.debug(f"Processing Lambda Function: {function_name}")
 
-        function_details = self.provider_instance.aws_clients.lambda_client.get_function(
-            FunctionName=function_name)
+        try:
+            function_details = self.provider_instance.aws_clients.lambda_client.get_function(
+                FunctionName=function_name)
+        except Exception as e:
+            logger.error(
+                f"Unexpected error occurred while getting lambda function: {e}")
+            return
+
         function_arn = function_details["Configuration"]["FunctionArn"]
 
         if not ftstack:
@@ -126,7 +131,7 @@ class AwsLambda:
                 if tags.get('ftstack', 'aws_lambda') != 'aws_lambda':
                     ftstack = "stack_" + tags.get('ftstack', 'aws_lambda')
             except Exception as e:
-                logger.error("Error occurred: ", e)
+                logger.error(f"Error occurred: {e}")
 
         s3_bucket = ''
         s3_key = ''
@@ -188,7 +193,8 @@ class AwsLambda:
                 if vpc_name:
                     self.hcl.add_additional_data(
                         resource_type, function_arn, "vpc_name", vpc_name)
-                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(
+                    self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         resource_type, function_arn, "subnet_names", subnet_names)
@@ -331,7 +337,8 @@ class AwsLambda:
     def aws_lambda_layer_version(self):
         logger.debug(f"Processing Lambda Layer Versions...")
 
-        layers = self.provider_instance.aws_clients.lambda_client.list_layers()["Layers"]
+        layers = self.provider_instance.aws_clients.lambda_client.list_layers()[
+            "Layers"]
 
         for layer in layers:
             layer_name = layer["LayerName"]
@@ -364,7 +371,8 @@ class AwsLambda:
 
     def aws_lambda_layer_version_permission(self):
         logger.debug(f"Processing Lambda Layer Version Permissions...")
-        paginator = self.provider_instance.aws_clients.lambda_client.get_paginator("list_layers")
+        paginator = self.provider_instance.aws_clients.lambda_client.get_paginator(
+            "list_layers")
         page_iterator = paginator.paginate()
         for page in page_iterator:
             for layer in page["Layers"]:

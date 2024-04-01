@@ -13,7 +13,7 @@ logger = logging.getLogger('finisterra')
 
 class EKS:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -32,12 +32,15 @@ class EKS:
 
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.logs_instance = Logs(self.provider_instance, self.hcl)
-        self.launchtemplate_instance = LaunchTemplate(self.provider_instance, self.hcl)
+        self.launchtemplate_instance = LaunchTemplate(
+            self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -77,80 +80,86 @@ class EKS:
         resource_type = 'aws_eks_cluster'
         logger.debug("Processing EKS Clusters...")
 
-        clusters = self.provider_instance.aws_clients.eks_client.list_clusters()["clusters"]
-        if len(clusters):
-            self.task = self.provider_instance.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
+        try:
 
-        for cluster_name in clusters:
-            cluster = self.provider_instance.aws_clients.eks_client.describe_cluster(name=cluster_name)[
-                "cluster"]
-            self.provider_instance.progress.update(
-                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
-            tags = cluster.get("tags", {})
-            ftstack = "eks"
-            if tags.get("ftstack", "eks") != "eks":
-                ftstack = "stack_"+tags.get("ftstack", "eks")
+            clusters = self.provider_instance.aws_clients.eks_client.list_clusters()[
+                "clusters"]
+            if len(clusters):
+                self.task = self.provider_instance.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
 
-            # if cluster_name != "xxxxx":
-            #     continue
+            for cluster_name in clusters:
+                cluster = self.provider_instance.aws_clients.eks_client.describe_cluster(name=cluster_name)[
+                    "cluster"]
+                self.provider_instance.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
+                tags = cluster.get("tags", {})
+                ftstack = "eks"
+                if tags.get("ftstack", "eks") != "eks":
+                    ftstack = "stack_"+tags.get("ftstack", "eks")
 
-            logger.debug(f"Processing EKS Cluster: {cluster_name}")
-            id = cluster_name
+                # if cluster_name != "xxxxx":
+                #     continue
 
-            attributes = {
-                "id": id,
-            }
-            self.hcl.process_resource(
-                resource_type, cluster_name.replace("-", "_"), attributes)
+                logger.debug(f"Processing EKS Cluster: {cluster_name}")
+                id = cluster_name
 
-            self.hcl.add_stack(resource_type, id, ftstack)
+                attributes = {
+                    "id": id,
+                }
+                self.hcl.process_resource(
+                    resource_type, cluster_name.replace("-", "_"), attributes)
 
-            vpc_id = cluster["resourcesVpcConfig"]["vpcId"]
-            if vpc_id:
-                vpc_name = self.get_vpc_name(vpc_id)
-                if vpc_name:
-                    self.hcl.add_additional_data(
-                        resource_type, id, "vpc_name", vpc_name)
+                self.hcl.add_stack(resource_type, id, ftstack)
 
-            # Call aws_iam_role for the cluster's associated IAM role
-            role_name = cluster["roleArn"].split('/')[-1]
-            self.iam_role_instance.aws_iam_role(role_name, ftstack)
+                vpc_id = cluster["resourcesVpcConfig"]["vpcId"]
+                if vpc_id:
+                    vpc_name = self.get_vpc_name(vpc_id)
+                    if vpc_name:
+                        self.hcl.add_additional_data(
+                            resource_type, id, "vpc_name", vpc_name)
 
-            # security_groups
-            security_group_ids = cluster["resourcesVpcConfig"]["securityGroupIds"]
-            for security_group_id in security_group_ids:
-                self.security_group_instance.aws_security_group(
-                    security_group_id, ftstack)
+                # Call aws_iam_role for the cluster's associated IAM role
+                role_name = cluster["roleArn"].split('/')[-1]
+                self.iam_role_instance.aws_iam_role(role_name, ftstack)
 
-            # kms key
-            if 'encryptionConfig' in cluster:
-                self.kms_instance.aws_kms_key(
-                    cluster['encryptionConfig'][0]['provider']['keyArn'], ftstack)
+                # security_groups
+                security_group_ids = cluster["resourcesVpcConfig"]["securityGroupIds"]
+                for security_group_id in security_group_ids:
+                    self.security_group_instance.aws_security_group(
+                        security_group_id, ftstack)
 
-            # Call aws_eks_addon for each cluster
-            self.aws_eks_addon(cluster_name, ftstack)
+                # kms key
+                if 'encryptionConfig' in cluster:
+                    self.kms_instance.aws_kms_key(
+                        cluster['encryptionConfig'][0]['provider']['keyArn'], ftstack)
 
-            # Call aws_eks_identity_provider_config for each cluster
-            self.aws_eks_identity_provider_config(cluster_name)
+                # Call aws_eks_addon for each cluster
+                self.aws_eks_addon(cluster_name, ftstack)
 
-            # Determine the log group name based on a naming convention
-            log_group_name = f"/aws/eks/{cluster_name}/cluster"
+                # Call aws_eks_identity_provider_config for each cluster
+                self.aws_eks_identity_provider_config(cluster_name)
 
-            # Call aws_cloudwatch_log_group for each cluster's associated log group
-            self.logs_instance.aws_cloudwatch_log_group(
-                log_group_name, ftstack)
-            # self.aws_cloudwatch_log_group(log_group_name)
+                # Determine the log group name based on a naming convention
+                log_group_name = f"/aws/eks/{cluster_name}/cluster"
 
-            # Extract the security group ID
-            security_group_id = cluster["resourcesVpcConfig"]["clusterSecurityGroupId"]
-            self.aws_ec2_tag(security_group_id)
+                # Call aws_cloudwatch_log_group for each cluster's associated log group
+                self.logs_instance.aws_cloudwatch_log_group(
+                    log_group_name, ftstack)
+                # self.aws_cloudwatch_log_group(log_group_name)
 
-            # oidc irsa
-            self.aws_iam_openid_connect_provider(cluster_name)
+                # Extract the security group ID
+                security_group_id = cluster["resourcesVpcConfig"]["clusterSecurityGroupId"]
+                self.aws_ec2_tag(security_group_id)
 
-            # eks node group
-            self.aws_eks_node_group(cluster_name, ftstack)
+                # oidc irsa
+                self.aws_iam_openid_connect_provider(cluster_name)
+
+                # eks node group
+                self.aws_eks_node_group(cluster_name, ftstack)
+        except Exception as e:
+            logger.error(f"Error executing eks: {e}")
+            return
 
     def aws_eks_addon(self, cluster_name, ftstack=None):
         resource_type = 'aws_eks_addon'
@@ -235,7 +244,8 @@ class EKS:
     def aws_eks_fargate_profile(self):
         logger.debug("Processing EKS Fargate Profiles...")
 
-        clusters = self.provider_instance.aws_clients.eks_client.list_clusters()["clusters"]
+        clusters = self.provider_instance.aws_clients.eks_client.list_clusters()[
+            "clusters"]
 
         for cluster_name in clusters:
             fargate_profiles = self.provider_instance.aws_clients.eks_client.list_fargate_profiles(clusterName=cluster_name)[
@@ -345,7 +355,8 @@ class EKS:
 
             subnet_ids = node_group["subnets"]
             if subnet_ids:
-                subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
+                subnet_names = get_subnet_names(
+                    self.provider_instance.aws_clients, subnet_ids)
                 if subnet_names:
                     self.hcl.add_additional_data(
                         "aws_eks_node_group", id, "subnet_names", subnet_names)

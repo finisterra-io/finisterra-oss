@@ -7,7 +7,7 @@ logger = logging.getLogger('finisterra')
 
 class SNS:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -78,7 +78,8 @@ class SNS:
         resource_type = "aws_sns_topic"
         logger.debug("Processing SNS Topics...")
 
-        paginator = self.provider_instance.aws_clients.sns_client.get_paginator("list_topics")
+        paginator = self.provider_instance.aws_clients.sns_client.get_paginator(
+            "list_topics")
         total = 0
         for page in paginator.paginate():
             total += len(page.get("Topics", []))
@@ -109,7 +110,7 @@ class SNS:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": id,

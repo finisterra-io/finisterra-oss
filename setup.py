@@ -14,6 +14,7 @@ setup(
         'rich==13.7.0',
         'deepdiff==5.5.0',
         'cloudflare==2.19.2',
+        'pdpyras==5.2.0',
     ],
     entry_points={
         'console_scripts': [

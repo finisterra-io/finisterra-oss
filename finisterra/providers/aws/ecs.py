@@ -13,7 +13,7 @@ logger = logging.getLogger('finisterra')
 
 class ECS:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -33,8 +33,10 @@ class ECS:
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
         self.logs_instance = Logs(self.provider_instance, self.hcl)
         self.kms_instance = KMS(self.provider_instance, self.hcl)
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
-        self.target_group_instance = TargetGroup(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
+        self.target_group_instance = TargetGroup(
+            self.provider_instance, self.hcl)
 
     def get_subnet_names(self, network_configuration):
         if network_configuration:
@@ -44,7 +46,7 @@ class ECS:
             subnet_names = []
             for subnet_id in subnets:
                 response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                        subnet_id])
+                    subnet_id])
 
                 # Check if 'Subnets' key exists and it's not empty
                 if not response or 'Subnets' not in response or not response['Subnets']:
@@ -80,11 +82,11 @@ class ECS:
                 # get the vpc id for the first subnet
                 subnet_id = subnets[0]
                 response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                        subnet_id])
+                    subnet_id])
                 vpc_id = response['Subnets'][0]['VpcId']
             if vpc_id:
                 response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
-                                                                     vpc_id])
+                    vpc_id])
                 if not response or 'Vpcs' not in response or not response['Vpcs']:
                     # Handle this case as required, for example:
                     logger.debug(
@@ -153,7 +155,7 @@ class ECS:
                             ftstack = "stack_"+tag['value']
                         break
             except Exception as e:
-                logger.error("Error occurred: ", e)
+                logger.error(f"Error occurred: {e}")
 
             attributes = {
                 "id": id,
@@ -650,8 +652,8 @@ class ECS:
             self.aws_lb_listener(target_group_arn)
 
     def aws_lb_listener_rule(self, target_group_arn):
-        logger.debug("Processing Load Balancer Listener Rules for Target Group ARN:",
-                     target_group_arn)
+        logger.debug(
+            f"Processing Load Balancer Listener Rules for Target Group ARN: {target_group_arn}")
 
         load_balancers = self.provider_instance.aws_clients.elbv2_client.describe_load_balancers()[
             "LoadBalancers"]
@@ -691,8 +693,8 @@ class ECS:
                         "aws_lb_listener_rule", rule_id, attributes)
 
     def aws_lb_listener(self, target_group_arn):
-        logger.debug("Processing Load Balancer Listeners for Target Group ARN:",
-                     target_group_arn)
+        logger.debug(
+            f"Processing Load Balancer Listeners for Target Group ARN: {target_group_arn}")
 
         # Get all Load Balancers
         load_balancer_arns = [lb["LoadBalancerArn"]

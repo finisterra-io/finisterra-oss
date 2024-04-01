@@ -39,17 +39,21 @@ class CloudFront:
         self.wafv2_instance = Wafv2(self.provider_instance, self.hcl)
 
     def get_managed_cache_policies(self):
-        managed_cache_policies = self.provider_instance.aws_clients.cloudfront_client.list_cache_policies(
-            Type="managed",
-            MaxItems="100"
-        ).get("CachePolicyList", [])
-        result = {}
-        for policy in managed_cache_policies['Items']:
-            if policy['Type'] != 'managed':
-                continue
-            result[policy["CachePolicy"]["Id"]
-                   ] = policy["CachePolicy"]["CachePolicyConfig"]["Name"]
-        return result
+        try:
+            managed_cache_policies = self.provider_instance.aws_clients.cloudfront_client.list_cache_policies(
+                Type="managed",
+                MaxItems="100"
+            ).get("CachePolicyList", [])
+            result = {}
+            for policy in managed_cache_policies['Items']:
+                if policy['Type'] != 'managed':
+                    continue
+                result[policy["CachePolicy"]["Id"]
+                       ] = policy["CachePolicy"]["CachePolicyConfig"]["Name"]
+            return result
+        except Exception as e:
+            logger.error(f"Error occurred: {e}")
+            return None
 
     def cloudfront(self):
         self.hcl.prepare_folder()
@@ -146,7 +150,7 @@ class CloudFront:
                             ftstack = "stack_"+tag['Value']
                         break
             except Exception as e:
-                logger.error("Error occurred: ", e)
+                logger.error(f"Error occurred: {e}")
 
             id = distribution_id
 

@@ -9,7 +9,7 @@ logger = logging.getLogger('finisterra')
 
 class ElasticacheRedis:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -26,10 +26,12 @@ class ElasticacheRedis:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
 
     def get_vpc_name(self, vpc_id):
-        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+        response = self.provider_instance.aws_clients.ec2_client.describe_vpcs(VpcIds=[
+                                                                               vpc_id])
 
         if not response or 'Vpcs' not in response or not response['Vpcs']:
             # Handle this case as required, for example:
@@ -52,7 +54,7 @@ class ElasticacheRedis:
             subnet_id = subnet_ids[0]
             # get the vpc id for the subnet_id
             response = self.provider_instance.aws_clients.ec2_client.describe_subnets(SubnetIds=[
-                                                                    subnet_id])
+                subnet_id])
             if not response or 'Subnets' not in response or not response['Subnets']:
                 # Handle this case as required, for example:
                 logger.debug(
@@ -125,7 +127,7 @@ class ElasticacheRedis:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": id,
@@ -227,7 +229,8 @@ class ElasticacheRedis:
 
             subnet_ids = [subnet["SubnetIdentifier"]
                           for subnet in subnet_group["Subnets"]]
-            subnet_names = get_subnet_names(self.provider_instance.aws_clients, subnet_ids)
+            subnet_names = get_subnet_names(
+                self.provider_instance.aws_clients, subnet_ids)
             if subnet_names:
                 self.hcl.add_additional_data(
                     resource_type, id, "subnet_names",  subnet_names)

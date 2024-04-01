@@ -9,7 +9,7 @@ logger = logging.getLogger('finisterra')
 
 class StepFunction:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
         else:
@@ -75,9 +75,14 @@ class StepFunction:
                 #     continue
 
                 # Call describe_state_machine to get detailed info, including roleArn
-                state_machine = self.provider_instance.aws_clients.sfn_client.describe_state_machine(
-                    stateMachineArn=state_machine_summary['stateMachineArn']
-                )
+                try:
+                    state_machine = self.provider_instance.aws_clients.sfn_client.describe_state_machine(
+                        stateMachineArn=state_machine_summary['stateMachineArn']
+                    )
+                except Exception as e:
+                    # Handle other possible exceptions
+                    logger.error(f"Unexpected error occurred: {e}")
+                    continue
 
                 role_arn = state_machine.get('roleArn', None)
                 state_machine_arn = state_machine["stateMachineArn"]
@@ -93,7 +98,7 @@ class StepFunction:
                                 ftstack = "stack_"+tag['value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": state_machine_arn,

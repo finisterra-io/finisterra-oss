@@ -6,6 +6,7 @@ from ...providers.aws.iam_role import IAM
 import logging
 from botocore.exceptions import ClientError
 import inspect
+import botocore
 
 logger = logging.getLogger('finisterra')
 
@@ -87,18 +88,24 @@ class EC2:
         return None
 
     def get_kms_alias(self, kms_key_id):
-        value = ""
-        response = self.provider_instance.aws_clients.kms_client.list_aliases()
-        aliases = response.get('Aliases', [])
-        while 'NextMarker' in response:
-            response = self.provider_instance.aws_clients.kms_client.list_aliases(
-                Marker=response['NextMarker'])
-            aliases.extend(response.get('Aliases', []))
-        for alias in aliases:
-            if 'TargetKeyId' in alias and alias['TargetKeyId'] == kms_key_id.split('/')[-1]:
-                value = alias['AliasName']
-                break
-        return value
+        try:
+            value = ""
+            response = self.provider_instance.aws_clients.kms_client.list_aliases()
+            aliases = response.get('Aliases', [])
+            while 'NextMarker' in response:
+                response = self.provider_instance.aws_clients.kms_client.list_aliases(
+                    Marker=response['NextMarker'])
+                aliases.extend(response.get('Aliases', []))
+            for alias in aliases:
+                if 'TargetKeyId' in alias and alias['TargetKeyId'] == kms_key_id.split('/')[-1]:
+                    value = alias['AliasName']
+                    break
+            return value
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'AccessDeniedException':
+                return ""
+            else:
+                raise e
 
     def ec2(self):
         self.hcl.prepare_folder()
@@ -358,7 +365,7 @@ class EC2:
                                 ftstack = "stack_"+tag['Value']
                             break
                 except Exception as e:
-                    logger.error("Error occurred: ", e)
+                    logger.error(f"Error occurred: {e}")
 
                 attributes = {
                     "id": id,

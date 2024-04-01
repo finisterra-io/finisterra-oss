@@ -112,7 +112,8 @@ class S3:
                 if bucket_region == self.provider_instance.region:
                     self.process_single_s3_bucket(bucket_name, ftstack)
             except ClientError as e:
-                # logger.error(f"Access Denied: {e.response['Error']['Message']}")
+                logger.error(
+                    f"Access Denied: {e.response['Error']['Message']}")
                 pass
 
     def process_single_s3_bucket(self, bucket_name, ftstack=None):

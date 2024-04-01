@@ -11,7 +11,7 @@ logger = logging.getLogger('finisterra')
 
 class ElasticBeanstalk:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -28,7 +28,8 @@ class ElasticBeanstalk:
         self.hcl.provider_version = self.provider_instance.provider_version
         self.hcl.account_name = self.provider_instance.account_name
 
-        self.security_group_instance = SECURITY_GROUP(self.provider_instance, self.hcl)
+        self.security_group_instance = SECURITY_GROUP(
+            self.provider_instance, self.hcl)
         self.iam_role_instance = IAM(self.provider_instance, self.hcl)
 
     def elasticbeanstalk(self):
@@ -187,7 +188,7 @@ class ElasticBeanstalk:
                             ftstack = "stack_"+tag['Value']
                         break
             except Exception as e:
-                logger.error("Error occurred: ", e)
+                logger.error(f"Error occurred: {e}")
 
             attributes = {
                 "id": id,
@@ -200,75 +201,81 @@ class ElasticBeanstalk:
 
             self.hcl.add_stack(resource_type, id, ftstack)
 
-            # Retrieve the environment configuration details
-            config_settings = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_configuration_settings(
-                ApplicationName=env["ApplicationName"],
-                EnvironmentName=env["EnvironmentName"]
-            )
+            try:
+                # Retrieve the environment configuration details
+                config_settings = self.provider_instance.aws_clients.elasticbeanstalk_client.describe_configuration_settings(
+                    ApplicationName=env["ApplicationName"],
+                    EnvironmentName=env["EnvironmentName"]
+                )
 
-            # Process the Service Role
-            service_role = None
-            for option_setting in config_settings['ConfigurationSettings'][0]['OptionSettings']:
-                if option_setting['OptionName'] == 'ServiceRole':
-                    service_role = option_setting['Value']
+                # Process the Service Role
+                service_role = None
+                for option_setting in config_settings['ConfigurationSettings'][0]['OptionSettings']:
+                    if option_setting['OptionName'] == 'ServiceRole':
+                        service_role = option_setting['Value']
 
-            # Process IAM roles
-            if service_role:
-                self.service_roles[env_id] = service_role
-                service_role_name = service_role.split('/')[-1]
-                self.iam_role_instance.aws_iam_role(service_role_name, ftstack)
+                # Process IAM roles
+                if service_role:
+                    self.service_roles[env_id] = service_role
+                    service_role_name = service_role.split('/')[-1]
+                    self.iam_role_instance.aws_iam_role(
+                        service_role_name, ftstack)
 
-            # Process the EC2 Role
-            ec2_instance_profile = None
-            for option_setting in config_settings['ConfigurationSettings'][0]['OptionSettings']:
-                if option_setting['OptionName'] == 'IamInstanceProfile':
-                    ec2_instance_profile = option_setting['Value']
+                # Process the EC2 Role
+                ec2_instance_profile = None
+                for option_setting in config_settings['ConfigurationSettings'][0]['OptionSettings']:
+                    if option_setting['OptionName'] == 'IamInstanceProfile':
+                        ec2_instance_profile = option_setting['Value']
 
-            if ec2_instance_profile:
-                self.insatce_profiles[env_id] = ec2_instance_profile
-                # self.aws_iam_instance_profile(ec2_instance_profile)
-                instance_profile = self.provider_instance.aws_clients.iam_client.get_instance_profile(
-                    InstanceProfileName=ec2_instance_profile)
-                ec2_role = instance_profile['InstanceProfile']['Roles'][0]['Arn']
-                self.ec2_roles[env_id] = ec2_role.split('/')[-1]
-                ec2_role_name = ec2_role.split('/')[-1]
-                self.iam_role_instance.aws_iam_role(ec2_role_name, ftstack)
-                # self.aws_iam_role(ec2_role)
+                if ec2_instance_profile:
+                    self.insatce_profiles[env_id] = ec2_instance_profile
+                    # self.aws_iam_instance_profile(ec2_instance_profile)
+                    instance_profile = self.provider_instance.aws_clients.iam_client.get_instance_profile(
+                        InstanceProfileName=ec2_instance_profile)
+                    ec2_role = instance_profile['InstanceProfile']['Roles'][0]['Arn']
+                    self.ec2_roles[env_id] = ec2_role.split('/')[-1]
+                    ec2_role_name = ec2_role.split('/')[-1]
+                    self.iam_role_instance.aws_iam_role(ec2_role_name, ftstack)
+                    # self.aws_iam_role(ec2_role)
 
-            # Identify the Auto Scaling Group associated with the Elastic Beanstalk environment
-            auto_scaling_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()
+                # Identify the Auto Scaling Group associated with the Elastic Beanstalk environment
+                auto_scaling_groups = self.provider_instance.aws_clients.autoscaling_client.describe_auto_scaling_groups()
 
-            for group in auto_scaling_groups['AutoScalingGroups']:
-                # The Elastic Beanstalk environment name is part of the Auto Scaling Group name
-                if re.search(env_id, group['AutoScalingGroupName']):
-                    auto_scaling_group = group
-                    break
+                for group in auto_scaling_groups['AutoScalingGroups']:
+                    # The Elastic Beanstalk environment name is part of the Auto Scaling Group name
+                    if re.search(env_id, group['AutoScalingGroupName']):
+                        auto_scaling_group = group
+                        break
 
-            security_group_ids = []
-            # Get the Launch Configuration or Launch Template associated with the Auto Scaling Group
-            if 'LaunchConfigurationName' in auto_scaling_group:
-                launch_config_name = auto_scaling_group['LaunchConfigurationName']
-                launch_config = self.provider_instance.aws_clients.autoscaling_client.describe_launch_configurations(
-                    LaunchConfigurationNames=[launch_config_name]
-                )['LaunchConfigurations'][0]
-                security_group_names = launch_config['SecurityGroups']
-                for sg in security_group_names:
-                    # Get the id by the name using boto3
-                    security_group_id = self.provider_instance.aws_clients.ec2_client.describe_security_groups(
-                        GroupNames=[sg]
-                    )['SecurityGroups'][0]
-                    security_group_ids.append(security_group_id['GroupId'])
-            elif 'LaunchTemplate' in auto_scaling_group:
-                launch_template_id = auto_scaling_group['LaunchTemplate']['LaunchTemplateId']
-                launch_template_version = self.provider_instance.aws_clients.ec2_client.describe_launch_template_versions(
-                    LaunchTemplateId=launch_template_id
-                )['LaunchTemplateVersions'][0]['LaunchTemplateData']
-                security_group_ids = launch_template_version['SecurityGroupIds']
+                security_group_ids = []
+                # Get the Launch Configuration or Launch Template associated with the Auto Scaling Group
+                if 'LaunchConfigurationName' in auto_scaling_group:
+                    launch_config_name = auto_scaling_group['LaunchConfigurationName']
+                    launch_config = self.provider_instance.aws_clients.autoscaling_client.describe_launch_configurations(
+                        LaunchConfigurationNames=[launch_config_name]
+                    )['LaunchConfigurations'][0]
+                    security_group_names = launch_config['SecurityGroups']
+                    for sg in security_group_names:
+                        # Get the id by the name using boto3
+                        security_group_id = self.provider_instance.aws_clients.ec2_client.describe_security_groups(
+                            GroupNames=[sg]
+                        )['SecurityGroups'][0]
+                        security_group_ids.append(security_group_id['GroupId'])
+                elif 'LaunchTemplate' in auto_scaling_group:
+                    launch_template_id = auto_scaling_group['LaunchTemplate']['LaunchTemplateId']
+                    launch_template_version = self.provider_instance.aws_clients.ec2_client.describe_launch_template_versions(
+                        LaunchTemplateId=launch_template_id
+                    )['LaunchTemplateVersions'][0]['LaunchTemplateData']
+                    security_group_ids = launch_template_version['SecurityGroupIds']
 
-            # Process security groups
-            if security_group_ids:
-                self.security_groups[env_id] = security_group_ids[0]
-                for sg in security_group_ids:
-                    self.security_group_instance.aws_security_group(
-                        sg, ftstack)
-                # self.aws_security_group(security_group_ids)
+                # Process security groups
+                if security_group_ids:
+                    self.security_groups[env_id] = security_group_ids[0]
+                    for sg in security_group_ids:
+                        self.security_group_instance.aws_security_group(
+                            sg, ftstack)
+                    # self.aws_security_group(security_group_ids)
+
+            except Exception as e:
+                # General exception handling if you expect other types of exceptions to be possible
+                logger.error(f"An unexpected error occurred: {e}")
