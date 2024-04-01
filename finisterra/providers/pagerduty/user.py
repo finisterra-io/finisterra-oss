@@ -72,5 +72,3 @@ class User:
             self.hcl.process_resource(
                 resource_name, id, attributes)
             self.hcl.add_stack(resource_name, id, ftstack)
-
-            break
