@@ -13,6 +13,7 @@ import requests
 import tempfile
 import zipfile
 import glob
+import shutil
 
 
 logger = logging.getLogger('finisterra')
@@ -286,6 +287,7 @@ class GithubUtils:
                 "Authorization": "Bearer " + api_token,
             }
 
+            logger.debug(f"zip_path: {zip_path}")
             files = {
                 'zipFile': ('code.zip', open(zip_path, 'rb'), 'application/zip')
             }

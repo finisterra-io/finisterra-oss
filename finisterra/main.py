@@ -215,14 +215,12 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'client_vpn',
         ]
 
-        if github_push_repo:
-            github_utils.create_aws_gh_role()
-
     if github_push_repo:
         # Install the Github App
         github_utils.install_gh()
         # Validate Repository permissions
         github_utils.validate_github_repo()
+        github_utils.create_aws_gh_role()
 
     if execute:
         with progress:

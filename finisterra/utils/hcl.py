@@ -277,6 +277,10 @@ class HCL:
                    "Authorization": "Bearer " + api_token}
 
         # Define the request payload
+
+        s3Bucket = f'ft-{self.account_id}-{self.region}-tfstate'
+        dynamoDBTable = f'ft-{self.account_id}-{self.region}-tfstate-lock'
+
         payload = {
             'tfstate': tfstate_json,
             'provider': self.provider_name_short,
@@ -291,6 +295,8 @@ class HCL:
             'account_id': self.account_id,
             'account_name': self.account_name,
             'module': self.module,
+            's3Bucket': s3Bucket,
+            'dynamoDBTable': dynamoDBTable,
             'local_modules': os.environ.get('FT_LOCAL_MODULES', False)
         }
 
