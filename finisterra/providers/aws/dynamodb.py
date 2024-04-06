@@ -1,6 +1,7 @@
 from ...utils.hcl import HCL
 import logging
 import inspect
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger('finisterra')
 
@@ -67,67 +68,87 @@ class Dynamodb:
         resource_type = "aws_dynamodb_table"
         # logger.debug(f"Processing DynamoDB Tables...")
 
+        filtered_tables = []  # List to hold filtered tables
+
+        # Fetch and filter tables
         paginator = self.provider_instance.aws_clients.dynamodb_client.get_paginator(
             "list_tables")
-        total = 0
-        for page in paginator.paginate():
-            total += len(page["TableNames"])
-
-        if total > 0:
-            self.task = self.provider_instance.progress.add_task(
-                f"[cyan]Processing {self.__class__.__name__}...", total=total)
         for page in paginator.paginate():
             for table_name in page["TableNames"]:
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{table_name}[/]")
                 table_description = self.provider_instance.aws_clients.dynamodb_client.describe_table(
                     TableName=table_name)["Table"]
 
-                # if table_name != "xxxxx":
-                #     continue
-
-                logger.debug(f"Processing DynamoDB Table: {table_name}")
-                id = table_name
-
-                ftstack = "dynamodb"
                 try:
-                    response = self.provider_instance.aws_clients.dynamodb_client.list_tags_of_resource(
+                    tags_response = self.provider_instance.aws_clients.dynamodb_client.list_tags_of_resource(
                         ResourceArn=table_description["TableArn"])
-                    tags = response.get('Tags', [])
-                    for tag in tags:
-                        if tag['Key'] == 'ftstack':
-                            if tag['Value'] != 'dynamodb':
-                                ftstack = "stack_"+tag['Value']
-                            break
-                except Exception as e:
-                    logger.error(f"Error occurred: {e}")
+                    table_tags = {tag['Key']: tag['Value']
+                                  for tag in tags_response['Tags']}
+                except ClientError as e:
+                    if e.response['Error']['Code'] in ['AccessDenied', 'ResourceNotFoundException']:
+                        continue  # Skip tables that cannot be accessed or don't exist
+                    else:
+                        raise e
 
-                attributes = {
-                    "id": id,
-                    "name": table_name,
-                    "read_capacity": table_description["ProvisionedThroughput"]["ReadCapacityUnits"],
-                    "write_capacity": table_description["ProvisionedThroughput"]["WriteCapacityUnits"],
-                }
+                match_all_conditions = all(
+                    any(table_tags.get(f['Name'].replace(
+                        'tag:', ''), '') == value for value in f['Values'])
+                    for f in self.provider_instance.filters
+                ) if self.provider_instance.filters else True
 
-                if "GlobalSecondaryIndexes" in table_description:
-                    for gsi in table_description["GlobalSecondaryIndexes"]:
-                        index_name = gsi["IndexName"]
-                        index_resource_id = f'table/{table_name}/index/{index_name}'
-                        self.aws_appautoscaling_target(index_resource_id)
+                if match_all_conditions:
+                    # Add the table name and description to the list
+                    filtered_tables.append((table_name, table_description))
 
-                self.hcl.process_resource(
-                    resource_type, table_name.replace("-", "_"), attributes)
-                self.hcl.add_stack(resource_type, id, ftstack)
+        # Now process the filtered tables
+        total_filtered = len(filtered_tables)
+        if total_filtered > 0:
+            self.task = self.provider_instance.progress.add_task(
+                f"[cyan]Processing {self.__class__.__name__}...", total=total_filtered)
 
-                target_name = self.dynamodb_aws_dynamodb_target_name(
-                    table_name)
-                if resource_type not in self.hcl.additional_data:
-                    self.hcl.additional_data[resource_type] = {}
-                if id not in self.hcl.additional_data[resource_type]:
-                    self.hcl.additional_data[resource_type][id] = {}
-                self.hcl.additional_data[resource_type][id]["target_name"] = target_name
+        for table_name, table_description in filtered_tables:
+            self.provider_instance.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{table_name}[/]")
+            logger.debug(f"Processing DynamoDB Table: {table_name}")
+            id = table_name
 
-                self.aws_appautoscaling_target(table_name)
+            ftstack = "dynamodb"
+            try:
+                response = self.provider_instance.aws_clients.dynamodb_client.list_tags_of_resource(
+                    ResourceArn=table_description["TableArn"])
+                tags = response.get('Tags', [])
+                for tag in tags:
+                    if tag['Key'] == 'ftstack':
+                        if tag['Value'] != 'dynamodb':
+                            ftstack = "stack_" + tag['Value']
+                        break
+            except Exception as e:
+                logger.error(f"Error occurred: {e}")
+
+            attributes = {
+                "id": id,
+                "name": table_name,
+                "read_capacity": table_description["ProvisionedThroughput"]["ReadCapacityUnits"],
+                "write_capacity": table_description["ProvisionedThroughput"]["WriteCapacityUnits"],
+            }
+
+            if "GlobalSecondaryIndexes" in table_description:
+                for gsi in table_description["GlobalSecondaryIndexes"]:
+                    index_name = gsi["IndexName"]
+                    index_resource_id = f'table/{table_name}/index/{index_name}'
+                    self.aws_appautoscaling_target(index_resource_id)
+
+            self.hcl.process_resource(
+                resource_type, table_name.replace("-", "_"), attributes)
+            self.hcl.add_stack(resource_type, id, ftstack)
+
+            target_name = self.dynamodb_aws_dynamodb_target_name(table_name)
+            if resource_type not in self.hcl.additional_data:
+                self.hcl.additional_data[resource_type] = {}
+            if id not in self.hcl.additional_data[resource_type]:
+                self.hcl.additional_data[resource_type][id] = {}
+            self.hcl.additional_data[resource_type][id]["target_name"] = target_name
+
+            self.aws_appautoscaling_target(table_name)
 
     def aws_appautoscaling_target(self, table_name):
         service_namespace = 'dynamodb'

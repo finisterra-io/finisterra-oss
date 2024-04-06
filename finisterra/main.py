@@ -255,6 +255,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             for result in results:
                 ftstacks = ftstacks.union(result)
 
+        stack_code_generated = False
         base_dir = os.path.join(output_dir, "tf_code")
         for ftstack in ftstacks:
             generated_path = os.path.join(base_dir, ftstack)
@@ -270,8 +271,9 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                         pass
                 shutil.rmtree(generated_path)
                 generated_path = stack_path
+                stack_code_generated = True
 
-        if stack_name:
+        if stack_code_generated:
             ftstacks = [stack_name]
 
         if run_plan and ftstacks:
