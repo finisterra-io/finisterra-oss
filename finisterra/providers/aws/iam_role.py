@@ -68,17 +68,28 @@ class IAM:
         # Code to process all roles if no specific role_name is provided
         paginator = self.provider_instance.aws_clients.iam_client.get_paginator(
             "list_roles")
-        total = 0
+        filtered_roles = []
         for page in paginator.paginate():
-            total += len(page["Roles"])
+            for role in page["Roles"]:
+                try:
+                    tags = self.provider_instance.aws_clients.iam_client.list_role_tags(
+                        RoleName=role['RoleName'])["Tags"]
+                    # Convert tags list to a dictionary for easier matching
+                    tag_dict = {tag['Key']: tag['Value'] for tag in tags}
+                    if self.role_matches_filters(tag_dict):
+                        filtered_roles.append(role)
+                except Exception as e:
+                    logger.debug(
+                        f"Error listing tags for IAM Role {role['RoleName']}: {e}")
+                    continue
+        total = len(filtered_roles)
         if total > 0:
             self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=total)
-        for page in paginator.paginate():
-            for role in page["Roles"]:
-                self.provider_instance.progress.update(
-                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{role['RoleName']}[/]")
-                self.process_iam_role(role, ftstack)
+        for role in filtered_roles:
+            self.provider_instance.progress.update(
+                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{role['RoleName']}[/]")
+            self.process_iam_role(role, ftstack)
 
     def process_iam_role(self, role, ftstack=None):
         resource_type = "aws_iam_role"
@@ -108,6 +119,18 @@ class IAM:
 
         # Now call aws_iam_instance_profile for the current role_name
         self.aws_iam_instance_profile(current_role_name)
+
+    def role_matches_filters(self, role_tags):
+        """
+        Check if the role's tags match all filter conditions.
+        :param role_tags: Dictionary of role tags
+        :return: True if role matches all filter conditions, False otherwise.
+        """
+        return all(
+            any(role_tags.get(f['Name'].replace('tag:', ''),
+                '') == value for value in f['Values'])
+            for f in self.provider_instance.filters
+        ) if self.provider_instance.filters else True
 
     def aws_iam_instance_profile(self, role_name):
         logger.debug("Processing IAM Instance Profiles...")

@@ -76,32 +76,51 @@ class EKS:
                 f"[orange3]{self.__class__.__name__} [bold]No resources found[/]", total=1)
             self.provider_instance.progress.update(self.task, advance=1)
 
+    def cluster_matches_filters(self, cluster_tags):
+        """
+        Check if the cluster's tags match all filter conditions.
+        :param cluster_tags: Dictionary of cluster tags
+        :return: True if cluster matches all filter conditions, False otherwise.
+        """
+        return all(
+            any(cluster_tags.get(f['Name'].replace(
+                'tag:', ''), '') == value for value in f['Values'])
+            for f in self.provider_instance.filters
+        ) if self.provider_instance.filters else True
+
     def aws_eks_cluster(self):
         resource_type = 'aws_eks_cluster'
         logger.debug("Processing EKS Clusters...")
 
         try:
-
             clusters = self.provider_instance.aws_clients.eks_client.list_clusters()[
                 "clusters"]
-            if len(clusters):
-                self.task = self.provider_instance.progress.add_task(
-                    f"[cyan]Processing {self.__class__.__name__}...", total=len(clusters))
+            filtered_clusters = []
 
             for cluster_name in clusters:
-                cluster = self.provider_instance.aws_clients.eks_client.describe_cluster(name=cluster_name)[
-                    "cluster"]
+                cluster_info = self.provider_instance.aws_clients.eks_client.describe_cluster(
+                    name=cluster_name)["cluster"]
+                cluster_tags = cluster_info.get("tags", {})
+
+                if self.cluster_matches_filters(cluster_tags):
+                    filtered_clusters.append((cluster_name, cluster_info))
+
+            if filtered_clusters:
+                self.task = self.provider_instance.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=len(filtered_clusters))
+
+            for cluster_name, cluster in filtered_clusters:
                 self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{cluster_name}[/]")
-                tags = cluster.get("tags", {})
-                ftstack = "eks"
-                if tags.get("ftstack", "eks") != "eks":
-                    ftstack = "stack_"+tags.get("ftstack", "eks")
-
-                # if cluster_name != "xxxxx":
-                #     continue
-
                 logger.debug(f"Processing EKS Cluster: {cluster_name}")
+
+                ftstack = "eks"
+                if cluster.get("tags", {}).get("ftstack", "eks") != "eks":
+                    ftstack = "stack_" + \
+                        cluster.get("tags", {}).get("ftstack", "eks")
+
+                # Here, continue with your processing logic as needed
+                # The example below is a simplification of your original processing steps
                 id = cluster_name
 
                 attributes = {
@@ -109,7 +128,6 @@ class EKS:
                 }
                 self.hcl.process_resource(
                     resource_type, cluster_name.replace("-", "_"), attributes)
-
                 self.hcl.add_stack(resource_type, id, ftstack)
 
                 vpc_id = cluster["resourcesVpcConfig"]["vpcId"]
@@ -119,12 +137,21 @@ class EKS:
                         self.hcl.add_additional_data(
                             resource_type, id, "vpc_name", vpc_name)
 
+                subnet_ids = cluster["resourcesVpcConfig"]["subnetIds"]
+                if subnet_ids:
+                    subnet_names = get_subnet_names(
+                        self.provider_instance.aws_clients, subnet_ids)
+                    if subnet_names:
+                        self.hcl.add_additional_data(
+                            "aws_eks_cluster", id, "subnet_names", subnet_names)
+
                 # Call aws_iam_role for the cluster's associated IAM role
                 role_name = cluster["roleArn"].split('/')[-1]
                 self.iam_role_instance.aws_iam_role(role_name, ftstack)
 
                 # security_groups
                 security_group_ids = cluster["resourcesVpcConfig"]["securityGroupIds"]
+                # logger.info(f"Security Group IDs: {security_group_ids}")
                 for security_group_id in security_group_ids:
                     self.security_group_instance.aws_security_group(
                         security_group_id, ftstack)
