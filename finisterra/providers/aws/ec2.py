@@ -467,6 +467,11 @@ class EC2:
                     self.security_group_instance.aws_security_group(
                         sg["GroupId"], ftstack)
 
+                key_pair = instance.get("KeyName", "")
+                logger.debug(f"Key Pair: {key_pair}")
+                if key_pair:
+                    self.aws_key_pair(key_pair, ftstack)
+
                 # disable for now until i know how to handle private and public ips
                 # for ni in instance.get("NetworkInterfaces", []):
                 #     self.aws_network_interface(ni["NetworkInterfaceId"])
@@ -608,23 +613,38 @@ class EC2:
         self.hcl.process_resource(
             "aws_network_interface_attachment", network_interface["NetworkInterfaceId"].replace("-", "_"), attributes)
 
-    def aws_key_pair(self):
+    def aws_key_pair(self, key_name, ftstack):
         logger.debug(f"Processing EC2 Key Pairs...")
+        resource_type = "aws_key_pair"
 
+        # Retrieve all key pairs
         key_pairs = self.provider_instance.aws_clients.ec2_client.describe_key_pairs(
             IncludePublicKey=True)["KeyPairs"]
-        for key_pair in key_pairs:
-            key_pair_name = key_pair["KeyName"]
-            logger.debug(f"Processing Key Pair: {key_pair_name}")
 
-            attributes = {
-                "id": key_pair_name,
-                "public_key": key_pair["PublicKey"],
-                # "key_name": key_pair_name,
-                # "fingerprint": key_pair["KeyFingerprint"],
-            }
-            self.hcl.process_resource(
-                "aws_key_pair", key_pair_name.replace("-", "_"), attributes)
+        for key_pair in key_pairs:
+            current_key_name = key_pair["KeyName"]
+
+            # Check if the current key pair is the one we're interested in
+            if current_key_name == key_name:
+                logger.debug(f"Processing Key Pair: {current_key_name}")
+
+                # Define the attributes for the key pair
+                id = current_key_name
+                attributes = {
+                    "id": current_key_name,
+                    "public_key": key_pair.get("PublicKey", ""),
+                }
+
+                # Process the resource with a modified key name to fit naming conventions
+                self.hcl.process_resource(
+                    resource_type, id, attributes)
+
+                self.hcl.add_stack(resource_type, id, ftstack)
+
+                break  # Since we found the key pair, no need to continue the loop
+            else:
+                # If it's not the key pair we're looking for, log and skip to the next
+                logger.debug(f"Skipping Key Pair: {current_key_name}")
 
     def aws_launch_template(self):
         logger.debug(f"Processing EC2 Launch Templates...")
