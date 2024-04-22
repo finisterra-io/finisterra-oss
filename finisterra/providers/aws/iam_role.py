@@ -185,14 +185,13 @@ class IAM:
                     self.aws_iam_policy(policy_arn, ftstack)
 
     def aws_iam_policy(self, policy_arn, ftstack=None):
+        # Check if the policy is AWS managed
+        if ':aws:policy/' in policy_arn:
+            logger.debug(f"Skipping AWS managed policy: {policy_arn}")
+            return  # This is an AWS managed policy
+
         resource_type = "aws_iam_policy"
         policy_name = policy_arn.split('/')[-1]
-        # Ignore AWS managed policies and policies with '/service-role/' in the ARN
-        # if policy_arn.startswith('arn:aws:iam::aws:policy/') or '/service-role/' in policy_arn:
-        #     return
-
-        # if policy_name != "xxxxx":
-        #     continue
 
         logger.debug(f"Processing IAM Policy: {policy_name}")
         id = policy_arn
@@ -201,8 +200,8 @@ class IAM:
             "arn": policy_arn,
             "name": policy_name,
         }
-        self.hcl.process_resource(
-            resource_type, policy_name, attributes)
+        self.hcl.process_resource(resource_type, policy_name, attributes)
+
         if not ftstack:
             ftstack = "iam"
         self.hcl.add_stack(resource_type, id, ftstack)

@@ -8,7 +8,7 @@ logger = logging.getLogger('finisterra')
 
 class KMS:
     def __init__(self, provider_instance, hcl=None):
-        self.provider_instance=provider_instance
+        self.provider_instance = provider_instance
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
@@ -57,38 +57,62 @@ class KMS:
         if key_arn:
             # Process only the key specified by the ARN
             try:
-                key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key_arn)[
-                    "KeyMetadata"]
+                key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(
+                    KeyId=key_arn)["KeyMetadata"]
                 if key_metadata["KeyManager"] == "CUSTOMER":
-                    self.process_key(key_metadata, ftstack)
+                    # Filter based on tags even when a specific key ARN is provided
+                    tags = self.provider_instance.aws_clients.kms_client.list_resource_tags(KeyId=key_arn)[
+                        "Tags"]
+                    tag_dict = {tag['TagKey']: tag['TagValue'] for tag in tags}
+                    if self.key_matches_filters(tag_dict):
+                        self.process_key(key_metadata, ftstack)
                 else:
                     return "MANAGED"
             except botocore.exceptions.ClientError as e:
-                logger.error(f"  Error processing KMS Key: {e}")
+                logger.error(f"Error processing KMS Key: {e}")
+                return
         else:
-            # Process all customer-managed keys
-            paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
-            total = 0
-            for page in paginator.paginate():
-                for key in page["Keys"]:
-                    total += 1
-
-            if total > 0:
-                self.task = self.provider_instance.progress.add_task(
-                    f"[cyan]Processing {self.__class__.__name__}...", total=total)
+            # Process all customer-managed keys with tag-based filtering
+            paginator = self.provider_instance.aws_clients.kms_client.get_paginator(
+                "list_keys")
+            filtered_keys = []
 
             for page in paginator.paginate():
                 for key in page["Keys"]:
                     key_id = key["KeyId"]
-                    self.provider_instance.progress.update(
-                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{key_id}[/]")
                     try:
                         key_metadata = self.provider_instance.aws_clients.kms_client.describe_key(KeyId=key_id)[
                             "KeyMetadata"]
                         if key_metadata["KeyManager"] == "CUSTOMER":
-                            self.process_key(key_metadata, ftstack)
+                            tags = self.provider_instance.aws_clients.kms_client.list_resource_tags(KeyId=key_id)[
+                                "Tags"]
+                            tag_dict = {tag['TagKey']: tag['TagValue']
+                                        for tag in tags}
+                            if self.key_matches_filters(tag_dict):
+                                filtered_keys.append((key_id, key_metadata))
                     except botocore.exceptions.ClientError as e:
-                        logger.error(f"  Error processing KMS Key: {e}")
+                        logger.error(f"Error processing KMS Key: {e}")
+
+            if filtered_keys:
+                self.task = self.provider_instance.progress.add_task(
+                    f"[cyan]Processing {self.__class__.__name__}...", total=len(filtered_keys))
+
+                for key_id, key_metadata in filtered_keys:
+                    self.provider_instance.progress.update(
+                        self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{key_id}[/]")
+                    self.process_key(key_metadata, ftstack)
+
+    def key_matches_filters(self, key_tags):
+        """
+        Check if the key's tags match all filter conditions.
+        :param key_tags: Dictionary of key tags
+        :return: True if key matches all filter conditions, False otherwise.
+        """
+        return all(
+            any(key_tags.get(f['Name'].replace('tag:', ''),
+                '') == value for value in f['Values'])
+            for f in self.provider_instance.filters
+        ) if self.provider_instance.filters else True
 
     def process_key(self, key_metadata, ftstack):
         resource_type = "aws_kms_key"
@@ -205,7 +229,8 @@ class KMS:
 
     def check_iam_role_exists(self, role_name):
         try:
-            self.provider_instance.aws_clients.iam_client.get_role(RoleName=role_name)
+            self.provider_instance.aws_clients.iam_client.get_role(
+                RoleName=role_name)
             return True  # Role exists
         except botocore.exceptions.ClientError as error:
             if error.response['Error']['Code'] == 'NoSuchEntity':
@@ -267,7 +292,8 @@ class KMS:
 
     def aws_kms_replica_key(self):
         logger.debug("Processing KMS Replica Keys...")
-        paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
+        paginator = self.provider_instance.aws_clients.kms_client.get_paginator(
+            "list_keys")
 
         try:
             for page in paginator.paginate():
@@ -307,7 +333,8 @@ class KMS:
 
     def aws_kms_external_key(self):
         logger.debug("Processing KMS External Keys...")
-        paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
+        paginator = self.provider_instance.aws_clients.kms_client.get_paginator(
+            "list_keys")
         for page in paginator.paginate():
             for key in page["Keys"]:
                 try:
@@ -333,7 +360,8 @@ class KMS:
 
     def aws_kms_replica_external_key(self):
         logger.debug("Processing KMS Replica External Keys...")
-        paginator = self.provider_instance.aws_clients.kms_client.get_paginator("list_keys")
+        paginator = self.provider_instance.aws_clients.kms_client.get_paginator(
+            "list_keys")
 
         try:
             for page in paginator.paginate():
