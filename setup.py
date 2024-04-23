@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='finisterra',
-    version='1.0.20',
+    version='1.0.21',
     packages=find_packages(),
     install_requires=[
         'boto3==1.26.94',
@@ -15,6 +15,7 @@ setup(
         'deepdiff==5.5.0',
         'cloudflare==2.19.2',
         'pdpyras==5.2.0',
+        'kafka-python==2.0.2',
     ],
     entry_points={
         'console_scripts': [

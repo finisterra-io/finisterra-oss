@@ -35,6 +35,7 @@ class HCL:
             "resources": []
         }
         self.state_instances = {}
+        self.provider_additional_data = ""
 
     def search_state_file(self, resource_type, resource_name, resource_id):
         # Search for the resource in the state
@@ -148,6 +149,7 @@ class HCL:
 
         # Initializing Terraform with a retry mechanism
         logger.debug("Initializing Terraform...")
+        logger.debug(f"Script dir: {self.script_dir}")
         try:
             subprocess.run(["terraform", "init", "-no-color"], cwd=self.script_dir,
                            check=True, stdout=subprocess.DEVNULL)
@@ -206,7 +208,7 @@ class HCL:
     def prepare_folder(self):
         try:
             create_version_file(self.script_dir, self.provider_name_short,
-                                self.provider_source, self.provider_version)
+                                self.provider_source, self.provider_version, self.provider_additional_data)
         except Exception as e:
             logger.error(e)
             exit()
@@ -288,6 +290,7 @@ class HCL:
             'provider_name_short': self.provider_name_short,
             'provider_source': self.provider_source,
             'provider_version': self.provider_version,
+            'provider_additional_data': self.provider_additional_data,
             'ftstacks': self.ftstacks,
             'additional_data': self.additional_data,
             'id_key_list': self.id_key_list,

@@ -15,6 +15,7 @@ from rich.traceback import Traceback
 from .providers.aws.Aws import Aws
 from .providers.cloudflare.Cloudflare import Cloudflare
 from .providers.pagerduty.PagerDuty import PagerDuty
+from .providers.kafka.Kafka import Kafka
 
 from .utils.auth import auth
 from .utils.tf_plan import execute_terraform_plan, print_tf_plan
@@ -135,6 +136,27 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         # Define all provider methods for execution
         all_provider_methods = [
             'user',
+        ]
+
+    if provider == "kafka":
+        account_id = ""
+        region = "global"
+        auth_payload = {
+            "provider": provider,
+            "module": module,
+            "account_id": account_id,
+            "region": region
+        }
+        auth(auth_payload)
+        execute = True
+
+        script_dir = tempfile.mkdtemp()
+        provider_instance = Kafka(
+            progress, script_dir, output_dir, filters)
+
+        # Define all provider methods for execution
+        all_provider_methods = [
+            'kafka',
         ]
 
     if provider == "aws":

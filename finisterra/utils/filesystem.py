@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger('finisterra')
 
 
-def create_version_file(path, provider_name, provider_source, provider_version):
+def create_version_file(path, provider_name, provider_source, provider_version, additional_data=None):
     file_name = os.path.join(path, "versions.tf")
     with open(file_name, "w") as version_file:
         version_file.write('terraform {\n')
@@ -17,6 +17,9 @@ def create_version_file(path, provider_name, provider_source, provider_version):
         version_file.write('}\n')
         version_file.write('}\n')
         version_file.write('}\n')
+
+        if additional_data:
+            version_file.write(f'  {additional_data}\n')
 
 
 def load_provider_schema(script_dir,  provider_name, provider_source, provider_version):
