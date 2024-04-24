@@ -12,10 +12,11 @@ class IAM:
 
         if not hcl:
             self.hcl = HCL(self.provider_instance.schema_data)
-            self.hcl.region = "global"
+            self.hcl.global_region = "global"
         else:
             self.hcl = hcl
 
+        self.hcl.region = self.provider_instance.region
         self.hcl.output_dir = self.provider_instance.output_dir
         self.hcl.account_id = self.provider_instance.aws_account_id
 

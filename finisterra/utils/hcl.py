@@ -36,6 +36,7 @@ class HCL:
         }
         self.state_instances = {}
         self.provider_additional_data = ""
+        self.global_region = None
 
     def search_state_file(self, resource_type, resource_name, resource_id):
         # Search for the resource in the state
@@ -295,6 +296,7 @@ class HCL:
             'additional_data': self.additional_data,
             'id_key_list': self.id_key_list,
             'region': self.region,
+            'global_region': self.global_region,
             'account_id': self.account_id,
             'account_name': self.account_name,
             'module': self.module,
