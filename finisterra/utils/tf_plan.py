@@ -168,6 +168,7 @@ def print_summary(counts, module):
 def print_tf_plan(counts, updates, module):
     counts = print_detailed_changes(counts, updates)
     print_summary(counts, module)
+    return counts
 
 
 def execute_terraform_plan(console, output_dir, ftstack):

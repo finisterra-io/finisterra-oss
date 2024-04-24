@@ -298,6 +298,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
         if stack_code_generated:
             ftstacks = [stack_name]
 
+        destroy_count = 0
         if run_plan and ftstacks:
             # check if the output directory exists
             os.chdir(os.path.join(output_dir, "tf_code"))
@@ -327,8 +328,10 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             for counts, updates, ftstack in results:
                 console.print(
                     f"\n[bold]Terraform Plan for {ftstack}[/bold]")
-                print_tf_plan(counts, updates, ftstack)
+                formated_counts = print_tf_plan(counts, updates, ftstack)
+                destroy_count += formated_counts['destroy']
                 console.print('-' * 50)
+        
 
         if github_push_repo:
             if not github_utils.gh_push_onboarding(provider, account_id, region):
@@ -353,6 +356,8 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
                 generated_path = os.path.join(base_dir, ftstack)
                 if not github_push_repo:
                     logger.info(f"Terraform code created at: {generated_path}")
+
+        exit(destroy_count)
 
 
 def setup_logger():

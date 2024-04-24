@@ -7,6 +7,7 @@ import logging
 from botocore.exceptions import ClientError
 import inspect
 import botocore
+from ...providers.aws.utils import get_vpc_name
 
 logger = logging.getLogger('finisterra')
 
@@ -415,6 +416,12 @@ class EC2:
                     if id not in self.hcl.additional_data[resource_type]:
                         self.hcl.additional_data[resource_type][id] = {}
                     self.hcl.additional_data[resource_type][id]["user_data"] = ec2_get_user_data
+
+                vpc_id = instance.get("VpcId", "")
+                vpc_name = get_vpc_name(self.provider_instance.aws_clients, vpc_id)
+                if vpc_name:
+                    self.hcl.add_additional_data(
+                        resource_type, id, "vpc_name", vpc_name)
 
                 subnet_id = instance.get("SubnetId", "")
                 if subnet_id:
