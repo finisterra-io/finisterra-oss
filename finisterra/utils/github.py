@@ -210,7 +210,7 @@ class GithubUtils:
                 return False
 
     def check_aws_gh_role(self):
-        role_name = "ft-rw-gha-cicd-role"
+        role_name = "ft-ro-gha-cicd-role"
         logger.debug(f"Checking if the IAM role '{role_name}' exists...")
         session = boto3.Session()
         aws_clients = AwsClients(session, "us-east-1")
@@ -229,8 +229,8 @@ class GithubUtils:
     def create_aws_gh_role(self):
         if not self.check_aws_gh_role():
             region = "us-east-1"
-            templateURL = "https://s3.amazonaws.com/finisterra-aws-connect/ft-rw-gha-cicd-role.yaml"
-            stackName = "ft-rw-gha-cicd-role"
+            templateURL = "https://s3.amazonaws.com/finisterra-aws-connect/ft-ro-gha-cicd-role.yaml"
+            stackName = "ft-ro-gha-cicd-role"
             GitRepositoryOwner = self.org_name
 
             url = f"https://console.aws.amazon.com/cloudformation/home?region={region}#/stacks/create/review?templateURL={templateURL}&stackName={stackName}&param_GitRepositoryOwner={GitRepositoryOwner}"
