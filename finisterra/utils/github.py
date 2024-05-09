@@ -2,7 +2,7 @@ import os
 import subprocess
 import http.client
 import logging
-from ..utils.auth import read_token_from_file
+from ..utils.ft_api import read_token_from_file
 import time
 import threading
 import json
@@ -13,7 +13,6 @@ import requests
 import tempfile
 import zipfile
 import glob
-import shutil
 
 
 logger = logging.getLogger('finisterra')

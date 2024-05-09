@@ -1099,7 +1099,8 @@ class HCL:
             return structure
 
         self.prepare_terragrunt("tf_code")
-        root_path = "finisterra"
+        
+        root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_file_folder = os.path.join(
             root_path, "providers", self.short_provider_name, "config")
         

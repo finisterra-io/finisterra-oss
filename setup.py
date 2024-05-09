@@ -2,8 +2,11 @@ from setuptools import setup, find_packages
 
 setup(
     name='finisterra',
-    version='1.0.25',
+    version='1.0.30',
     packages=find_packages(),
+    package_data={
+        'finisterra': ['providers/**/*.yaml'],
+    },    
     install_requires=[
         'wheel==0.43.0',
         'boto3==1.26.94',
