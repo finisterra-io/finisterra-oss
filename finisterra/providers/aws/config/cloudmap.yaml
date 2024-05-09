@@ -1,0 +1,37 @@
+aws_service_discovery_private_dns_namespace:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudmap"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-cloudmap"
+  target_resource_name: this
+  add_id_hash_to_name: true
+  name_field: namespace_name
+  defaults:
+    create_private_dns_namespace: true
+  import_id:
+    function: cloudmap_private_dns_namespace_import_id
+  fields:
+    namespace_name:
+      field: name
+      type: string
+    namespace_description:
+      field: description
+      type: string
+    vpc_name:
+      function: cloudmap_get_vpc_name
+      arg: vpc
+      type: string
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_service_discovery_service:
+      join:
+        id:
+          field: namespace_id
+      target_resource_name: this
+      second_index:
+        field: name
+      fields:
+        service_names:
+          function: cloudmap_build_service_names
+          type: map

@@ -1,0 +1,117 @@
+aws_lambda_function:
+  terraform_module: "github.com/finisterra-io/terraform-aws-lambda"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-lambda"
+  target_resource_name: this
+  name_field: function_name
+  joined_fields:
+    vpc_config:
+      sub_fields:
+        - security_group_ids
+    iam_role_arn:
+      sub_fields:
+        - iam_role_arn
+  import_id:
+    field: function_name
+  fields:
+    architectures:
+      field: architectures
+      type: list
+    description:
+      field: description
+      type: string
+    filename:
+      field: filename
+      type: string
+    function_name:
+      field: function_name
+      type: string
+    handler:
+      field: handler
+      type: string
+    image_uri:
+      field: image_uri
+      type: string
+    kms_key_arn:
+      field: kms_key_arn
+      type: string
+    layers:
+      field: layers
+      type: list
+    memory_size:
+      field: memory_size
+      type: number
+    package_type:
+      field: package_type
+      type: string
+    publish:
+      field: publish
+      type: bool
+    reserved_concurrent_executions:
+      field: reserved_concurrent_executions
+      type: number
+    iam_role_arn:
+      field: role
+      type: string
+    runtime:
+      field: runtime
+      type: string
+    s3_bucket:
+      field: s3_bucket
+      type: string
+    s3_key:
+      field: s3_key
+      type: string
+    s3_object_version:
+      field: s3_object_version
+      type: string
+    source_code_hash:
+      field: source_code_hash
+      type: string
+    tags:
+      field: tags
+      type: map
+    timeout:
+      field: timeout
+      type: number
+    dead_letter_config_target_arn:
+      function: get_field_from_attrs
+      arg: dead_letter_config.target_arn
+      type: string
+    lambda_environment:
+      field: environment
+      type: map
+    image_config:
+      field: image_config
+      type: map
+    tracing_config_mode:
+      function: get_field_from_attrs
+      arg: tracing_config.mode
+      type: string
+    vpc_config:
+      function: lambda_vpc_config
+      arg: id
+      type: list
+    ephemeral_storage_size:
+      function: get_field_from_attrs
+      arg: ephemeral_storage.size
+      type: number
+  # childs:
+  #   aws_cloudwatch_log_group:
+  #     join:
+  #       function_name:
+  #         function: lambda_cloudwatch_log_group_name
+  #         arg: id
+  #     target_resource_name: default
+  #     defaults:
+  #       create_aws_cloudwatch_log_group: true
+  #     fields:
+  #       cloudwatch_logs_kms_key_arn:
+  #         field: kms_key_id
+  #         type: string
+  #       cloudwatch_logs_retention_in_days:
+  #         field: retention_in_days
+  #         type: number
+  #       cloudwatch_logs_tags:
+  #         field: tags
+  #         type: map

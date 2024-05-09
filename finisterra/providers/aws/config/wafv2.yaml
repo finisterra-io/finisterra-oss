@@ -1,0 +1,82 @@
+aws_wafv2_web_acl:
+  terraform_module: "github.com/finisterra-io/terraform-aws-wafv2"
+  terraform_module_version: "1.0.5"
+  target_resource_name: default
+  local_terraform_name: "terraform-aws-wafv2"
+  import_id:
+    function: wafv2_web_acl_import_id
+    arg: id
+  joined_fields:
+    log_destination_configs:
+      sub_fields:
+        - log_destination_configs
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    scope:
+      field: scope
+      type: string
+    token_domains:
+      field: token_domains
+      type: list
+    tags:
+      field: tags
+      type: map
+    default_action:
+      field: default_action
+      type: list
+    visibility_config:
+      field: visibility_config
+      type: list
+    custom_response_body:
+      field: custom_response_body
+      type: list
+    rules:
+      function: wafv2_get_rules
+      arg: id
+      type: list
+  childs:
+    aws_wafv2_web_acl_logging_configuration:
+      join:
+        arn:
+          field: resource_arn
+      target_resource_name: default
+      fields:
+        log_destination_configs:
+          field: log_destination_configs
+          type: list
+        redacted_fields:
+          field: redacted_fields
+          type: list
+        logging_filter:
+          field: logging_filter
+          type: list
+
+aws_wafv2_ip_set:
+  terraform_module: "github.com/finisterra-io/terraform-aws-wafv2//modules/ip-set"
+  terraform_module_version: "1.0.5"
+  target_resource_name: default
+  local_terraform_name: "terraform-aws-wafv2/modules/ip-set"
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    scope:
+      field: scope
+      type: string
+    addresses:
+      field: addresses
+      type: list
+    ip_address_version:
+      field: ip_address_version
+      type: string
+    tags:
+      field: tags
+      type: map

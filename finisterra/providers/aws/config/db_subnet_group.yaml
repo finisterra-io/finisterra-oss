@@ -1,0 +1,32 @@
+aws_db_subnet_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-db-subnet-group"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-db-subnet-group"
+  target_resource_name: this
+  name_field: name
+  fields:
+    name:
+      field: name
+      type: string
+    subnet_ids:
+      function: rds_get_subnet_ids
+      arg: subnet_ids
+      type: list
+    subnet_names:
+      function: rds_get_subnet_names
+      arg: subnet_ids
+      type: list
+    tags:
+      field: tags
+      type: map
+    description:
+      field: description
+      type: string
+    vpc_id:
+      function: rds_get_vpc_id_by_subnet
+      type: string
+      arg: vpc_id
+    vpc_name:
+      function: rds_get_vpc_name_by_subnet
+      type: string
+      arg: vpc_id

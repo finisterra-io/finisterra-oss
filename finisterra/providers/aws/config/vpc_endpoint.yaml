@@ -1,0 +1,57 @@
+aws_vpc_endpoint:
+  terraform_module: "github.com/finisterra-io/terraform-aws-vpc//modules/vpc-endpoint"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-vpc/modules/vpc-endpoint"
+  target_resource_name: this
+  joined_fields:
+    security_group_ids:
+      sub_fields:
+        - security_group_ids
+  fields:
+    vpc_name:
+      function: get_vpc_name_vpce
+      arg: id
+      type: string
+    vpc_id:
+      function: get_vpc_id_vpce
+      arg: id
+      type: string
+    subnet_names:
+      function: get_subnet_names_vpce
+      arg: id
+      type: list
+    subnet_ids:
+      function: get_subnet_ids_vpce
+      arg: id
+      type: list
+    service_name:
+      field: service_name
+      type: string
+    vpc_endpoint_type:
+      field: vpc_endpoint_type
+      type: string
+    dns_options:
+      field: dns_options
+      type: list
+    ip_address_type:
+      field: ip_address_type
+      type: string
+    auto_accept:
+      field: auto_accept
+      type: bool
+    policy:
+      field: policy
+      type: string
+      multiline: true
+    private_dns_enabled:
+      field: private_dns_enabled
+      type: bool
+    security_group_ids:
+      field: security_group_ids
+      type: list
+    route_table_ids:
+      field: route_table_ids
+      type: list
+    tags:
+      field: tags
+      type: map

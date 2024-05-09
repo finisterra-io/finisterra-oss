@@ -1,0 +1,152 @@
+aws_eks_cluster:
+  terraform_module: "github.com/finisterra-io/terraform-aws-eks"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-eks"
+  target_resource_name: this
+  name_field: cluster_name
+  joined_fields:
+    iam_role_arn:
+      sub_fields:
+        - iam_role_arn
+    cluster_encryption_config:
+      sub_fields:
+        - key_arn
+    cluster_security_group_ids:
+      sub_fields:
+        - cluster_security_group_ids
+    cluster_addons:
+      sub_fields:
+        - service_account_role_arn
+    eks_managed_node_groups:
+      sub_fields:
+        - iam_role_arn
+        - launch_template_id
+  fields:
+    cluster_name:
+      field: name
+      type: string
+    iam_role_arn:
+      field: role_arn
+      type: string
+    cluster_version:
+      field: version
+      type: string
+    cluster_enabled_log_types:
+      field: enabled_cluster_log_types
+      type: list
+    cluster_security_group_ids:
+      function: get_field_from_attrs
+      arg: vpc_config.security_group_ids
+      type: list
+    subnet_names:
+      function: eks_get_subnet_names
+      arg: id
+      type: list
+    subnet_ids:
+      function: eks_get_subnet_ids
+      arg: id
+      type: list
+    vpc_name:
+      function: get_vpc_name_eks
+      arg: id
+      type: string
+    vpc_id:
+      function: get_vpc_id_eks
+      arg: id
+      type: string
+    cluster_endpoint_private_access:
+      function: get_field_from_attrs
+      arg: vpc_config.endpoint_private_access
+      type: bool
+    cluster_endpoint_public_access:
+      function: get_field_from_attrs
+      arg: vpc_config.endpoint_public_access
+      type: bool
+    cluster_endpoint_public_access_cidrs:
+      function: get_field_from_attrs
+      arg: vpc_config.public_access_cidrs
+      type: list
+    cluster_encryption_config:
+      field: encryption_config
+      type: map
+    cluster_tags:
+      field: tags
+      type: map
+    cluster_ip_family:
+      function: get_field_from_attrs
+      arg: kubernetes_network_config.ip_family
+      type: string
+    cluster_service_ipv4_cidr:
+      function: get_field_from_attrs
+      arg: kubernetes_network_config.service_ipv4_cidr
+      type: string
+  childs:
+    aws_eks_addon:
+      join:
+        id:
+          field: cluster_name
+      target_resource_name: this
+      second_index:
+        field: addon_name
+      fields:
+        cluster_addons:
+          function: eks_build_cluster_addons
+          type: map
+          arg: id
+    aws_ec2_tag:
+      join:
+        resource_id:
+          join_function: eks_join_ec2_tag_resource_id
+          arg: id
+      target_resource_name: cluster_primary_security_group
+      second_index:
+        field: key
+      fields:
+        ec2_tags:
+          function: eks_build_cluster_tags
+          arg: id
+          type: map
+
+    aws_iam_openid_connect_provider:
+      join:
+        arn:
+          join_function: join_eks_cluster_and_oidc_provider
+          arg: id
+      target_resource_name: oidc_provider
+      fields:
+        oidc_provider_tags:
+          field: tags
+          type: map
+        custom_oidc_thumbprints:
+          field: thumbprint_list
+          type: list
+    aws_eks_node_group:
+      join:
+        name:
+          field: cluster_name
+      target_resource_name: this
+      target_submodule: module.eks_managed_node_group
+      first_index:
+        function: get_node_group_name
+        arg: id
+      fields:
+        eks_managed_node_groups:
+          function: eks_build_managed_node_groups
+          arg: id
+          type: map
+      childs:
+        aws_autoscaling_schedule:
+          join:
+            name:
+              join_function: eks_join_node_group_autoscaling_schedule
+              arg: id
+          target_resource_name: this
+          target_submodule: module.eks_managed_node_group
+          first_index:
+            function: eks_asg_get_node_group_name
+            arg: id
+          fields:
+            eks_managed_node_groups:
+              function: eks_build_node_group_autoscaling_schedules
+              arg: id
+              type: map

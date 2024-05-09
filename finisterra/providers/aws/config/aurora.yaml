@@ -1,0 +1,263 @@
+aws_rds_cluster:
+  terraform_module: "github.com/finisterra-io/terraform-aws-aurora"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-aurora"
+  target_resource_name: this
+  name_field: cluster_identifier
+  joined_fields:
+    vpc_security_group_ids:
+      sub_fields:
+        - vpc_security_group_ids
+    db_subnet_group_name:
+      sub_fields:
+        - db_subnet_group_name
+    instances:
+      sub_fields:
+        - monitoring_role_arn
+        - db_parameter_group_name
+        - performance_insights_kms_key_id
+    kms_key_id:
+      sub_fields:
+        - kms_key_id
+    db_cluster_parameter_group_name:
+      sub_fields:
+        - db_cluster_parameter_group_name
+  fields:
+    allocated_storage:
+      field: allocated_storage
+      type: number
+    availability_zones:
+      field: availability_zones
+      type: list
+    backup_retention_period:
+      field: backup_retention_period
+      type: number
+    backtrack_window:
+      field: backtrack_window
+      type: number
+    cluster_identifier:
+      field: cluster_identifier
+      type: string
+    cluster_members:
+      field: cluster_members
+      type: list
+    copy_tags_to_snapshot:
+      field: copy_tags_to_snapshot
+      type: bool
+    database_name:
+      field: database_name
+      type: string
+    instance_class:
+      field: db_cluster_instance_class
+      type: string
+    db_cluster_parameter_group_name:
+      field: db_cluster_parameter_group_name
+      type: string
+    db_cluster_db_instance_parameter_group_name:
+      field: db_instance_parameter_group_name
+      type: string
+    allow_major_version_upgrade:
+      field: allow_major_version_upgrade
+      type: bool
+    db_subnet_group_name:
+      field: db_subnet_group_name
+      type: string
+    deletion_protection:
+      field: deletion_protection
+      type: bool
+    enable_global_write_forwarding:
+      field: enable_global_write_forwarding
+      type: bool
+    enabled_cloudwatch_logs_exports:
+      field: enabled_cloudwatch_logs_exports
+      type: list
+    enable_http_endpoint:
+      field: enable_http_endpoint
+      type: bool
+    engine:
+      field: engine
+      type: string
+    engine_mode:
+      field: engine_mode
+      type: string
+    engine_version:
+      field: engine_version
+      type: string
+    final_snapshot_identifier:
+      field: final_snapshot_identifier
+      type: string
+    global_cluster_identifier:
+      field: global_cluster_identifier
+      type: string
+    iam_database_authentication_enabled:
+      field: iam_database_authentication_enabled
+      type: bool
+    iops:
+      field: iops
+      type: number
+    kms_key_id:
+      function: aurora_get_kms_key_id
+      arg: id
+      type: string
+    kms_key_alias:
+      function: aurora_get_kms_key_alias
+      arg: id
+      type: string
+    manage_master_user_password:
+      field: manage_master_user_password
+      type: bool
+    master_user_secret_kms_key_id:
+      field: master_user_secret_kms_key_id
+      type: string
+    master_username:
+      field: master_username
+      type: string
+    network_type:
+      field: network_type
+      type: string
+    port:
+      field: port
+      type: number
+    preferred_backup_window:
+      field: preferred_backup_window
+      type: string
+    preferred_maintenance_window:
+      field: preferred_maintenance_window
+      type: string
+    replication_source_identifier:
+      field: replication_source_identifier
+      type: string
+    restore_to_point_in_time:
+      field: restore_to_point_in_time
+      type: list
+    s3_import:
+      field: s3_import
+      type: map
+    scaling_configuration:
+      field: scaling_configuration
+      type: map
+    serverlessv2_scaling_configuration:
+      field: serverlessv2_scaling_configuration
+      type: map
+    skip_final_snapshot:
+      field: skip_final_snapshot
+      type: bool
+    snapshot_identifier:
+      field: snapshot_identifier
+      type: string
+    source_region:
+      field: source_region
+      type: string
+    storage_encrypted:
+      field: storage_encrypted
+      type: bool
+    storage_type:
+      field: storage_type
+      type: string
+    tags:
+      field: tags
+      type: map
+    vpc_security_group_ids:
+      function: aurora_get_security_group_ids
+      arg: id
+    vpc_id:
+      function: aurora_get_vpc_id_by_group
+      type: string
+      arg: id
+    vpc_name:
+      function: aurora_get_vpc_name_by_group
+      type: string
+      arg: id
+  childs:
+    aws_appautoscaling_target:
+      join:
+        arn:
+          function: aurora_build_resource_id
+          arg: id
+      target_resource_name: this
+      defaults:
+        autoscaling_enabled: true
+      fields:
+        scalable_dimension:
+          field: scalable_dimension
+          type: string
+        min_capacity:
+          field: min_capacity
+          type: number
+        autoscaling_max_capacity:
+          field: max_capacity
+          type: number
+        service_namespace:
+          field: service_namespace
+          type: string
+    aws_appautoscaling_policy:
+      join:
+        arn:
+          function: build_resource_id
+          arg: id
+      target_resource_name: this
+      defaults:
+        autoscaling_enabled: true
+      fields:
+        appautoscaling_policy_name:
+          field: name
+          type: string
+        autoscaling_policy_type:
+          field: policy_type
+          type: string
+        predefined_metric_type:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.predefined_metric_specification.predefined_metric_type
+          type: string
+        autoscaling_scale_in_cooldown:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.scale_in_cooldown
+          type: number
+        autoscaling_scale_out_cooldown:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.scale_out_cooldown
+          type: number
+        autoscaling_target_cpu:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.target_value
+          type: number
+        autoscaling_target_connections:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.target_value
+          type: number
+    aws_rds_cluster_endpoint:
+      join:
+        cluster_identifier:
+          field: cluster_identifier
+      target_resource_name: this
+      second_index:
+        field: cluster_endpoint_identifier
+      fields:
+        cluster_endpoint:
+          function: aurora_build_cluster_endpoint
+          arg: id
+          type: map
+    aws_rds_cluster_role_association:
+      join:
+        cluster_identifier:
+          field: cluster_identifier
+      target_resource_name: this
+      second_index:
+        field: cluster_endpoint_identifier
+      fields:
+        cluster_endpoint:
+          function: aurora_build_cluster_role_association
+          arg: id
+          type: map
+    aws_rds_cluster_instance:
+      join:
+        cluster_identifier:
+          field: cluster_identifier
+      target_resource_name: this
+      second_index:
+        field: identifier
+      fields:
+        instances:
+          function: aurora_build_instances
+          arg: id
+          type: map

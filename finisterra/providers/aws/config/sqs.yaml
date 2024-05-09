@@ -1,0 +1,151 @@
+aws_sqs_queue:
+  terraform_module: "github.com/finisterra-io/terraform-aws-sqs"
+  terraform_module_version: "1.0.0"
+  local_terraform_name: "terraform-aws-sqs"
+  target_resource_name: this
+  skip_if:
+    function: sqs_is_dql
+    arg: url
+  fields:
+    name:
+      field: name
+      type: string
+    content_based_deduplication:
+      field: content_based_deduplication
+      type: string
+    deduplication_scope:
+      field: deduplication_scope
+      type: string
+    delay_seconds:
+      field: delay_seconds
+      type: string
+    fifo_queue:
+      field: fifo_queue
+      type: string
+    fifo_throughput_limit:
+      field: fifo_throughput_limit
+      type: string
+    kms_data_key_reuse_period_seconds:
+      field: kms_data_key_reuse_period_seconds
+      type: string
+    kms_master_key_id:
+      field: kms_master_key_id
+      type: string
+    max_message_size:
+      field: max_message_size
+      type: string
+    message_retention_seconds:
+      field: message_retention_seconds
+      type: string
+    receive_wait_time_seconds:
+      field: receive_wait_time_seconds
+      type: string
+    sqs_managed_sse_enabled:
+      field: sqs_managed_sse_enabled
+      type: string
+    visibility_timeout_seconds:
+      field: visibility_timeout_seconds
+      type: string
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_sqs_queue_policy:
+      join:
+        url:
+          field: queue_url
+      target_resource_name:
+        function: sqs_queue_target_name
+        arg: queue_url
+      # defaults:
+      #   create_queue_policy: true
+      #   create_queue_policy_document: false
+      fields:
+        aws_sqs_queue_policy:
+          field: policy
+          multiline: true
+
+    aws_sqs_queue_redrive_policy:
+      join:
+        url:
+          field: queue_url
+      target_resource_name: this
+      fields:
+        redrive_policy:
+          field: redrive_policy
+          multiline: true
+
+    aws_sqs_queue_redrive_allow_policy:
+      join:
+        url:
+          field: queue_url
+      target_resource_name: this
+      fields:
+        redrive_allow_policy:
+          field: redrive_allow_policy
+          multiline: true
+
+    aws_sqs_queue:
+      target_resource_name: dlq
+      join:
+        url:
+          function: sqs_get_parent_url
+          arg: id
+      # defaults:
+      #   create_dlq: true
+      fields:
+        dlq_name:
+          field: name
+          type: string
+        dlq_content_based_deduplication:
+          field: content_based_deduplication
+          type: string
+        dlq_deduplication_scope:
+          field: deduplication_scope
+          type: string
+        dlq_delay_seconds:
+          field: delay_seconds
+          type: string
+        dlq_kms_data_key_reuse_period_seconds:
+          field: kms_data_key_reuse_period_seconds
+          type: string
+        dlq_kms_master_key_id:
+          field: kms_master_key_id
+          type: string
+        dlq_message_retention_seconds:
+          field: message_retention_seconds
+          type: string
+        dlq_receive_wait_time_seconds:
+          field: receive_wait_time_seconds
+          type: string
+        dlq_sqs_managed_sse_enabled:
+          field: sqs_managed_sse_enabled
+          type: string
+        dlq_visibility_timeout_seconds:
+          field: visibility_timeout_seconds
+          type: string
+        dlq_tags:
+          field: tags
+          type: map
+      childs:
+        aws_sqs_queue_policy:
+          join:
+            url:
+              field: queue_url
+          target_resource_name: dlq
+          # defaults:
+          #   create_dlq_queue_policy: true
+          #   create_dlq_queue_policy_document: false
+          fields:
+            aws_sqs_queue_policy_dlq:
+              field: policy
+              multiline: true
+        aws_sqs_queue_redrive_allow_policy:
+          join:
+            url:
+              field: queue_url
+          target_resource_name: dlq
+          fields:
+            dlq_redrive_allow_policy:
+              field: redrive_allow_policy
+              multiline: true

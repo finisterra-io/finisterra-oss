@@ -1,0 +1,229 @@
+aws_db_instance:
+  terraform_module: "github.com/finisterra-io/terraform-aws-rds"
+  terraform_module_version: "1.0.5"
+  local_terraform_name: "terraform-aws-rds"
+  target_resource_name: this
+  name_field: identifier
+  joined_fields:
+    vpc_security_group_ids:
+      sub_fields:
+        - vpc_security_group_ids
+    parameter_group_name:
+      sub_fields:
+        - parameter_group_name
+    option_group_name:
+      sub_fields:
+        - option_group_name
+    db_subnet_group_name:
+      sub_fields:
+        - db_subnet_group_name
+    monitoring_role_arn:
+      sub_fields:
+        - monitoring_role_arn
+    kms_key_id:
+      sub_fields:
+        - kms_key_id
+    performance_insights_kms_key_id:
+      sub_fields:
+        - performance_insights_kms_key_id
+  fields:
+    identifier:
+      field: identifier
+    engine:
+      field: engine
+    engine_version:
+      field: engine_version
+      type: string
+    instance_class:
+      field: instance_class
+    allocated_storage:
+      field: allocated_storage
+    storage_type:
+      field: storage_type
+    storage_encrypted:
+      field: storage_encrypted
+
+    kms_key_id:
+      function: rds_get_kms_key_id
+      arg: id
+      type: string
+    kms_key_alias:
+      function: rds_get_kms_key_alias
+      arg: id
+      type: string
+
+    license_model:
+      field: license_model
+    db_name:
+      function: rds_get_db_name
+      arg: db_name
+    username:
+      function: rds_get_username
+      arg: username
+    password:
+      field: password
+    port:
+      field: port
+    domain:
+      field: domain
+    domain_iam_role_name:
+      field: domain_iam_role_name
+    iam_database_authentication_enabled:
+      field: iam_database_authentication_enabled
+    custom_iam_instance_profile:
+      field: custom_iam_instance_profile
+    master_user_secret_kms_key_id:
+      field: master_user_secret_kms_key_id
+    vpc_security_group_ids:
+      function: rds_get_security_group_ids
+      arg: id
+    db_subnet_group_name:
+      field: db_subnet_group_name
+    parameter_group_name:
+      field: parameter_group_name
+    option_group_name:
+      field: option_group_name
+    network_type:
+      field: network_type
+    availability_zone:
+      field: availability_zone
+    multi_az:
+      field: multi_az
+    iops:
+      field: iops
+    storage_throughput:
+      field: storage_throughput
+    publicly_accessible:
+      field: publicly_accessible
+    ca_cert_identifier:
+      field: ca_cert_identifier
+    allow_major_version_upgrade:
+      field: allow_major_version_upgrade
+    auto_minor_version_upgrade:
+      field: auto_minor_version_upgrade
+    apply_immediately:
+      field: apply_immediately
+    maintenance_window:
+      field: maintenance_window
+    blue_green_update:
+      field: blue_green_update
+    snapshot_identifier:
+      field: snapshot_identifier
+    final_snapshot_identifier:
+      field: final_snapshot_identifier
+    copy_tags_to_snapshot:
+      field: copy_tags_to_snapshot
+    skip_final_snapshot:
+      field: skip_final_snapshot
+    performance_insights_enabled:
+      field: performance_insights_enabled
+    performance_insights_retention_period:
+      field: performance_insights_retention_period
+    performance_insights_kms_key_alias:
+      function: rds_get_kms_key_alias_performance_insights
+      arg: id
+    performance_insights_kms_key_id:
+      function: rds_get_kms_key_id_performance_insights
+      arg: id
+    replicate_source_db:
+      field: replicate_source_db
+    replica_mode:
+      field: replica_mode
+    backup_retention_period:
+      field: backup_retention_period
+    backup_window:
+      field: backup_window
+    max_allocated_storage:
+      field: max_allocated_storage
+    monitoring_interval:
+      field: monitoring_interval
+    monitoring_role_arn:
+      field: monitoring_role_arn
+    character_set_name:
+      field: character_set_name
+    nchar_character_set_name:
+      field: nchar_character_set_name
+    timezone:
+      field: timezone
+    enabled_cloudwatch_logs_exports:
+      field: enabled_cloudwatch_logs_exports
+    timeouts:
+      field: timeouts
+    deletion_protection:
+      field: deletion_protection
+    delete_automated_backups:
+      field: delete_automated_backups
+    restore_to_point_in_time:
+      field: restore_to_point_in_time
+    s3_import:
+      field: s3_import
+    tags:
+      field: tags
+    vpc_id:
+      function: rds_get_vpc_id_by_group
+      type: string
+      arg: id
+    vpc_name:
+      function: rds_get_vpc_name_by_group
+      type: string
+      arg: id
+    final_snapshot_identifier:
+      function: rds_get_final_snapshot_identifier
+      type: string
+      arg: id
+
+aws_db_option_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-rds//modules/db_option_group"
+  terraform_module_version: "1.0.5"
+  target_resource_name: this
+  fields:
+    name:
+      field: name
+      type: string
+    engine_name:
+      field: engine_name
+      type: string
+    major_engine_version:
+      field: major_engine_version
+      type: string
+    description:
+      field: description
+      type: string
+    tags:
+      field: tags
+      type: map
+    options:
+      field: options
+      type: list
+
+aws_db_instance_automated_backups_replication:
+  terraform_module: "github.com/finisterra-io/terraform-aws-rds//modules/db_instance_automated_backups_replication"
+  terraform_module_version: "1.0.5"
+  local_terraform_name: "terraform-aws-rds/modules/db_instance_automated_backups_replication"
+  target_resource_name: this
+  joined_fields:
+    source_db_instance_arn:
+      sub_fields:
+        - source_db_instance_arn
+    kms_key_id:
+      sub_fields:
+        - kms_key_id
+  fields:
+    source_db_instance_arn:
+      field: source_db_instance_arn
+      type: string
+    kms_key_id:
+      function: rds_get_kms_key_id_backups
+      arg: id
+      type: string
+    kms_key_alias:
+      function: rds_get_kms_key_alias_backups
+      arg: id
+      type: string
+
+    pre_signed_url:
+      field: pre_signed_url
+      type: string
+    retention_period:
+      field: retention_period
+      type: number

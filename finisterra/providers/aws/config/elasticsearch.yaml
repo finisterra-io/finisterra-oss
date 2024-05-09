@@ -1,0 +1,77 @@
+aws_elasticsearch_domain:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elasticsearch"
+  terraform_module_version: "1.0.0"
+  target_resource_name: default
+  name_field: domain_name
+  joined_fields:
+    vpc_options:
+      sub_fields:
+        - security_group_ids
+    encrypt_at_rest:
+      sub_fields:
+        - kms_key_id
+    domain_endpoint_options:
+      sub_fields:
+        - custom_endpoint_certificate_arn
+    log_publishing_options:
+      sub_fields:
+        - cloudwatch_log_group_arn
+  import_id:
+    field: domain_name
+  fields:
+    domain_name:
+      field: domain_name
+      type: string
+    elasticsearch_version:
+      field: elasticsearch_version
+      type: string
+    advanced_options:
+      field: advanced_options
+      type: map
+    advanced_security_options:
+      field: advanced_security_options
+      type: map
+    ebs_options:
+      field: ebs_options
+      type: map
+    encrypt_at_rest:
+      function: es_get_encrypt_at_rest
+      type: map
+      arg: id
+    domain_endpoint_options:
+      field: domain_endpoint_options
+      type: map
+    cluster_config:
+      field: cluster_config
+      type: map
+    auto_tune_options:
+      field: auto_tune_options
+      type: map
+    vpc_options:
+      function: es_get_vpc_options
+      type: map
+      arg: id
+    node_to_node_encryption_enabled:
+      function: get_field_from_attrs
+      arg: node_to_node_encryption.enabled
+    automated_snapshot_start_hour:
+      function: get_field_from_attrs
+      arg: snapshot_options.automated_snapshot_start_hour
+    cognito_options:
+      field: cognito_options
+      type: map
+    log_publishing_options:
+      field: log_publishing_options
+      type: list
+    access_policies:
+      field: access_policies
+      type: string
+      multiline: true
+    tags:
+      function: es_get_tags
+      type: map
+      arg: id
+    vpc_name:
+      function: es_get_vpc_name
+      type: string
+      arg: id

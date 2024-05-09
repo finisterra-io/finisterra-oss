@@ -1,0 +1,294 @@
+aws_ecs_cluster:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ecs//modules/cluster"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-ecs/modules/cluster"
+  keys:
+    - name
+  joined_fields:
+    cluster_configuration:
+      sub_fields:
+        - cloud_watch_log_group_name
+        - kms_key_id
+  target_resource_name: this
+  name_field: cluster_name
+  fields:
+    cluster_name:
+      field: name
+      type: string
+    cluster_configuration:
+      field: configuration
+      type: map
+    cluster_service_connect_defaults:
+      field: service_connect_defaults
+      type: map
+    cluster_settings:
+      field: setting
+      type: map
+    tags:
+      field: tags
+      type: map
+
+aws_ecs_service:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ecs//modules/service"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-ecs/modules/service"
+  target_resource_name: ignore_task_definition
+  joined_fields:
+    cluster_arn:
+      sub_fields:
+        - cluster_arn
+    iam_role:
+      sub_fields:
+        - iam_role
+    task_role_arn:
+      sub_fields:
+        - task_role_arn
+    execution_role_arn:
+      sub_fields:
+        - execution_role_arn
+    network_configuration:
+      sub_fields:
+        - security_groups
+    load_balancer:
+      sub_fields:
+        - target_group_arn
+        - elb_name
+
+  defaults:
+    create_task_definition: false
+  import_id:
+    function: ecs_service_import_id
+    arg: id
+  fields:
+    name:
+      field: name
+      type: string
+    alarms:
+      field: alarms
+      type: list
+    capacity_provider_strategy:
+      field: capacity_provider_strategy
+      type: list
+    cluster_arn:
+      field: cluster
+      type: string
+    deployment_circuit_breaker:
+      field: deployment_circuit_breaker
+      type: list
+    deployment_controller:
+      field: deployment_controller
+      type: list
+    deployment_maximum_percent:
+      field: deployment_maximum_percent
+      type: number
+    deployment_minimum_healthy_percent:
+      field: deployment_minimum_healthy_percent
+      type: number
+    desired_count:
+      field: desired_count
+      type: number
+    enable_ecs_managed_tags:
+      field: enable_ecs_managed_tags
+      type: boolean
+    enable_execute_command:
+      field: enable_execute_command
+      type: boolean
+    force_new_deployment:
+      field: force_new_deployment
+      type: boolean
+      #default: null
+    health_check_grace_period_seconds:
+      field: health_check_grace_period_seconds
+      type: number
+    launch_type:
+      field: launch_type
+      type: string
+    load_balancer:
+      field: load_balancer
+      type: list
+    ordered_placement_strategy:
+      field: ordered_placement_strategy
+      type: list
+    placement_constraints:
+      field: placement_constraints
+      type: list
+    platform_version:
+      field: platform_version
+      type: string
+    scheduling_strategy:
+      field: scheduling_strategy
+      type: string
+    service_connect_configuration:
+      field: service_connect_configuration
+      type: list
+    service_registries:
+      function: ecs_build_service_registries
+      arg: service_registries
+      type: map
+    triggers:
+      field: triggers
+      type: map
+    wait_for_steady_state:
+      field: wait_for_steady_state
+      type: boolean
+      #default: null
+    propagate_tags:
+      field: propagate_tags
+      type: string
+    tags:
+      field: tags
+      type: map
+    timeouts:
+      field: timeouts
+      type: map
+    security_group_ids:
+      function: ecs_get_network_field
+      arg: security_group_ids
+      type: list
+    subnet_ids:
+      function: ecs_get_network_field
+      arg: subnet_ids
+      type: list
+    vpc_name:
+      function: get_vpc_name_ecs
+      type: string
+      arg: id
+    iam_role:
+      field: iam_role
+      type: string
+    network_configuration:
+      function: ecs_get_network_configuration
+      arg: network_configuration
+      type: list
+
+  childs:
+    aws_ecs_task_definition:
+      join:
+        task_definition:
+          function: ecs_task_definition_id
+          arg: id
+      target_resource_name: this
+      defaults:
+        create_task_definition: true
+      import_id:
+        function: ecs_task_definition_import_id
+        arg: id
+      fields:
+        task_definition_arn:
+          field: arn
+          type: string
+        network_mode:
+          field: network_mode
+          type: string
+        container_definitions:
+          field: container_definitions
+          jsonencode: true
+          type: string
+        cpu:
+          field: cpu
+          type: number
+        ephemeral_storage:
+          field: ephemeral_storage
+          type: map
+        family:
+          field: family
+          type: string
+        inference_accelerator:
+          field: inference_accelerator
+          type: map
+        ipc_mode:
+          field: ipc_mode
+          type: string
+        memory:
+          field: memory
+          type: number
+          #default: null
+        proxy_configuration:
+          field: proxy_configuration
+          type: map
+        requires_compatibilities:
+          field: requires_compatibilities
+          type: list
+          #default: null
+        runtime_platform:
+          field: runtime_platform
+          type: map
+          default: {}
+        skip_destroy:
+          field: skip_destroy
+          type: boolean
+          #default: null
+        volume:
+          function: ecs_task_definition_volume
+          type: map
+          arg: id
+        task_tags:
+          field: tags
+          type: map
+        task_definition_placement_constraints:
+          field: placement_constraints
+          type: list
+        task_role_arn:
+          # function: get_iam_role
+          field: task_role_arn
+          type: string
+        execution_role_arn:
+          # function: get_iam_role
+          field: execution_role_arn
+          type: string
+
+    aws_appautoscaling_target:
+      join:
+        name:
+          function: ecs_get_name_from_arn
+          arg: resource_id
+      target_resource_name: this
+      defaults:
+        enable_autoscaling: true
+      import_id:
+        function: ecs_appautoscaling_target_import_id
+        arg: id
+      fields:
+        autoscaling_min_capacity:
+          field: min_capacity
+          type: number
+        autoscaling_max_capacity:
+          field: max_capacity
+          type: number
+        autoscaling_tags:
+          field: tags
+          type: map
+      childs:
+        aws_appautoscaling_policy:
+          join:
+            resource_id:
+              field: resource_id
+            service_namespace:
+              field: service_namespace
+            scalable_dimension:
+              field: scalable_dimension
+          target_resource_name: this
+          import_id:
+            function: ecs_appautoscaling_policy_import_id
+            arg: id
+          second_index:
+            field: name
+          fields:
+            autoscaling_policies:
+              function: ecs_autoscaling_policies
+              arg: id
+              type: list
+        aws_appautoscaling_scheduled_action:
+          join:
+            resource_id:
+              field: resource_id
+            service_namespace:
+              field: service_namespace
+            scalable_dimension:
+              field: scalable_dimension
+          target_resource_name: this
+          fields:
+            autoscaling_scheduled_actions:
+              function: ecs_autoscaling_scheduled_actions
+              type: list
+              arg: id

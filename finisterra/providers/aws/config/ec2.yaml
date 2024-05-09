@@ -1,0 +1,181 @@
+aws_instance:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ec2"
+  terraform_module_version: "1.0.5"
+  target_resource_name: default
+  local_terraform_name: "terraform-aws-ec2"
+  add_id_hash_to_name: true
+  joined_fields:
+    security_groups:
+      sub_fields:
+        - security_groups
+    device_name_list:
+      sub_fields:
+        - kms_key_id
+    instance_profile:
+      sub_fields:
+        - instance_profile
+    root_block_device:
+      sub_fields:
+        - kms_key_id
+    ssh_key_pair:
+      sub_fields:
+        - ssh_key_pair
+  fields:
+    ami:
+      field: ami
+      type: string
+    availability_zone:
+      field: availability_zone
+      type: string
+    instance_type:
+      field: instance_type
+      type: string
+    ebs_optimized:
+      field: ebs_optimized
+      type: bool
+    disable_api_termination:
+      field: disable_api_termination
+      type: bool
+    user_data:
+      function: ec2_get_user_data
+      arg: id
+      type: string
+      multiline: true
+      jsonfield: false
+    user_data_base64:
+      field: user_data_base64
+      type: string
+    instance_profile:
+      field: iam_instance_profile
+      type: string
+    instance_initiated_shutdown_behavior:
+      field: instance_initiated_shutdown_behavior
+      type: string
+    associate_public_ip_address:
+      field: associate_public_ip_address
+      type: bool
+    ssh_key_pair:
+      field: key_name
+      type: string
+    vpc_name:
+      function: get_vpc_name_ec2
+      arg: id
+      type: string
+    vpc_id:
+      function: get_vpc_id_ec2
+      arg: id
+      type: string
+    subnet_name:
+      function: get_subnet_name_ec2
+      arg: id
+      type: string
+    subnet_id:
+      function: get_subnet_id_ec2
+      arg: id
+      type: string
+    monitoring:
+      field: monitoring
+      type: bool
+    # private_ip:
+    #   field: private_ip
+    #   type: string
+    secondary_private_ips:
+      field: secondary_private_ips
+      type: list
+    source_dest_check:
+      field: source_dest_check
+      type: bool
+    ipv6_address_count:
+      field: ipv6_address_count
+      type: number
+    # ipv6_addresses:
+    #   field: ipv6_addresses
+    #   type: list
+    tenancy:
+      field: tenancy
+      type: string
+    security_groups:
+      field: vpc_security_group_ids
+      type: list
+    external_network_interfaces:
+      field: network_interface
+      type: list
+    root_block_device:
+      function: ec2_get_root_block_device
+      arg: root_block_device
+      type: map
+    metadata_options:
+      function: clean_empty_values_dict
+      arg: metadata_options
+      type: map
+    burstable_mode:
+      function: get_field_from_attrs
+      arg: credit_specification.cpu_credits
+      type: string
+    tags:
+      field: tags
+      type: map
+    volume_tags:
+      field: volume_tags
+      type: map
+    launch_template:
+      field: launch_template
+      type: list
+  childs:
+    aws_volume_attachment:
+      join:
+        id:
+          field: instance_id
+      target_resource_name: default
+      second_index:
+        field: device_name
+      childs:
+        aws_ebs_volume:
+          join:
+            volume_id:
+              field: id
+          target_resource_name: default
+          second_index:
+            function: ec2_get_device_name
+          fields:
+            device_name_list:
+              function: ec2_get_device_name_list
+              type: map
+    aws_eip:
+      join:
+        id:
+          field: instance
+      second_index:
+        field: public_ip
+      target_resource_name: default
+      fields:
+        public_ip_addresses:
+          function: ec2_get_public_ip_addresses
+          type: map
+          arg: id
+
+    # aws_network_interface_attachment:
+    #   join:
+    #     id:
+    #       field: instance_id
+    #   target_resource_name: additional
+    #   second_index:
+    #     function: ec2_get_device_index
+    #   fields:
+    #     additional_ips_count:
+    #       function: ec2_get_additional_ips_count
+    #       type: number
+
+aws_key_pair:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ec2//modules/key_pair"
+  terraform_module_version: "1.0.5"
+  target_resource_name: this
+  local_terraform_name: "terraform-aws-ec2/modules/key_pair"
+  add_id_hash_to_name: true
+  fields:
+    key_name:
+      field: key_name
+      type: string
+    public_key:
+      field: public_key
+      type: string

@@ -1,0 +1,67 @@
+aws_lb_target_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elbv2//modules/target_group"
+  terraform_module_version: "1.0.4"
+  local_terraform_name: "terraform-aws-elbv2/modules/target_group"
+  joined_fields:
+    listener_rules:
+      sub_fields:
+        - listener_arn
+  target_resource_name: this
+  name_field: name
+  fields:
+    name:
+      field: name
+      type: string
+    port:
+      field: port
+      type: number
+    protocol:
+      field: protocol
+      type: string
+    health_check:
+      field: health_check
+      type: map
+    stickiness:
+      field: stickiness
+      type: map
+    tags:
+      field: tags
+      type: map
+    vpc_name:
+      function: get_vpc_name_tg
+      type: string
+    vpc_id:
+      function: get_vpc_id_tg
+      type: string
+    target_type:
+      field: target_type
+      type: string
+    deregistration_delay:
+      field: deregistration_delay
+      type: number
+    proxy_protocol_v2:
+      field: proxy_protocol_v2
+      type: bool
+    slow_start:
+      field: slow_start
+      type: number
+    lambda_multi_value_headers_enabled:
+      field: lambda_multi_value_headers_enabled
+      type: bool
+  childs:
+    aws_lb_listener_rule:
+      join:
+        name:
+          join_function: tg_join_aws_lb_target_group_to_aws_lb_listener_rule
+      target_resource_name: this
+      second_index:
+        function: tg_get_id_from_arn
+        arg: arn
+      fields:
+        # listener_arn:
+        #   field: listener_arn
+        #   type: string
+        listener_rules:
+          function: tg_get_listener_rules
+          arg: id
+          type: map

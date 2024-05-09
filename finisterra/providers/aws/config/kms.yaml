@@ -1,0 +1,159 @@
+aws_kms_key:
+  terraform_module: "github.com/finisterra-io/terraform-aws-kms"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-kms"
+  target_resource_name: this
+  defaults:
+    create_external: false
+    create_replica: false
+    create_replica_external: false
+  additional_output_fields:
+    aws_kms_alias:
+      - id_key: id
+        output: aliases
+        type: map
+  fields:
+    bypass_policy_lockout_safety_check:
+      field: bypass_policy_lockout_safety_check
+      type: string
+    customer_master_key_spec:
+      field: customer_master_key_spec
+      type: string
+    custom_key_store_id:
+      field: custom_key_store_id
+      type: string
+    deletion_window_in_days:
+      field: deletion_window_in_days
+      type: string
+    description:
+      field: description
+      type: string
+    enable_key_rotation:
+      field: enable_key_rotation
+      type: string
+    is_enabled:
+      field: is_enabled
+      type: string
+    key_usage:
+      field: key_usage
+      type: string
+    multi_region:
+      field: multi_region
+      type: string
+    policy:
+      field: policy
+      type: string
+      multiline: true
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_kms_replica_key:
+      join:
+        arn:
+          field: primary_key_arn
+      target_resource_name: this
+      defaults:
+        create_replica: true
+      fields:
+        primary_key_arn:
+          field: primary_key_arn
+          type: string
+    aws_kms_alias:
+      join:
+        id:
+          field: target_key_id
+      target_resource_name: this
+      second_index:
+        field: name
+      fields:
+        aliases:
+          function: build_aliases
+          arg: name
+          type: list
+    aws_kms_grant:
+      join:
+        arn:
+          field: key_id
+      target_resource_name: this
+      second_index:
+        field: id
+      fields:
+        grants:
+          function: build_grants
+          arg: id
+          type: map
+
+aws_kms_external_key:
+  terraform_module: "github.com/finisterra-io/terraform-aws-kms"
+  terraform_module_version: "1.0.1"
+  target_resource_name: this
+  defaults:
+    create_external: true
+    create_replica: false
+    create_replica_external: false
+  fields:
+    bypass_policy_lockout_safety_check:
+      field: bypass_policy_lockout_safety_check
+      type: string
+    deletion_window_in_days:
+      field: deletion_window_in_days
+      type: string
+    description:
+      field: description
+      type: string
+    is_enabled:
+      field: enabled
+      type: string
+    key_material_base64:
+      field: key_material_base64
+      type: string
+    multi_region:
+      field: multi_region
+      type: string
+    policy:
+      field: policy
+      type: string
+      multiline: true
+    valid_to:
+      field: valid_to
+      type: string
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_kms_replica_external_key:
+      join:
+        arn:
+          field: primary_key_arn
+      target_resource_name: this
+      defaults:
+        create_replica_external: true
+      fields:
+        primary_external_key_arn:
+          field: primary_key_arn
+          type: string
+    aws_kms_alias:
+      join:
+        id:
+          field: target_key_id
+      target_resource_name: this
+      second_index:
+        field: name
+      fields:
+        aliases:
+          function: build_aliases
+          arg: name
+          type: list
+    aws_kms_grant:
+      join:
+        arn:
+          field: key_id
+      target_resource_name: this
+      second_index:
+        field: id
+      fields:
+        grants:
+          function: build_grants
+          arg: id
+          type: map

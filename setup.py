@@ -2,9 +2,10 @@ from setuptools import setup, find_packages
 
 setup(
     name='finisterra',
-    version='1.0.24',
+    version='1.0.25',
     packages=find_packages(),
     install_requires=[
+        'wheel==0.43.0',
         'boto3==1.26.94',
         'PyJWT==2.7.0',
         'pycryptodome==3.18.0',
@@ -24,7 +25,7 @@ setup(
     },
     author='Finisterra',
     author_email='daniel@finisterra.io',
-    description='Terraform in minutes not weeks.',
+    description='Terraform in minutes not months.',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     url='https://github.com/finisterra-io/finisterra',

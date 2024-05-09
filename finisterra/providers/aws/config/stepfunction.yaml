@@ -1,0 +1,35 @@
+aws_sfn_state_machine:
+  terraform_module: "github.com/finisterra-io/terraform-aws-step-function"
+  terraform_module_version: "1.0.0"
+  local_terraform_name: "terraform-aws-step-function"
+  target_resource_name: this
+  joined_fields:
+    role_arn:
+      sub_fields:
+        - role_arn
+    logging_configuration:
+      sub_fields:
+        - log_destination
+  fields:
+    name:
+      field: name
+      type: string
+    role_arn:
+      field: role_arn
+      type: string
+    definition:
+      field: definition
+      type: string
+      multiline: true
+    logging_configuration:
+      field: logging_configuration
+      type: map
+    tracing_configuration:
+      field: tracing_configuration
+      type: map
+    type:
+      field: type
+      type: string
+    tags:
+      field: tags
+      type: map
