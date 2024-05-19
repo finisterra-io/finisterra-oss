@@ -1,0 +1,123 @@
+aws_sns_topic:
+  terraform_module: "github.com/finisterra-io/terraform-aws-sns"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-sns"
+  target_resource_name: this
+  fields:
+    name:
+      field: name
+      type: string
+    content_based_deduplication:
+      field: content_based_deduplication
+      type: string
+    delivery_policy:
+      field: delivery_policy
+      type: string
+      multiline: true
+    display_name:
+      field: display_name
+      type: string
+    fifo_topic:
+      field: fifo_topic
+      type: string
+    signature_version:
+      function: sns_signature_version
+      arg: id
+      type: number
+    tracing_config:
+      field: tracing_config
+      type: string
+    kms_master_key_id:
+      field: kms_master_key_id
+      type: string
+    tags:
+      field: tags
+      type: map
+    archive_policy:
+      field: archive_policy
+      type: string
+    application_failure_feedback_role_arn:
+      field: application_failure_feedback_role_arn
+      type: string
+    application_success_feedback_role_arn:
+      field: application_success_feedback_role_arn
+      type: string
+    application_success_feedback_sample_rate:
+      field: application_success_feedback_sample_rate
+      type: number
+    firehose_failure_feedback_role_arn:
+      field: firehose_failure_feedback_role_arn
+      type: string
+    firehose_success_feedback_role_arn:
+      field: firehose_success_feedback_role_arn
+      type: string
+    firehose_success_feedback_sample_rate:
+      field: firehose_success_feedback_sample_rate
+      type: number
+    http_failure_feedback_role_arn:
+      field: http_failure_feedback_role_arn
+      type: string
+    http_success_feedback_role_arn:
+      field: http_success_feedback_role_arn
+      type: string
+    http_success_feedback_sample_rate:
+      field: http_success_feedback_sample_rate
+      type: number
+    lambda_failure_feedback_role_arn:
+      field: lambda_failure_feedback_role_arn
+      type: string
+    lambda_success_feedback_role_arn:
+      field: lambda_success_feedback_role_arn
+      type: string
+    lambda_success_feedback_sample_rate:
+      field: lambda_success_feedback_sample_rate
+      type: number
+    sqs_failure_feedback_role_arn:
+      field: sqs_failure_feedback_role_arn
+      type: string
+    sqs_success_feedback_role_arn:
+      field: sqs_success_feedback_role_arn
+      type: string
+    sqs_success_feedback_sample_rate:
+      field: sqs_success_feedback_sample_rate
+      type: number
+  childs:
+    aws_sns_topic_policy:
+      join:
+        arn:
+          field: arn
+      target_resource_name: this
+      # defaults:
+      # create_topic_policy: true
+      # create_topic_policy_document: false
+      fields:
+        policy:
+          field: policy
+          type: string
+          multiline: true
+
+    aws_sns_topic_subscription:
+      join:
+        arn:
+          field: topic_arn
+      # defaults:
+      #   create_subscription: true
+      second_index:
+        function: sns_get_key_from_arn
+        arg: id
+      target_resource_name: this
+      fields:
+        subscriptions:
+          function: sns_build_subscriptions
+          arg: id
+
+    aws_sns_topic_data_protection_policy:
+      join:
+        arn:
+          field: arn
+      target_resource_name: this
+      fields:
+        data_protection_policy:
+          field: policy
+          type: string
+          multiline: true

@@ -1,0 +1,124 @@
+aws_ec2_client_vpn_endpoint:
+  terraform_module: "github.com/finisterra-io/terraform-aws-client-vpn"
+  terraform_module_version: "1.0.0"
+  local_terraform_name: "terraform-aws-client-vpn"
+  target_resource_name: this
+  import_id:
+    field: id
+  joined_fields:
+    authentication_options:
+      sub_fields:
+        - saml_provider_arn
+    security_group_ids:
+      sub_fields:
+        - security_group_ids
+  fields:
+    authentication_options:
+      function: clean_empty_values_dict
+      arg: authentication_options
+      type: map
+    client_cidr_block:
+      field: client_cidr_block
+      type: string
+    client_connect_options:
+      function: clean_empty_values_dict
+      arg: client_connect_options
+      type: map
+    client_login_banner_options:
+      function: clean_empty_values_dict
+      arg: client_login_banner_options
+      type: map
+    connection_log_options:
+      function: clean_empty_values_dict
+      arg: connection_log_options
+      type: map
+    description:
+      field: description
+      type: string
+    dns_servers:
+      field: dns_servers
+      type: list
+    security_group_ids:
+      field: security_group_ids
+      type: list
+    self_service_portal:
+      field: self_service_portal
+      type: string
+    server_certificate_arn:
+      field: server_certificate_arn
+      type: string
+    session_timeout_hours:
+      field: session_timeout_hours
+      type: number
+    split_tunnel:
+      field: split_tunnel
+      type: bool
+    tags:
+      field: tags
+      type: map
+    transport_protocol:
+      field: transport_protocol
+      type: string
+    vpc_name:
+      function: get_vpc_name_client_vpn
+      arg: id
+      type: string
+    vpc_id:
+      function: get_vpc_id_client_vpn
+      arg: id
+      type: string
+    vpn_port:
+      field: vpn_port
+      type: number
+  childs:
+    aws_ec2_client_vpn_network_association:
+      join:
+        id:
+          field: client_vpn_endpoint_id
+      target_resource_name: this
+      import_id:
+        function: client_vpn_network_association_import_id
+        arg: id
+      second_index:
+        function: client_vpn_network_association_second_index
+        arg: id
+      fields:
+        network_association_subnet_names:
+          function: client_vpn_network_association_get_subnet_names
+          arg: id
+          type: list
+        network_association_subnet_ids:
+          function: client_vpn_network_association_get_subnet_ids
+          arg: id
+          type: list
+    aws_ec2_client_vpn_authorization_rule:
+      join:
+        id:
+          field: client_vpn_endpoint_id
+      target_resource_name: this
+      import_id:
+        function: client_vpn_authorization_rule_import_id
+        arg: id
+      second_index:
+        field: target_network_cidr
+      fields:
+        authorization_rules:
+          function: client_vpn_authorization_rule_get_rules
+          arg: id
+          type: list
+    aws_ec2_client_vpn_route:
+      join:
+        id:
+          field: client_vpn_endpoint_id
+      target_resource_name: this
+      import_id:
+        function: client_vpn_route_import_id
+        arg: id
+      second_index:
+        function: client_vpn_route_second_index
+        arg: id
+      fields:
+        routes:
+          function: client_vpn_route_get_routes
+          arg: id
+          type: list

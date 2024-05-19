@@ -1,0 +1,319 @@
+aws_api_gateway_rest_api:
+  terraform_module: "github.com/finisterra-io/terraform-aws-apigateway"
+  terraform_module_version: "1.0.6"
+  local_terraform_name: "terraform-aws-apigateway"
+  target_resource_name: this
+  add_id_hash_to_name: true
+  joined_fields:
+    resources:
+      sub_fields:
+        - ALL
+    endpoint_configuration:
+      sub_fields:
+        - ALL
+    deployments:
+      sub_fields:
+        - destination_arn
+    base_path_mappings:
+      sub_fields:
+        - domain_name
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    body:
+      field: body
+      type: string
+      multiline: true
+    endpoint_configuration:
+      function: clean_empty_values_list
+      arg: endpoint_configuration
+      type: list
+    api_key_source:
+      field: api_key_source
+      type: string
+    binary_media_types:
+      field: binary_media_types
+      type: list
+    minimum_compression_size:
+      field: minimum_compression_size
+      type: number
+    disable_execute_api_endpoint:
+      field: disable_execute_api_endpoint
+      type: bool
+    fail_on_warnings:
+      field: fail_on_warnings
+      type: bool
+    parameters:
+      field: parameters
+      type: map
+    put_rest_api_mode:
+      field: put_rest_api_mode
+      type: string
+    # openapi_spec:
+    #   function: apigateway_openapi_spec
+    #   arg: id
+    #   type: string
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_api_gateway_gateway_response:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name: this
+      second_index:
+        field: response_type
+      import_id:
+        function: apigateway_gateway_response_import_id
+        arg: id
+      fields:
+        gateway_responses:
+          function: apigateway_build_gateway_responses
+          type: map
+          arg: id
+    aws_api_gateway_model:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name: this
+      second_index:
+        field: name
+      import_id:
+        function: apigateway_model_import_id
+        arg: id
+      fields:
+        models:
+          function: apigateway_build_models
+          type: map
+          arg: id
+    aws_api_gateway_deployment:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name: this
+      import_id:
+        function: apigateway_deployment_import_id
+        arg: id
+      second_index:
+        field: id
+      fields:
+        deployments:
+          function: apigateway_build_deployments
+          type: map
+          arg: id
+    aws_api_gateway_rest_api_policy:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name: this
+      fields:
+        rest_api_policy:
+          field: policy
+          type: string
+          multiline: true
+    aws_api_gateway_stage:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name: this
+      second_index:
+        function: apigateway_get_stage_name_index
+        arg: id
+      fields:
+        deployments:
+          function: apigateway_build_stages
+          type: map
+          arg: id
+
+    aws_api_gateway_method_settings:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name: all
+      second_index:
+        function: apigateway_get_method_settings
+        arg: id
+      fields:
+        api_gateway_method_settings:
+          function: apigateway_build_method_settings
+          type: map
+          arg: id
+    aws_api_gateway_resource:
+      join:
+        id:
+          field: rest_api_id
+      target_resource_name:
+        function: apigateway_target_resource_name
+        arg: id
+      second_index:
+        field: path
+      import_id:
+        function: apigateway_resource_import_id
+        arg: id
+      fields:
+        resources:
+          function: apigateway_build_resources
+          type: map
+          arg: id
+      childs:
+        aws_api_gateway_method:
+          join:
+            id:
+              field: resource_id
+          target_resource_name:
+            function: apigateway_target_method_name
+            arg: id
+          second_index:
+            function: apigateway_method_index
+            arg: id
+          import_id:
+            function: apigateway_method_import_id
+            arg: id
+          fields:
+            resources:
+              function: apigateway_build_methods
+              type: map
+              arg: id
+        aws_api_gateway_integration:
+          join:
+            id:
+              field: resource_id
+          target_resource_name:
+            function: apigateway_target_integration_name
+            arg: id
+          second_index:
+            function: apigateway_integration_index
+            arg: id
+          import_id:
+            function: apigateway_integration_import_id
+            arg: id
+          fields:
+            resources:
+              function: apigateway_build_integrations
+              type: map
+              arg: id
+        aws_api_gateway_method_response:
+          join:
+            id:
+              field: resource_id
+          target_resource_name:
+            function: apigateway_target_integration_name
+            arg: id
+          second_index:
+            function: apigateway_method_response_index
+            arg: id
+          import_id:
+            function: apigateway_method_response_import_id
+            arg: id
+          fields:
+            resources:
+              function: apigateway_build_method_responses
+              type: map
+              arg: id
+        aws_api_gateway_integration_response:
+          join:
+            id:
+              field: resource_id
+          target_resource_name:
+            function: apigateway_target_integration_name
+            arg: id
+          second_index:
+            function: apigateway_integration_response_index
+            arg: id
+          import_id:
+            function: apigateway_integration_response_import_id
+            arg: id
+          fields:
+            resources:
+              function: apigateway_build_integration_responses
+              type: map
+              arg: id
+    aws_api_gateway_base_path_mapping:
+      join:
+        id:
+          field: api_id
+      target_resource_name: this
+      second_index:
+        function: apigateway_base_path_mapping_second_index
+        arg: id
+      import_id:
+        function: apigateway_base_path_mapping_import_id
+        arg: id
+      fields:
+        base_path_mappings:
+          function: apigateway_build_base_path_mappings
+          type: map
+          arg: id
+
+aws_api_gateway_vpc_link:
+  terraform_module: github.com/finisterra-io/terraform-aws-apigateway//modules/vpc-link
+  terraform_module_version: "1.0.6"
+  local_terraform_name: "terraform-aws-apigateway/modules/vpc-link"
+  target_resource_name: this
+  joined_fields:
+    target_arns:
+      sub_fields:
+        - target_arns
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    target_arns:
+      field: target_arns
+      type: list
+    tags:
+      field: tags
+      type: map
+
+aws_api_gateway_domain_name:
+  terraform_module: "github.com/finisterra-io/terraform-aws-apigateway//modules/domain"
+  terraform_module_version: "1.0.6"
+  local_terraform_name: "terraform-aws-apigateway/modules/domain"
+  target_resource_name: this
+  name_field: domain_name
+  joined_fields:
+    regional_certificate_arn:
+      sub_fields:
+        - regional_certificate_arn
+    certificate_arn:
+      sub_fields:
+        - certificate_arn
+    ownership_verification_certificate_arn:
+      sub_fields:
+        - ownership_verification_certificate_arn
+  fields:
+    domain_name:
+      field: domain_name
+      type: string
+    regional_certificate_arn:
+      field: regional_certificate_arn
+      type: string
+    security_policy:
+      field: security_policy
+      type: string
+    certificate_arn:
+      field: certificate_arn
+      type: string
+    certificate_name:
+      field: certificate_name
+      type: string
+    endpoint_configuration:
+      field: endpoint_configuration
+      type: list
+    mutual_tls_authentication:
+      field: mutual_tls_authentication
+      type: list
+    ownership_verification_certificate_arn:
+      field: ownership_verification_certificate_arn
+      type: string
+    tags:
+      field: tags
+      type: map

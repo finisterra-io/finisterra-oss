@@ -1,0 +1,409 @@
+aws_vpc:
+  terraform_module: "github.com/finisterra-io/terraform-aws-vpc"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-vpc"
+  target_resource_name: this
+  defaults:
+    create_igw: false
+  joined_fields:
+    aws_flow_logs:
+      sub_fields:
+        - log_destination
+        - iam_role_arn
+        - log_group_name
+  fields:
+    # name:
+    #   function: get_field_from_attrs
+    #   arg: tags.Name
+    #   type: string
+    #   hcl_print: false
+    cidr:
+      field: cidr_block
+      type: string
+    ipv4_ipam_pool_id:
+      field: ipv4_ipam_pool_id
+      type: string
+    ipv4_netmask_length:
+      field: ipv4_netmask_length
+      type: number
+    ipv6_cidr:
+      field: ipv6_cidr_block
+      type: string
+    ipv6_ipam_pool_id:
+      field: ipv6_ipam_pool_id
+      type: string
+    ipv6_netmask_length:
+      function: bigger_than_zero
+      arg: ipv6_netmask_length
+      type: number
+    ipv6_cidr_block_network_border_group:
+      field: ipv6_cidr_block_network_border_group
+      type: string
+    instance_tenancy:
+      field: instance_tenancy
+      type: string
+    enable_dns_hostnames:
+      field: enable_dns_hostnames
+      type: bool
+    enable_dns_support:
+      field: enable_dns_support
+      type: bool
+    enable_network_address_usage_metrics:
+      field: enable_network_address_usage_metrics
+      type: bool
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_default_route_table:
+      join:
+        id:
+          field: vpc_id
+      target_resource_name: default
+      defaults:
+        manage_default_route_table: true
+      import_id:
+        field: vpc_id
+      fields:
+        default_route_table_propagating_vgws:
+          field: propagating_vgws
+          type: list
+        default_route_table_routes:
+          function: vpc_default_route_table_routes
+          arg: id
+          type: list
+        default_route_table_tags:
+          field: tags
+          type: map
+    aws_default_network_acl:
+      join:
+        id:
+          field: vpc_id
+      target_resource_name: this
+      defaults:
+        manage_default_network_acl: true
+      fields:
+        default_network_acl_egress:
+          function: vpc_format_network_acl_rules
+          arg: egress
+          type: list
+        default_network_acl_ingress:
+          function: vpc_format_network_acl_rules
+          arg: ingress
+          type: list
+        default_network_acl_tags:
+          field: tags
+          type: map
+    aws_default_security_group:
+      join:
+        id:
+          field: vpc_id
+      target_resource_name: this
+      defaults:
+        manage_default_security_group: true
+      fields:
+        default_security_group_egress:
+          function: vpc_format_egress_rules
+          arg: id
+          type: list
+        default_security_group_ingress:
+          function: vpc_format_ingress_rules
+          arg: id
+          type: list
+        default_security_group_tags:
+          field: tags
+          type: map
+    aws_subnet_private:
+      resource_type: aws_subnet
+      join:
+        id:
+          field: vpc_id
+      skip_if:
+        function: vpc_is_subnet_public
+        arg: vpc_id
+      second_index:
+        field: cidr_block
+      target_resource_name: private
+      fields:
+        private_subnets:
+          function: vpc_add_private_subnet
+          arg: id
+          type: map
+      childs:
+        aws_route_table_association:
+          join:
+            id:
+              field: subnet_id
+          target_resource_name: private
+          second_index:
+            function: vpc_get_route_table_association_index
+            arg: route_table_id
+          import_id:
+            function: vpc_get_route_table_association_import_id
+            aeg: id
+          fields:
+            private_route_tables:
+              function: vpc_add_route_table_association
+              arg: id
+          childs:
+            aws_route_table:
+              join:
+                route_table_id:
+                  field: id
+              target_resource_name: private
+              second_index:
+                function: vpc_get_route_table_name
+                arg: id
+              fields:
+                private_route_tables:
+                  function: vpc_add_route_table
+                  arg: id
+                  type: list
+              childs:
+                aws_route:
+                  join:
+                    id:
+                      field: route_table_id
+                  target_resource_name: private
+                  second_index:
+                    field: id
+                  import_id:
+                    function: vpc_get_route_import_id
+                    arg: id
+                  fields:
+                    private_route_tables:
+                      function: vpc_add_route
+                      arg: id
+                      type: map
+
+    aws_subnet_public:
+      resource_type: aws_subnet
+      join:
+        id:
+          field: vpc_id
+      skip_if:
+        function: vpc_is_subnet_private
+        arg: vpc_id
+      second_index:
+        field: cidr_block
+      target_resource_name: public
+      fields:
+        public_subnets:
+          function: vpc_add_public_subnet
+          arg: id
+          type: map
+        # public_subnet_enable_dns64:
+        #   field: enable_dns64
+        #   type: bool
+        # public_subnet_enable_resource_name_dns_aaaa_record_on_launch:
+        #   field: enable_resource_name_dns_aaaa_record_on_launch
+        #   type: bool
+        # public_subnet_enable_resource_name_dns_a_record_on_launch:
+        #   field: enable_resource_name_dns_a_record_on_launch
+        #   type: bool
+        # public_subnet_ipv6_native:
+        #   field: ipv6_native
+        #   type: bool
+        # map_public_ip_on_launch:
+        #   field: map_public_ip_on_launch
+        #   type: bool
+        # public_subnet_private_dns_hostname_type_on_launch:
+        #   field: private_dns_hostname_type_on_launch
+        #   type: string
+
+      childs:
+        aws_route_table_association:
+          join:
+            id:
+              field: subnet_id
+          target_resource_name: public
+          second_index:
+            function: vpc_get_route_table_association_index
+            arg: route_table_id
+          import_id:
+            function: vpc_get_route_table_association_import_id
+            aeg: id
+          fields:
+            public_route_tables:
+              function: vpc_add_route_table_association
+              arg: id
+          childs:
+            aws_route_table:
+              join:
+                route_table_id:
+                  field: id
+              target_resource_name: public
+              second_index:
+                function: vpc_get_route_table_name
+                arg: id
+              fields:
+                public_route_tables:
+                  function: vpc_add_route_table
+                  arg: id
+                  type: list
+              childs:
+                aws_route:
+                  join:
+                    id:
+                      field: route_table_id
+                  target_resource_name: public
+                  second_index:
+                    field: id
+                  import_id:
+                    function: vpc_get_route_import_id
+                    arg: id
+                  fields:
+                    public_route_tables:
+                      function: vpc_add_route
+                      arg: id
+                      type: map
+
+        aws_nat_gateway:
+          join:
+            id:
+              field: subnet_id
+          target_resource_name: this
+          # defaults:
+          #   enable_nat_gateway: true
+          second_index:
+            function: vpc_get_nat_gateway_index
+            arg: id
+          fields:
+            nat_gateways:
+              function: vpc_add_nat_gateway
+              arg: id
+              type: map
+          childs:
+            aws_eip:
+              join:
+                allocation_id:
+                  field: allocation_id
+              target_resource_name: nat
+              second_index:
+                function: vpc_get_eip_index
+                arg: id
+              fields:
+                nat_gateways:
+                  function: vpc_add_eip
+                  arg: id
+                  type: map
+
+    aws_internet_gateway:
+      join:
+        id:
+          field: vpc_id
+      target_resource_name: this
+      defaults:
+        create_igw: true
+      fields:
+        igw_tags:
+          field: tags
+          type: map
+
+    # aws_network_acl:
+    #   join:
+    #     id:
+    #       field: vpc_id
+    #   target_resource_name: this
+    #   second_index:
+    #     function: vpc_get_network_acl_id
+    #     arg: id
+    #   fields:
+    #     aws_network_acls:
+    #       function: vpc_add_network_acl
+    #       arg: id
+    #       type: map
+    #   childs:
+    #     aws_network_acl_rule:
+    #       join:
+    #         id:
+    #           field: network_acl_id
+    #       target_resource_name: ingress
+    #       second_index:
+    #         function: vpc_get_network_acl_rule_id
+    #         arg: network_acl_id
+    #       skip_if:
+    #         function: vpc_is_network_acl_rule_egress
+    #         arg: network_acl_id
+    #       import_id:
+    #         function: vpc_aws_network_acl_rule_import_id
+    #         arg: id
+    #       fields:
+    #         aws_network_acls:
+    #           function: vpc_add_network_acl_ingress_rule
+    #           arg: id
+    #           type: map
+    #     aws_network_acl_rule_egress:
+    #       resource_type: aws_network_acl_rule
+    #       join:
+    #         id:
+    #           field: network_acl_id
+    #       target_resource_name: egress
+    #       second_index:
+    #         function: vpc_get_network_acl_rule_id
+    #         arg: network_acl_id
+    #       skip_if:
+    #         function: vpc_is_network_acl_rule_ingress
+    #         arg: network_acl_id
+    #       import_id:
+    #         function: vpc_aws_network_acl_rule_import_id
+    #         arg: id
+    #       fields:
+    #         aws_network_acls:
+    #           function: vpc_add_network_acl_egress_rule
+    #           arg: id
+    #           type: map
+
+    aws_flow_log:
+      join:
+        id:
+          field: vpc_id
+      target_resource_name: this
+      second_index:
+        field: log_destination
+      fields:
+        aws_flow_logs:
+          function: vpc_build_aws_flow_logs
+          arg: log_destination_type
+          type: map
+
+    aws_vpc_dhcp_options_association:
+      join:
+        id:
+          field: vpc_id
+      target_resource_name: this
+      defaults:
+        enable_dhcp_options_association: true
+      import_id:
+        field: vpc_id
+      fields:
+        dhcp_options_id:
+          field: dhcp_options_id
+          type: string
+      childs:
+        aws_vpc_dhcp_options:
+          join:
+            dhcp_options_id:
+              field: id
+          target_resource_name: this
+          fields:
+            create_dhcp_options:
+              unique: true
+            dhcp_options_domain_name:
+              field: domain_name
+              type: string
+            dhcp_options_domain_name_servers:
+              field: domain_name_servers
+              type: list
+            dhcp_options_netbios_name_servers:
+              field: netbios_name_servers
+              type: list
+            dhcp_options_netbios_node_type:
+              field: netbios_node_type
+              type: string
+            dhcp_options_ntp_servers:
+              field: ntp_servers
+              type: list
+            dhcp_options_tags:
+              field: tags
+              type: map

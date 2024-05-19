@@ -1,0 +1,51 @@
+aws_acm_certificate:
+  terraform_module: "github.com/finisterra-io/terraform-aws-acm"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-acm"
+  target_resource_name: this
+  name_field: domain_name
+  add_id_hash_to_name: true
+  fields:
+    domain_name:
+      field: domain_name
+      type: string
+    subject_alternative_names:
+      field: subject_alternative_names
+      type: list
+    validation_method:
+      function: acm_get_validation_method
+      type: string
+      arg: id
+    key_algorithm:
+      field: key_algorithm
+      type: string
+    certificate_transparency_logging_preference:
+      function: get_field_from_attrs
+      arg: options.certificate_transparency_logging_preference
+      type: string
+    validation_option:
+      field: validation_option
+      type: list
+    tags:
+      field: tags
+      type: map
+    certificate_authority_arn:
+      field: certificate_authority_arn
+      type: string
+  # childs:
+  #   aws_acm_certificate_validation:
+  #     join:
+  #       arn:
+  #         field: certificate_arn
+  #     target_resource_name: this
+  #     defaults:
+  #       validate_certificate: true
+  #       wait_for_validation: true
+  #     fields:
+  #       validation_record_fqdns:
+  #         field: validation_record_fqdns
+  #         type: list
+  #       validation_timeout:
+  #         function: get_field_from_attrs
+  #         arg: timeouts.validation_timeout
+  #         type: string

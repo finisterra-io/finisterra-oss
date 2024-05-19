@@ -1,0 +1,124 @@
+aws_dynamodb_table:
+  terraform_module: "github.com/finisterra-io/terraform-aws-dynamodb"
+  terraform_module_version: "1.0.5"
+  local_terraform_name: "terraform-aws-dynamodb"
+  keys:
+    - name
+  target_resource_name:
+    function: dynamodb_aws_dynamodb_target_name
+    arg: id
+  defaults:
+    ignore_changes_global_secondary_index: true
+  fields:
+    name:
+      field: name
+      type: string
+    billing_mode:
+      field: billing_mode
+      type: string
+    hash_key:
+      field: hash_key
+      type: string
+    range_key:
+      field: range_key
+      type: string
+    read_capacity:
+      field: read_capacity
+      type: number
+    write_capacity:
+      field: write_capacity
+      type: number
+    stream_enabled:
+      field: stream_enabled
+      type: bool
+    stream_view_type:
+      field: stream_view_type
+      type: string
+    table_class:
+      field: table_class
+      type: string
+    deletion_protection_enabled:
+      field: deletion_protection_enabled
+      type: bool
+    ttl_enabled:
+      function: get_field_from_attrs
+      arg: ttl.enabled
+      type: bool
+    ttl_attribute_name:
+      function: get_field_from_attrs
+      arg: ttl.attribute_name
+      type: string
+    point_in_time_recovery_enabled:
+      function: get_field_from_attrs
+      arg: point_in_time_recovery.enabled
+      type: bool
+    attributes:
+      field: attribute
+      type: list
+    local_secondary_indexes:
+      field: local_secondary_index
+      type: list
+    global_secondary_indexes:
+      field: global_secondary_index
+      type: list
+    replica_regions:
+      function: dynamodb_replica_regions
+      arg: id
+      type: list
+    server_side_encryption_enabled:
+      function: get_field_from_attrs
+      arg: server_side_encryption.enabled
+      type: bool
+      default: false
+    server_side_encryption_kms_key_arn:
+      function: get_field_from_attrs
+      arg: server_side_encryption.kms_key_arn
+      type: string
+    tags:
+      field: tags
+      type: map
+    timeouts:
+      field: timeouts
+      type: map
+  childs:
+    aws_appautoscaling_target:
+      join:
+        name:
+          function: dynamodb_get_name_from_arn
+          arg: resource_id
+      resource_type: aws_appautoscaling_target
+      import_id:
+        function: dynamodb_aws_appautoscaling_target_import_id
+        arg: id
+      target_resource_name: this
+      second_index:
+        function: dynamodb_get_autosaling_type
+        arg: id
+      defaults:
+        autoscaling_enabled: true
+      fields:
+        autoscaling:
+          function: dynamodb_build_autoscaling
+          arg: id
+          type: map
+      childs:
+        aws_appautoscaling_policy:
+          join:
+            resource_id:
+              field: resource_id
+            service_namespace:
+              field: service_namespace
+            scalable_dimension:
+              field: scalable_dimension
+          target_resource_name: this
+          second_index:
+            function: dynamodb_get_autosaling_type
+            arg: id
+          import_id:
+            function: dynamodb_aws_appautoscaling_policy_import_id
+            arg: id
+          fields:
+            autoscaling:
+              function: dynamodb_build_autoscaling_policy
+              arg: id
+              type: map

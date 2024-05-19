@@ -1,0 +1,257 @@
+aws_s3_bucket:
+  terraform_module: "github.com/finisterra-io/terraform-aws-s3"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-s3"
+  name_field: bucket
+  add_id_hash_to_name: true
+  joined_fields:
+    server_side_encryption_configuration:
+      sub_fields:
+        - kms_master_key_id
+    replication_configuration:
+      sub_fields:
+        - role
+  target_resource_name: this
+  fields:
+    bucket:
+      field: bucket
+    bucket_prefix:
+      field: bucket_prefix
+    tags:
+      field: tags
+    force_destroy:
+      field: force_destroy
+    object_lock_enabled:
+      field: object_lock_enabled
+  defaults:
+    attach_public_policy: false
+  childs:
+    aws_s3_bucket_logging:
+      target_resource_name: this
+      join:
+        bucket:
+          field: bucket
+      fields:
+        logging:
+          function: aws_s3_build_logging
+          arg: id
+          type: map
+
+    aws_s3_bucket_acl:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        acl:
+          field: acl
+        expected_bucket_owner:
+          field: expected_bucket_owner
+        grant:
+          function: aws_s3_bucket_acl_grant
+          arg: id
+        owner:
+          function: aws_s3_bucket_acl_owner
+          arg: id
+
+    aws_s3_bucket_website_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        website:
+          function: aws_s3_bucket_website_configuration_website
+          arg: id
+        expected_bucket_owner:
+          field: expected_bucket_owner
+
+    aws_s3_bucket_versioning:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        versioning:
+          function: aws_s3_bucket_versioning_versioning
+          arg: id
+        expected_bucket_owner:
+          field: expected_bucket_owner
+
+    aws_s3_bucket_server_side_encryption_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        server_side_encryption_configuration:
+          function: aws_s3_server_side_encryption_configuration
+          arg: id
+        expected_bucket_owner:
+          field: expected_bucket_owner
+
+    aws_s3_bucket_accelerate_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        acceleration_status:
+          field: status
+        expected_bucket_owner:
+          field: expected_bucket_owner
+
+    aws_s3_bucket_request_payment_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        request_payer:
+          field: payer
+        expected_bucket_owner:
+          field: expected_bucket_owner
+
+    aws_s3_bucket_cors_configuration: #Not tested
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        expected_bucket_owner:
+          field: expected_bucket_owner
+        cors_rule:
+          field: cors_rule
+
+    aws_s3_bucket_lifecycle_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        expected_bucket_owner:
+          field: expected_bucket_owner
+        lifecycle_rule:
+          function: aws_s3_bucket_lifecycle_configuration_lifecycle_rule
+          arg: id
+
+    aws_s3_bucket_object_lock_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      defaults:
+        create_object_lock_configuration: true
+      fields:
+        object_lock_configuration_token:
+          field: token
+          type: string
+        object_lock_configuration_object_lock_enabled:
+          field: object_lock_enabled
+          type: string
+        expected_bucket_owner:
+          field: expected_bucket_owner
+          type: string
+        object_lock_configuration_rule:
+          function: aws_s3_get_object_lock_configuration_rule
+          arg: id
+          type: list
+
+    aws_s3_bucket_replication_configuration:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        replication_configuration:
+          function: aws_s3_build_replication_configuration
+          arg: id
+
+    aws_s3_bucket_policy:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      defaults:
+        attach_policy: true
+      fields:
+        policy:
+          function: aws_s3_bucket_policy_policy
+          arg: policy
+          multiline: true
+    aws_s3_bucket_public_access_block:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      defaults:
+        attach_public_policy: true
+      fields:
+        block_public_acls:
+          field: block_public_acls
+        block_public_policy:
+          field: block_public_policy
+        ignore_public_acls:
+          field: ignore_public_acls
+        restrict_public_buckets:
+          field: restrict_public_buckets
+
+    aws_s3_bucket_ownership_controls:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      defaults:
+        control_object_ownership: true
+      fields:
+        object_ownership:
+          function: aws_s3_bucket_ownership_controls_object_ownership
+          arg: id
+
+    aws_s3_bucket_intelligent_tiering_configuration:
+      join:
+        bucket:
+          field: bucket
+      second_index:
+        field: name
+      target_resource_name: this
+      fields:
+        intelligent_tiering:
+          function: s3_build_tiering
+          arg: id
+          type: map
+
+    aws_s3_bucket_metric: #no tested
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      fields:
+        metric_configuration:
+          field: metric_configuration
+
+    aws_s3_bucket_inventory:
+      join:
+        bucket:
+          field: bucket
+      target_resource_name: this
+      second_index:
+        field: name
+      fields:
+        inventory_configuration:
+          function: aws_s3_get_inventory_configuration
+          arg: id
+          type: list
+
+    aws_s3_bucket_analytics_configuration:
+      join:
+        bucket:
+          field: bucket
+      second_index:
+        field: name
+      target_resource_name: this
+      fields:
+        analytics_configuration:
+          function: aws_s3_get_analytics_configuration
+          arg: id
+          type: list

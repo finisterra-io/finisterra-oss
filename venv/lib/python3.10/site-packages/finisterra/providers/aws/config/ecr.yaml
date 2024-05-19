@@ -1,0 +1,117 @@
+aws_ecr_repository:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ecr"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-ecr"
+  name_field: repository_name
+  joined_fields:
+    repository_kms_key:
+      sub_fields:
+        - repository_kms_key
+  target_resource_name: this
+  defaults:
+    repository_type: private
+  fields:
+    repository_name:
+      field: name
+      type: string
+    repository_image_tag_mutability:
+      field: image_tag_mutability
+      type: string
+    repository_encryption_type:
+      function: get_field_from_attrs
+      arg: encryption_configuration.encryption_type
+      type: string
+    repository_kms_key:
+      function: ecr_get_repository_kms_key
+      arg: encryption_configuration.kms_key
+      type: string
+    repository_kms_key_alias:
+      function: ecr_get_repository_kms_key_alias
+      arg: encryption_configuration.kms_key
+      type: string
+    repository_force_delete:
+      field: force_delete
+    repository_image_scan_on_push:
+      function: get_field_from_attrs
+      arg: image_scanning_configuration.scan_on_push
+      type: bool
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_ecr_repository_policy:
+      join:
+        name:
+          field: repository
+      target_resource_name: this
+      defaults:
+        attach_repository_policy: true
+        create_repository_policy: false
+      fields:
+        # repository_name:
+        #   field: name
+        #   type: string
+        repository_policy:
+          field: policy
+          type: string
+          multiline: true
+    aws_ecr_lifecycle_policy:
+      join:
+        name:
+          field: repository
+      target_resource_name: this
+      defaults:
+        create_lifecycle_policy: true
+      fields:
+        # repository_name:
+        #   field: name
+        #   type: string
+        repository_lifecycle_policy:
+          field: policy
+          type: string
+          multiline: true
+
+    aws_ecr_registry_scanning_configuration:
+      join:
+        id:
+          field: id
+      target_resource_name: this
+      defaults:
+        manage_registry_scanning_configuration: true
+      fields:
+        registry_scan_type:
+          field: scan_type
+          type: string
+        registry_scan_rules:
+          function: ecr_get_registry_scan_rules
+          type: list
+          arg: id
+
+aws_ecr_registry_policy:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ecr//modules/registry_policy"
+  terraform_module_version: "1.0.1"
+  target_resource_name: this
+  fields:
+    registry_policy:
+      field: policy
+      type: string
+      multiline: true
+
+aws_ecr_pull_through_cache_rule:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ecr//modules/pull_through_cache_rule"
+  terraform_module_version: "1.0.1"
+  target_resource_name: this
+  fields:
+    registry_pull_through_cache_rules:
+      field: rules
+      type: list
+
+aws_ecr_replication_configuration:
+  terraform_module: "github.com/finisterra-io/terraform-aws-ecr//modules/replication_configuration"
+  terraform_module_version: "1.0.1"
+  target_resource_name: this
+  fields:
+    registry_replication_rules:
+      function: ecr_build_registry_replication_rules
+      type: list
+      arg: id

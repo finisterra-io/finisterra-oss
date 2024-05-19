@@ -1,0 +1,65 @@
+aws_elastic_beanstalk_application:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elastic-beanstalk//modules/application"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-elastic-beanstalk/modules/application"
+  target_resource_name: default
+  defaults:
+    enabled: true
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    tags:
+      field: tags
+      type: map
+    appversion_lifecycle_service_role_arn:
+      function: get_field_from_attrs
+      arg: appversion_lifecycle.service_role_arn
+      type: string
+    appversion_lifecycle_max_count:
+      function: get_field_from_attrs
+      arg: appversion_lifecycle.max_count
+      type: number
+    appversion_lifecycle_delete_source_from_s3:
+      function: get_field_from_attrs
+      arg: appversion_lifecycle.delete_source_from_s3
+      type: bool
+
+aws_elastic_beanstalk_environment:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elastic-beanstalk//modules/environment"
+  terraform_module_version: "1.0.3"
+  local_terraform_name: "terraform-aws-elastic-beanstalk/modules/environment"
+  target_resource_name: default
+  defaults:
+    enabled: true
+  fields:
+    name:
+      field: name
+      type: string
+    elastic_beanstalk_application_name:
+      field: application
+      type: string
+    description:
+      field: description
+      type: string
+    tier:
+      field: tier
+      type: string
+    solution_stack_name:
+      field: solution_stack_name
+      type: string
+    wait_for_ready_timeout:
+      field: wait_for_ready_timeout
+      type: number
+    version_label:
+      field: version_label
+      type: string
+    tags:
+      field: tags
+      type: map
+    settings:
+      field: setting
+      type: list

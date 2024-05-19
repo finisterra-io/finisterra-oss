@@ -1,0 +1,266 @@
+aws_cloudfront_distribution:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudfront"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-cloudfront"
+  target_resource_name: this
+  joined_fields:
+    origin:
+      sub_fields:
+        - origin_access_identity
+    default_cache_behavior:
+      sub_fields:
+        - cache_policy_id
+        - origin_request_policy_id
+        - response_headers_policy_id
+        - function_arn
+        - lambda_arn
+    ordered_cache_behavior:
+      sub_fields:
+        - cache_policy_id
+        - origin_request_policy_id
+        - response_headers_policy_id
+        - function_arn
+        - lambda_arn
+    viewer_certificate:
+      sub_fields:
+        - acm_certificate_arn
+    logging_config:
+      sub_fields:
+        - bucket
+    web_acl_id:
+      sub_fields:
+        - web_acl_id
+  fields:
+    enabled:
+      field: enabled
+      type: bool
+    aliases:
+      field: aliases
+      type: list
+    comment:
+      field: comment
+      type: string
+    default_root_object:
+      field: default_root_object
+      type: string
+    http_version:
+      field: http_version
+      type: string
+    is_ipv6_enabled:
+      field: is_ipv6_enabled
+      type: bool
+    price_class:
+      field: price_class
+      type: string
+    retain_on_delete:
+      field: retain_on_delete
+      type: bool
+    wait_for_deployment:
+      field: wait_for_deployment
+      type: bool
+    web_acl_id:
+      field: web_acl_id
+      type: string
+    tags:
+      field: tags
+      type: map
+    logging_config:
+      field: logging_config
+      type: map
+    origin:
+      function: cloudfront_build_origin
+      type: map
+      arg: id
+    origin_group:
+      field: origin_group
+      type: list
+    default_cache_behavior:
+      function: cloudfront_build_default_cache_behavior
+      type: map
+      arg: id
+    ordered_cache_behavior:
+      function: cloudfront_build_ordered_cache_behavior
+      type: list
+      arg: id
+    viewer_certificate:
+      function: cloudfront_build_viewer_certificate
+      type: map
+      arg: id
+    custom_error_response:
+      field: custom_error_response
+      type: list
+    geo_restriction:
+      function: cloudfront_build_geo_restriction
+      type: map
+      arg: id
+  childs:
+    aws_cloudfront_monitoring_subscription:
+      join:
+        id:
+          field: distribution_id
+      target_resource_name: this
+      defaults:
+        create_monitoring_subscription: true
+      fields:
+        realtime_metrics_subscription_status:
+          function: get_field_from_attrs
+          arg: monitoring_subscription.realtime_metrics_subscription_config.realtime_metrics_subscription_status
+          type: string
+
+aws_cloudfront_origin_access_identity:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudfront//modules/origin_access_identity"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-cloudfront/modules/origin_access_identity"
+  target_resource_name: this
+  add_id_hash_to_name: true
+  fields:
+    comment:
+      field: comment
+      type: string
+
+aws_cloudfront_cache_policy:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudfront//modules/cache_policy"
+  terraform_module_version: "1.0.2"
+  target_resource_name: this
+  local_terraform_name: "terraform-aws-cloudfront/modules/cache_policy"
+  add_id_hash_to_name: true
+  fields:
+    name:
+      field: name
+      type: string
+    comment:
+      field: comment
+      type: string
+    default_ttl:
+      field: default_ttl
+      type: number
+    max_ttl:
+      field: max_ttl
+      type: number
+    min_ttl:
+      field: min_ttl
+      type: number
+    enable_accept_encoding_brotli:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.enable_accept_encoding_brotli
+      type: bool
+    enable_accept_encoding_gzip:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.enable_accept_encoding_gzip
+      type: bool
+    cookie_behavior:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.cookies_config.cookie_behavior
+      type: string
+    cookies:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.cookies_config.cookies.items
+      type: list
+    header_behavior:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.headers_config.header_behavior
+      type: string
+    headers:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.headers_config.headers.items
+      type: list
+    query_string_behavior:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.query_strings_config.query_string_behavior
+      type: string
+    query_strings:
+      function: get_field_from_attrs
+      arg: parameters_in_cache_key_and_forwarded_to_origin.query_strings_config.query_strings.items
+      type: list
+
+aws_cloudfront_response_headers_policy:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudfront//modules/response_headers_policy"
+  terraform_module_version: "1.0.2"
+  target_resource_name: this
+  local_terraform_name: "terraform-aws-cloudfront/modules/response_headers_policy"
+  add_id_hash_to_name: true
+  fields:
+    name:
+      field: name
+      type: string
+    comment:
+      field: comment
+      type: string
+    cors_config:
+      field: cors_config
+      type: list
+    custom_headers_config:
+      field: custom_headers_config
+      type: list
+    remove_headers_config:
+      field: remove_headers_config
+      type: list
+    security_headers_config:
+      field: security_headers_config
+      type: list
+    server_timing_headers_config:
+      field: server_timing_headers_config
+      type: list
+
+aws_cloudfront_origin_request_policy:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudfront//modules/origin_request_policy"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-cloudfront/modules/origin_request_policy"
+  target_resource_name: this
+  add_id_hash_to_name: true
+  fields:
+    name:
+      field: name
+      type: string
+    comment:
+      field: comment
+      type: string
+    cookie_behavior:
+      function: get_field_from_attrs
+      arg: cookies_config.cookie_behavior
+      type: string
+    cookies:
+      function: get_field_from_attrs
+      arg: cookies_config.cookies.items
+      type: list
+    header_behavior:
+      function: get_field_from_attrs
+      arg: headers_config.header_behavior
+      type: string
+    headers:
+      function: get_field_from_attrs
+      arg: headers_config.headers.items
+      type: list
+    query_string_behavior:
+      function: get_field_from_attrs
+      arg: query_strings_config.query_string_behavior
+      type: string
+    query_strings:
+      function: get_field_from_attrs
+      arg: query_strings_config.query_strings.items
+      type: list
+
+aws_cloudfront_function:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudfront//modules/function"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-cloudfront/modules/function"
+  target_resource_name: this
+  add_id_hash_to_name: true
+  fields:
+    name:
+      field: name
+      type: string
+    comment:
+      field: comment
+      type: string
+    runtime:
+      field: runtime
+      type: string
+    publish:
+      field: publish
+      type: bool
+    code:
+      field: code
+      type: string
+      multiline: true
+      jsonfield: false

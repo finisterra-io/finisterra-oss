@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='finisterra',
-    version='1.0.30',
+    version='1.0.32',
     packages=find_packages(),
     package_data={
         'finisterra': ['providers/**/*.yaml'],

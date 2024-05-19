@@ -1,0 +1,208 @@
+aws_msk_cluster:
+  terraform_module: "github.com/finisterra-io/terraform-aws-msk"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-msk"
+  target_resource_name: default
+  name_field: cluster_name
+  defaults:
+    enabled: true
+    autoscaling_enabled: false
+  fields:
+    kafka_version:
+      field: kafka_version
+      type: string
+    cluster_name:
+      field: cluster_name
+      type: string
+    security_groups:
+      function: get_field_from_attrs
+      arg: broker_node_group_info.security_groups
+      type: list
+    number_of_broker_nodes:
+      field: number_of_broker_nodes
+      type: number
+    enhanced_monitoring:
+      field: enhanced_monitoring
+      type: string
+    broker_instance_type:
+      function: get_field_from_attrs
+      arg: broker_node_group_info.instance_type
+      type: string
+    subnet_names:
+      function: msk_get_subnet_names
+      arg: subnets
+      type: list
+    subnet_ids:
+      function: msk_get_subnet_ids
+      arg: subnets
+      type: list
+    vpc_name:
+      function: get_vpc_name_msk
+      arg: id
+      type: string
+    vpc_id:
+      function: get_vpc_id_msk
+      arg: id
+      type: string
+    broker_volume_size:
+      function: get_field_from_attrs
+      arg: broker_node_group_info.storage_info.ebs_storage_info.volume_size
+      type: number
+    provisioned_throughput:
+      function: msk_get_provisioned_throughput
+      arg: id
+      type: list
+    public_access_enabled:
+      function: msk_get_public_access_enabled
+      arg: broker_node_group_info.connectivity_info.public_access.type
+      type: string
+    client_broker:
+      function: get_field_from_attrs
+      arg: encryption_info.encryption_in_transit.client_broker
+      type: string
+    encryption_in_cluster:
+      function: get_field_from_attrs
+      arg: encryption_info.encryption_in_transit.in_cluster
+      type: string
+    encryption_at_rest_kms_key_arn:
+      function: get_field_from_attrs
+      arg: encryption_info.encryption_at_rest_kms_key_arn
+      type: string
+    client_authentication:
+      field: client_authentication
+      type: list
+    # client_allow_unauthenticated:
+    #   function: get_field_from_attrs
+    #   arg: broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.unauthenticated
+    #   type: bool
+    # certificate_authority_arns:
+    #   function: get_field_from_attrs
+    #   arg: broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.tls.certificate_authority_arns
+    #   type: list
+    # client_tls_auth_enabled:
+    #   function: get_field_from_attrs
+    #   arg: broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.tls
+    #   type: bool
+    # client_sasl_scram_enabled:
+    #   function: get_field_from_attrs
+    #   arg: broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.sasl.scram
+    #   type: bool
+    # client_sasl_iam_enabled:
+    #   function: get_field_from_attrs
+    #   arg: broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.sasl.iam
+    #   type: bool
+    jmx_exporter_enabled:
+      function: get_field_from_attrs
+      arg: open_monitoring.prometheus.jmx_exporter.enabled_in_broker
+      type: bool
+    node_exporter_enabled:
+      function: get_field_from_attrs
+      arg: open_monitoring.prometheus.node_exporter.enabled_in_broker
+      type: bool
+    cloudwatch_logs_enabled:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.cloudwatch_logs.enabled
+      type: bool
+    cloudwatch_logs_log_group:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.cloudwatch_logs.log_group
+      type: string
+    firehose_logs_enabled:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.firehose.enabled
+      type: bool
+    firehose_delivery_stream:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.firehose.delivery_stream
+      type: string
+    s3_logs_enabled:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.s3.enabled
+      type: bool
+    s3_logs_bucket:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.s3.bucket
+      type: string
+    s3_logs_prefix:
+      function: get_field_from_attrs
+      arg: logging_info.broker_logs.s3.prefix
+      type: string
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_msk_configuration:
+      join:
+        arn:
+          join_function: msk_join_configuration
+          arg: id
+      target_resource_name: config
+      fields:
+        configuration_name:
+          field: name
+          type: string
+        configuration_description:
+          field: description
+          type: string
+        server_properties:
+          function: msk_get_server_properties
+          arg: server_properties
+          type: map
+        config_kafka_versions:
+          field: kafka_versions
+          type: list
+    aws_appautoscaling_target:
+      join:
+        arn:
+          field: resource_id
+      target_resource_name: default
+      defaults:
+        autoscaling_enabled: true
+      import_id:
+        function: msk_get_autoscaling_target_import_id
+        arg: id
+      fields:
+        scalable_dimension:
+          field: scalable_dimension
+          type: string
+        min_capacity:
+          field: min_capacity
+          type: number
+        max_capacity:
+          field: max_capacity
+          type: number
+        service_namespace:
+          field: service_namespace
+          type: string
+        autoscalling_target_tags:
+          field: tags
+          type: map
+    aws_appautoscaling_policy:
+      join:
+        arn:
+          field: resource_id
+      target_resource_name: default
+      defaults:
+        autoscaling_enabled: true
+      import_id:
+        function: msk_get_autoscaling_policy_import_id
+        arg: id
+      fields:
+        appautoscaling_policy_name:
+          field: name
+          type: string
+        policy_type:
+          field: policy_type
+          type: string
+        predefined_metric_type:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.predefined_metric_specification.predefined_metric_type
+          type: string
+        storage_autoscaling_target_value:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.target_value
+          type: number
+        storage_autoscaling_disable_scale_in:
+          function: get_field_from_attrs
+          arg: target_tracking_scaling_policy_configuration.disable_scale_in
+          type: bool

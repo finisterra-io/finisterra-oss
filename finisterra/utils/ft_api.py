@@ -34,12 +34,8 @@ def prompt_for_token(auth_url):
     return input("Token: ")
 
 def get_url(api_part):
-    api_protocol = os.environ.get('FT_API_PROTOCOL_WEB', 'https')
-    api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
-    api_port = os.environ.get('FT_API_PORT_WEB', '')
-    if api_port:
-        api_port = f":{api_port}"
-    return f"{api_protocol}://{api_host}{api_port}/{api_part}"
+    api_host = os.environ.get('FT_API_HOST', 'https://app.finisterra.io')
+    return f"{api_host}/{api_part}"
 
 def get_headers():
     api_token = os.environ.get('FT_API_TOKEN')
@@ -66,7 +62,7 @@ def auth(payload):
 
     # validate if account is active
     url = get_url('api/aws/account-by-id-region')
-    logger.debug("Validating account...")
+    logger.debug(f"Validating account... {url} {payload} {headers}")
     response = requests.get(url, headers=headers, params=payload)
     if response.status_code == 200:
         data = response.json()

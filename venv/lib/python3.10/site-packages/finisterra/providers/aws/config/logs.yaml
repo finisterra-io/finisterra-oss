@@ -1,0 +1,25 @@
+aws_cloudwatch_log_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-cloudwatch//modules/log-group"
+  terraform_module_version: "1.0.1"
+  target_resource_name: this
+  name_field: name
+  joined_fields:
+    kms_key_id:
+      sub_fields:
+        - kms_key_id
+  fields:
+    name:
+      field: name
+      type: string
+    name_prefix:
+      field: name_prefix
+      type: string
+    retention_in_days:
+      field: retention_in_days
+      type: number
+    kms_key_id:
+      field: kms_key_id
+      type: string
+    tags:
+      field: tags
+      type: map

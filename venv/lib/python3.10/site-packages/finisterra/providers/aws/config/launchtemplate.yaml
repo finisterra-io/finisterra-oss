@@ -1,0 +1,119 @@
+aws_launch_template:
+  terraform_module: "github.com/finisterra-io/terraform-aws-launch-template"
+  terraform_module_version: "1.0.4"
+  target_resource_name: this
+  local_terraform_name: "terraform-aws-launch-template"
+  name_field: name
+  joined_fields:
+    vpc_security_group_ids:
+      sub_fields:
+        - vpc_security_group_ids
+    network_interfaces:
+      sub_fields:
+        - security_groups
+    block_device_mappings:
+      sub_fields:
+        - kms_key_id
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    ebs_optimized:
+      field: ebs_optimized
+      type: string
+    ami_id:
+      field: image_id
+      type: string
+    key_name:
+      field: key_name
+      type: string
+    vpc_security_group_ids:
+      field: vpc_security_group_ids
+      type: list
+    default_version:
+      field: default_version
+      type: string
+    disable_api_termination:
+      field: disable_api_termination
+      type: string
+    kernel_id:
+      field: kernel_id
+      type: string
+    ram_disk_id:
+      field: ram_disk_id
+      type: string
+    block_device_mappings:
+      function: launchtemplate_get_block_device_mappings
+      arg: block_device_mappings
+      type: list
+    capacity_reservation_specification:
+      field: capacity_reservation_specification
+      type: map
+    cpu_options:
+      field: cpu_options
+      type: map
+    credit_specification:
+      field: credit_specification
+      type: map
+    elastic_gpu_specifications:
+      field: elastic_gpu_specifications
+      type: map
+    elastic_inference_accelerator:
+      field: elastic_inference_accelerator
+      type: map
+    enclave_options:
+      field: enclave_options
+      type: map
+    hibernation_options:
+      field: hibernation_options
+      type: map
+    instance_market_options:
+      field: instance_market_options
+      type: map
+    maintenance_options:
+      field: maintenance_options
+      type: map
+    license_specifications:
+      field: license_specification
+      type: map
+    metadata_options:
+      function: clean_empty_values_list
+      arg: metadata_options
+      type: list
+    enable_monitoring:
+      function: get_field_from_attrs
+      arg: monitoring.enabled
+      type: bool
+    network_interfaces:
+      function: lt_get_network_interfaces
+      arg: network_interfaces
+      type: list
+    placement:
+      function: clean_empty_values_dict
+      arg: placement
+      type: map
+    private_dns_name_options:
+      field: private_dns_name_options
+      type: map
+    tags:
+      field: tags
+      type: map
+    tag_specifications:
+      field: tag_specifications
+      type: list
+    instance_type:
+      field: instance_type
+      type: string
+    user_data:
+      field: user_data
+      type: string
+    instance_initiated_shutdown_behavior:
+      field: instance_initiated_shutdown_behavior
+      type: string
+    iam_instance_profile:
+      function: clean_empty_values_list
+      arg: iam_instance_profile
+      type: list

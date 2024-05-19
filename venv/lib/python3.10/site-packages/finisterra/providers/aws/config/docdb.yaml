@@ -1,0 +1,142 @@
+aws_docdb_cluster:
+  terraform_module: "github.com/finisterra-io/terraform-aws-documentdb"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-documentdb"
+  target_resource_name: default
+  name_field: cluster_identifier
+  joined_fields:
+    vpc_security_group_ids:
+      sub_fields:
+        - vpc_security_group_ids
+    kms_key_id:
+      sub_fields:
+        - kms_key_id
+  fields:
+    cluster_identifier:
+      field: cluster_identifier
+      type: string
+    final_snapshot_identifier:
+      field: final_snapshot_identifier
+      type: string
+    master_username:
+      field: master_username
+      type: string
+    master_password:
+      field: master_password
+      type: string
+    retention_period:
+      field: backup_retention_period
+      type: number
+    preferred_backup_window:
+      field: preferred_backup_window
+      type: string
+    preferred_maintenance_window:
+      field: preferred_maintenance_window
+      type: string
+    skip_final_snapshot:
+      field: skip_final_snapshot
+      type: bool
+    deletion_protection:
+      field: deletion_protection
+      type: bool
+    apply_immediately:
+      field: apply_immediately
+      type: bool
+    storage_encrypted:
+      field: storage_encrypted
+      type: bool
+    kms_key_id:
+      field: kms_key_id
+      type: string
+    db_port:
+      field: port
+      type: number
+    snapshot_identifier:
+      field: snapshot_identifier
+      type: string
+    engine:
+      field: engine
+      type: string
+    engine_version:
+      field: engine_version
+      type: string
+    vpc_security_group_ids:
+      field: vpc_security_group_ids
+      type: list
+    enabled_cloudwatch_logs_exports:
+      field: enabled_cloudwatch_logs_exports
+      type: list
+    db_cluster_parameter_group_name:
+      field: db_cluster_parameter_group_name
+      type: string
+    tags:
+      field: tags
+      type: map
+  childs:
+    aws_docdb_cluster_instance:
+      join:
+        id:
+          field: cluster_identifier
+      target_resource_name: default
+      second_index:
+        field: identifier
+      fields:
+        cluster_instances:
+          function: docdb_build_cluster_instances
+          arg: identifier
+          type: map
+
+    aws_docdb_subnet_group:
+      join:
+        db_subnet_group_name:
+          field: name
+      defaults:
+        enable_aws_docdb_subnet_group: true
+      target_resource_name: default
+      fields:
+        vpc_name:
+          function: docdb_get_vpc_name
+          arg: vpc_id
+          type: string
+        vpc_id:
+          function: docdb_get_vpc_id
+          arg: vpc_id
+          type: string
+        subnet_names:
+          function: docdb_get_subnet_names
+          arg: subnet_ids
+          type: list
+        subnet_ids:
+          function: docdb_get_subnet_ids
+          arg: subnet_ids
+          type: list
+        db_subnet_group_name:
+          field: name
+          type: string
+        db_subnet_group_tags:
+          field: tags
+          type: map
+        db_subnet_group_description:
+          field: description
+          type: string
+
+    aws_docdb_cluster_parameter_group:
+      join:
+        db_cluster_parameter_group_name:
+          field: name
+      target_resource_name: default
+      defaults:
+        enable_aws_docdb_cluster_parameter_group: true
+      fields:
+        cluster_parameter_group_name:
+          field: name
+          type: string
+        cluster_parameter_group_description:
+          field: description
+          type: string
+        cluster_parameters:
+          field: parameters
+          type: list
+        cluster_parameter_group_tags:
+          field: tags
+          type: map

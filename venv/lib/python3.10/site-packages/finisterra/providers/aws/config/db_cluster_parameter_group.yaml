@@ -1,0 +1,22 @@
+aws_rds_cluster_parameter_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-db-cluster-parameter-group"
+  terraform_module_version: "1.0.1"
+  local_terraform_name: "terraform-aws-db-cluster-parameter-group"
+  target_resource_name: this
+  name_field: name
+  fields:
+    name:
+      field: name
+      type: string
+    family:
+      field: family
+      type: string
+    description:
+      field: description
+      type: string
+    tags:
+      field: tags
+      type: map
+    parameters:
+      field: parameter
+      type: list

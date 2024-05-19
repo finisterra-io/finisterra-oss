@@ -1,6 +1,5 @@
 import os
 import subprocess
-import http.client
 import logging
 from ..utils.ft_api import read_token_from_file
 import time
@@ -14,9 +13,7 @@ import tempfile
 import zipfile
 import glob
 
-
 logger = logging.getLogger('finisterra')
-
 
 class GithubUtils:
     def __init__(self, repository_name):
@@ -31,15 +28,8 @@ class GithubUtils:
     def get_web_api_conn(self):
         api_token = os.environ.get('FT_API_TOKEN')
         if not api_token:
-            # If not defined, read the token from the file
             api_token = read_token_from_file()
-        api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
-        api_port = os.environ.get('FT_API_PORT_WEB', 443)
-
-        if api_port == 443:
-            conn = http.client.HTTPSConnection(api_host)
-        else:
-            conn = http.client.HTTPConnection(api_host, api_port)
+        api_host = os.environ.get('FT_API_HOST', 'https://app.finisterra.io')
 
         headers = {
             'Content-Type': 'application/json',
@@ -47,7 +37,7 @@ class GithubUtils:
             "Connection": "close"
         }
 
-        return conn, headers
+        return api_host, headers
 
     def get_github_repo_name(self, local_repo_path):
         if not self.is_valid_github_repo(local_repo_path):
@@ -88,15 +78,14 @@ class GithubUtils:
             return None
 
     def is_valid_github_repo(self):
-        conn, headers = self.get_web_api_conn()
+        url, headers = self.get_web_api_conn()
         api_path = '/api/github/get-repositories'
         logger.debug("Getting the list of repositories from GitHub...")
 
-        conn.request('GET', api_path, headers=headers)
-        response = conn.getresponse()
+        response = requests.get(f"{url}{api_path}", headers=headers)
 
-        if response.status == 200:
-            response_dict = json.loads(response.read())
+        if response.status_code == 200:
+            response_dict = response.json()
             repositories = response_dict.get('repositories')
             for repository in repositories:
                 if repository.get('name') == self.repository_name:
@@ -106,7 +95,7 @@ class GithubUtils:
             return False, response_dict, False
 
         else:
-            response_body = response.read()
+            response_body = response.text
             logger.error(
                 f"Failed to get the list of repositories from GitHub: {response_body}")
             return False, None, True
@@ -129,14 +118,13 @@ class GithubUtils:
             valid, response_dict, final = self.is_valid_github_repo()
 
     def is_gh_installed(self):
-        conn, headers = self.get_web_api_conn()
+        url, headers = self.get_web_api_conn()
         api_path = '/api/github/validate-app-install'
         logger.debug("Checking if GitHub app is installed")
 
-        conn.request('GET', api_path, headers=headers)
-        response = conn.getresponse()
+        response = requests.get(f"{url}{api_path}", headers=headers)
 
-        if response.status == 200:
+        if response.status_code == 200:
             return True
 
     def install_gh(self):
@@ -158,7 +146,7 @@ class GithubUtils:
             installed = self.is_gh_installed()
 
     def gh_push_onboarding(self, provider, account_id, region):
-        conn, headers = self.get_web_api_conn()
+        url, headers = self.get_web_api_conn()
 
         # Create Githun api key
         payload = {
@@ -169,16 +157,15 @@ class GithubUtils:
         api_path = '/api/api-key/api-key'
         payload_json = json.dumps(payload, default=list)
         logger.debug("Creating Github FT secret...")
-        conn.request('POST', api_path, body=payload_json, headers=headers)
-        response = conn.getresponse()
+        response = requests.post(f"{url}{api_path}", headers=headers, data=payload_json)
 
-        if response.status != 200:
-            response_body = response.read()
+        if response.status_code != 200:
+            response_body = response.text
             logger.error(f"Failed to create Github FT secret: {response_body}")
             return False
 
-        response_json = response.read()
-        createdApiKey = json.loads(response_json).get("createdApiKey")
+        response_json = response.json()
+        createdApiKey = response_json.get("createdApiKey")
         if not createdApiKey:
             logger.error(f"Failed to create Github FT secret: {response_body}")
             return False
@@ -198,13 +185,12 @@ class GithubUtils:
             }
             payload_json = json.dumps(payload, default=list)
             logger.info("Pushing to Github ...")
-            conn.request('POST', api_path, body=payload_json, headers=headers)
-            response = conn.getresponse()
+            response = requests.post(f"{url}{api_path}", headers=headers, data=payload_json)
 
-            if response.status == 200:
+            if response.status_code == 200:
                 return True
             else:
-                response_body = response.read()
+                response_body = response.text
                 logger.error(f"Failed to push Github: {response_body}")
                 return False
 
@@ -273,14 +259,10 @@ class GithubUtils:
             api_token = os.environ.get('FT_API_TOKEN')
             if not api_token:
                 api_token = read_token_from_file()
-            api_host = os.environ.get('FT_API_HOST_WEB', 'app.finisterra.io')
-            api_port = os.environ.get('FT_API_PORT_WEB', 443)
+            api_host = os.environ.get('FT_API_HOST', 'https://app.finisterra.io')
             route = "api/github/push-code"
 
-            if api_port == 443:
-                url = f"https://{api_host}/{route}"
-            else:
-                url = f"http://{api_host}:{api_port}/{route}"
+            url = f"{api_host}/{route}"
 
             headers = {
                 "Authorization": "Bearer " + api_token,
@@ -305,7 +287,7 @@ class GithubUtils:
 
             # Log and check the response
             if response.status_code == 200:
-                response_dict = json.loads(response.text)
+                response_dict = response.json()
                 pr_url = response_dict.get('html_url')
                 if pr_url:
                     logger.info(

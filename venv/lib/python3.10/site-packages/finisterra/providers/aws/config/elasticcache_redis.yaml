@@ -1,0 +1,178 @@
+aws_elasticache_replication_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elasticache-redis"
+  terraform_module_version: "1.0.4"
+  local_terraform_name: "terraform-aws-elasticache-redis"
+  target_resource_name: default
+  name_field: replication_group_id
+  joined_fields:
+    security_group_ids:
+      sub_fields:
+        - security_group_ids
+    parameter_group_name:
+      sub_fields:
+        - parameter_group_name
+    subnet_group_name:
+      sub_fields:
+        - subnet_group_name
+  fields:
+    auth_token:
+      field: auth_token
+      type: string
+    transit_encryption_enabled:
+      field: transit_encryption_enabled
+      type: bool
+    replication_group_id:
+      field: replication_group_id
+      type: string
+    description:
+      field: description
+      type: string
+    instance_type:
+      field: node_type
+      type: string
+    num_cache_clusters:
+      field: num_cache_clusters
+      type: number
+    port:
+      field: port
+      type: number
+    parameter_group_name:
+      field: parameter_group_name
+      type: string
+    preferred_cache_cluster_azs:
+      field: preferred_cache_cluster_azs
+      type: list
+    automatic_failover_enabled:
+      field: automatic_failover_enabled
+      type: bool
+    multi_az_enabled:
+      field: multi_az_enabled
+      type: bool
+    subnet_group_name:
+      field: subnet_group_name
+      type: string
+    maintenance_window:
+      field: maintenance_window
+      type: string
+    notification_topic_arn:
+      field: notification_topic_arn
+      type: string
+    engine_version:
+      field: engine_version
+      type: string
+    at_rest_encryption_enabled:
+      field: at_rest_encryption_enabled
+      type: bool
+    kms_key_id:
+      field: kms_key_id
+      type: string
+    snapshot_name:
+      field: snapshot_name
+      type: string
+    snapshot_arns:
+      field: snapshot_arns
+      type: list
+    snapshot_window:
+      field: snapshot_window
+      type: string
+    snapshot_retention_limit:
+      field: snapshot_retention_limit
+      type: number
+    final_snapshot_identifier:
+      field: final_snapshot_identifier
+      type: string
+    apply_immediately:
+      field: apply_immediately
+      type: bool
+    data_tiering_enabled:
+      field: data_tiering_enabled
+      type: bool
+    auto_minor_version_upgrade:
+      field: auto_minor_version_upgrade
+      type: string
+    log_delivery_configuration:
+      field: log_delivery_configuration
+      type: map
+    tags:
+      field: tags
+      type: map
+    cluster_mode_num_node_groups:
+      field: num_node_groups
+      type: number
+    cluster_mode_replicas_per_node_group:
+      field: replicas_per_node_group
+      type: number
+    user_group_ids:
+      field: user_group_ids
+      type: list
+    # security_group_names:
+    #   field: security_group_names
+    #   type: list
+    security_group_ids:
+      function: ec_redis_get_security_group_ids
+      arg: id
+      type: list
+    vpc_id:
+      function: ec_redis_get_vpc_id_by_group
+      type: string
+      arg: id
+    vpc_name:
+      function: ec_redis_get_vpc_name_by_group
+      type: string
+      arg: id
+
+aws_elasticache_parameter_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elasticache-redis//modules/parameter_group"
+  terraform_module_version: "1.0.4"
+  local_terraform_name: "terraform-aws-elasticache-redis/modules/parameter_group"
+  target_resource_name: default
+  name_field: name
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    family:
+      field: family
+      type: string
+    parameters:
+      field: parameter
+      type: list
+    tags:
+      field: tags
+      type: map
+
+aws_elasticache_subnet_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-elasticache-redis//modules/subnet_group"
+  terraform_module_version: "1.0.4"
+  local_terraform_name: "terraform-aws-elasticache-redis/modules/subnet_group"
+  target_resource_name: default
+  name_field: name
+  fields:
+    name:
+      field: name
+      type: string
+    description:
+      field: description
+      type: string
+    subnet_ids:
+      function: ec_redis_get_subnet_ids
+      arg: subnet_ids
+      type: list
+    subnet_names:
+      function: ec_redis_get_subnet_names
+      arg: subnet_ids
+      type: list
+    tags:
+      field: tags
+      type: map
+    vpc_id:
+      function: ec_redis_get_vpc_id_by_subnet
+      type: string
+      arg: vpc_id
+    vpc_name:
+      function: ec_redis_get_vpc_name_by_subnet
+      type: string
+      arg: vpc_id

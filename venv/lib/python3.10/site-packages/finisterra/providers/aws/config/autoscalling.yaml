@@ -1,0 +1,259 @@
+aws_autoscaling_group:
+  terraform_module: "github.com/finisterra-io/terraform-aws-autoscaling-group"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-autoscaling-group"
+  target_resource_name: default
+  name_field: asg_name
+  joined_fields:
+    security_group_ids:
+      sub_fields:
+        - security_group_ids
+    service_linked_role_arn:
+      sub_fields:
+        - service_linked_role_arn
+    launch_template:
+      sub_fields:
+        - id
+  fields:
+    asg_name:
+      field: name
+      type: string
+    subnet_ids:
+      function: asg_get_subnet_ids
+      arg: vpc_zone_identifier
+      type: list
+    subnet_names:
+      function: asg_get_subnet_names
+      arg: vpc_zone_identifier
+      type: list
+    max_size:
+      field: max_size
+      type: number
+    min_size:
+      field: min_size
+      type: number
+    load_balancers:
+      field: load_balancers
+      type: list
+    health_check_grace_period:
+      field: health_check_grace_period
+      type: number
+    health_check_type:
+      field: health_check_type
+      type: string
+    min_elb_capacity:
+      field: min_elb_capacity
+      type: number
+    wait_for_elb_capacity:
+      field: wait_for_elb_capacity
+      type: string
+    target_group_arns:
+      field: target_group_arns
+      type: list
+    default_cooldown:
+      field: default_cooldown
+      type: number
+    force_delete:
+      field: force_delete
+      type: string
+    termination_policies:
+      field: termination_policies
+      type: list
+    suspended_processes:
+      field: suspended_processes
+      type: list
+    placement_group:
+      field: placement_group
+      type: string
+    enabled_metrics:
+      field: enabled_metrics
+      type: list
+    metrics_granularity:
+      field: metrics_granularity
+      type: string
+    wait_for_capacity_timeout:
+      field: wait_for_capacity_timeout
+      type: string
+    protect_from_scale_in:
+      field: protect_from_scale_in
+      type: string
+    service_linked_role_arn:
+      field: service_linked_role_arn
+      type: string
+    desired_capacity:
+      field: desired_capacity
+      type: number
+    max_instance_lifetime:
+      field: max_instance_lifetime
+      type: number
+    capacity_rebalance:
+      field: capacity_rebalance
+      type: string
+    instance_refresh:
+      field: instance_refresh
+      type: list
+    launch_template:
+      field: launch_template
+      type: list
+    mixed_instances_policy:
+      function: clean_empty_values_list
+      arg: mixed_instances_policy
+      type: list
+    warm_pool:
+      field: warm_pool
+      type: map
+    autoscaling_group_tags:
+      field: tag
+      type: list
+  childs:
+    aws_autoscaling_policy:
+      join:
+        name:
+          field: autoscaling_group_name
+      target_resource_name: this
+      second_index:
+        field: name
+      import_id:
+        function: asg_get_policy_import_id
+        arg: id
+      fields:
+        autoscaling_policies:
+          function: asg_build_autoscaling_policies
+          arg: id
+          type: map
+      childs:
+        aws_cloudwatch_metric_alarm:
+          join:
+            arn:
+              field: alarm_actions
+          target_resource_name: this
+          fields:
+            aws_cloudwatch_metric_alarms:
+              function: asg_build_aws_cloudwatch_metric_alarms
+              arg: id
+              type: map
+
+    aws_launch_configuration:
+      join:
+        id:
+          join_function: asg_join_launch_configuration
+      target_resource_name: default
+      defaults:
+        create_aws_launch_configuration: true
+      fields:
+        launch_configuration_name:
+          field: name
+          type: string
+        image_id:
+          field: image_id
+          type: string
+        instance_type:
+          field: instance_type
+          type: string
+        key_name:
+          field: key_name
+          type: string
+        user_data_base64:
+          function: asg_get_user_data_configuration
+          arg: id
+          type: string
+        enable_monitoring:
+          field: enable_monitoring
+          type: string
+        ebs_optimized:
+          field: ebs_optimized
+          type: string
+        security_group_ids:
+          field: security_groups
+          type: list
+        # security_group_names:
+        #   function: asg_get_security_group_names
+        #   arg: security_groups
+        #   type: list
+        root_block_device:
+          field: root_block_device
+          type: map
+        ebs_block_device:
+          field: ebs_block_device
+          type: list
+        ephemeral_block_device:
+          field: ephemeral_block_device
+          type: list
+        iam_instance_profile_name:
+          field: iam_instance_profile
+          type: string
+        spot_price:
+          field: spot_price
+          type: string
+        placement_tenancy:
+          field: placement_tenancy
+          type: string
+    # aws_launch_template:
+    #   join:
+    #     id:
+    #       join_function: asg_join_launch_template
+    #   target_resource_name: default
+    #   defaults:
+    #     create_aws_launch_template: true
+    #   fields:
+    #     launch_template_name:
+    #       field: name
+    #       type: string
+    #     block_device_mappings:
+    #       field: block_device_mappings
+    #       type: list
+    #     credit_specification:
+    #       field: credit_specification
+    #       type: map
+    #     disable_api_termination:
+    #       field: disable_api_termination
+    #       type: string
+    #     ebs_optimized:
+    #       field: ebs_optimized
+    #       type: string
+    #     update_default_version:
+    #       field: update_default_version
+    #       type: string
+    #     elastic_gpu_specifications:
+    #       field: elastic_gpu_specifications
+    #       type: map
+    #     image_id:
+    #       field: image_id
+    #       type: string
+    #     instance_initiated_shutdown_behavior:
+    #       field: instance_initiated_shutdown_behavior
+    #       type: string
+    #     instance_market_options:
+    #       field: instance_market_options
+    #       type: map
+    #     instance_type:
+    #       field: instance_type
+    #       type: string
+    #     key_name:
+    #       field: key_name
+    #       type: string
+    #     placement:
+    #       field: placement
+    #       type: map
+    #     user_data_base64:
+    #       function: asg_get_user_data_template
+    #       arg: id
+    #       type: string
+    #     iam_instance_profile:
+    #       field: iam_instance_profile
+    #       type: map
+    #     enable_monitoring:
+    #       function: get_field_from_attrs
+    #       arg: monitoring.enabled
+    #     network_interfaces:
+    #       field: network_interfaces
+    #       type: list
+    #     metadata_options:
+    #       field: metadata_options
+    #       type: map
+    #     tag_specifications:
+    #       field: tag_specifications
+    #       type: list
+    #     aws_launch_template_tags:
+    #       field: tags
+    #       type: map

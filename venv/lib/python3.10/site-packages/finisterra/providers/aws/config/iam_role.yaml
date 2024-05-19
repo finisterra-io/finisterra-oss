@@ -1,0 +1,105 @@
+aws_iam_role:
+  terraform_module: "github.com/finisterra-io/terraform-aws-iam//modules/iam_role"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-iam/modules/iam_role"
+  target_resource_name: default
+  name_field: role_name
+  # output_file_prefix: iam_role
+  joined_fields:
+    managed_policy_arns:
+      sub_fields:
+        - ALL
+  additional_output_fields:
+    aws_iam_instance_profile:
+      - id_key: id
+        output: profiles
+        type: map
+  fields:
+    role_name:
+      field: name
+      type: string
+    assume_role_policy:
+      field: assume_role_policy
+      type: string
+      multiline: true
+    role_description:
+      field: description
+      type: string
+    max_session_duration:
+      field: max_session_duration
+      type: number
+    inline_policies:
+      function: get_inline_policies
+      type: list
+    permissions_boundary:
+      field: permissions_boundary
+      type: string
+    path:
+      field: path
+      type: string
+    tags:
+      field: tags
+      type: map
+    managed_policy_arns:
+      function: iam_get_managed_policy_arns
+      arg: id
+      type: map
+  childs:
+    aws_iam_role_policy_attachment:
+      join:
+        name:
+          field: role
+      target_resource_name: managed
+      second_index:
+        function: get_policy_attachment_index
+    aws_iam_instance_profile:
+      join:
+        name:
+          field: role
+      target_resource_name: default
+      second_index:
+        field: name
+      fields:
+        instance_profiles:
+          function: get_instance_profiles
+          type: list
+
+aws_iam_policy:
+  terraform_module: "github.com/finisterra-io/terraform-aws-iam//modules/iam_policy"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-iam/modules/iam_policy"
+  target_resource_name: default
+  name_field: policy_name
+  fields:
+    policy_documents:
+      function: get_policy_documents
+      type: string
+      multiline: true
+    policy_name:
+      field: name
+      type: string
+    policy_description:
+      field: description
+      type: string
+    path:
+      field: path
+      type: string
+    tags:
+      field: tags
+      type: map
+
+aws_iam_saml_provider:
+  terraform_module: "github.com/finisterra-io/terraform-aws-iam//modules/iam_saml_provider"
+  terraform_module_version: "1.0.2"
+  local_terraform_name: "terraform-aws-iam/modules/iam_saml_provider"
+  target_resource_name: default
+  fields:
+    name:
+      field: name
+      type: string
+    saml_metadata_document:
+      field: saml_metadata_document
+      type: string
+    tags:
+      field: tags
+      type: map
