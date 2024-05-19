@@ -1,0 +1,103 @@
+name: Terraform Plan
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+  security-events: write
+  actions: write
+  pull-requests: write
+
+on:
+  pull_request:
+    paths:
+      - finisterra/**
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get the PR description
+        id: pr-description
+        run: |
+          if [[ "${{ github.event.pull_request.body }}" == *"[skip cicd-]"* ]]; then
+            echo "Setting output to skip apply."
+            echo "skip_cicd=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get updated folders
+        id: get-folders
+        uses: finisterra-io/gha-updated-folders@main
+
+      - name: Delete old PR comments
+        uses: maheshrayas/action-pr-comment-delete@v3.0
+        with:
+          github_token: "${{ secrets.GITHUB_TOKEN }}"
+          org: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          user: "github-actions[bot]"
+          issue: "${{ github.event.number }}"
+
+    outputs:
+      folders: ${{ steps.get-folders.outputs.folders }}
+      skip_cicd: ${{ steps.pr-description.outputs.skip_cicd }}
+
+  run_terragrunt_plan:
+    needs: [setup]
+    if: needs.setup.outputs.folders != '[]'
+    name: ${{ matrix.service.service_name }}-${{ matrix.service.aws_account_id }}-${{ matrix.service.aws_region }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{fromJson(needs.setup.outputs.folders)}}
+    env:
+      TERRAFORM_VERSION: "1.5.0"
+      TERRAGRUNT_VERSION: "0.50.4"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set AWS Credentials
+        id: set-aws-credentials
+        uses: finisterra-io/gha-set-aws-credentials@main
+        with:
+          folder: ${{ matrix.service.folder }}
+
+      - name: Run Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ matrix.service.folder }}
+          framework: terraform
+
+      - name: Plan Terraform ${{ matrix.service.service_name }}-${{ matrix.service.aws_account_id }}-${{ matrix.service.aws_region }}
+        uses: datadrivers/terragrunt-action@v0.10.2
+        with:
+          github-token: ${{ github.token }}
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          terragrunt-version: ${{ env.TERRAGRUNT_VERSION }}
+          use-aws-auth: false
+          enable-terraform-change-pr-commenter: true
+          terragrunt-working-directory: ${{ matrix.service.folder }}
+          terragrunt-command: |
+            if [ "${{ needs.setup.outputs.skip_cicd }}" != "true" ]
+              then
+              if [[ ! -f "terragrunt.hcl" ]]; then
+                echo "No resources found for ${AWS_MODULE}"
+                exit 0
+              fi
+              if terragrunt plan --terragrunt-non-interactive -detailed-exitcode -out=terraform.tfplan -lock-timeout=10m; then
+                # Succeeded, diff is empty (no changes)
+                rm terraform.tfplan  # delete the plan so we don't comment
+              else
+                if [ $? == 1 ]; then
+                  exit 1  # actual error, fail
+                fi
+                # Succeeded, there is a diff
+              fi
+            fi

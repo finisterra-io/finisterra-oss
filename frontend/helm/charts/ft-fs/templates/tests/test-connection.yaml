@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "ft-fs.fullname" . }}-test-connection"
+  labels:
+    {{- include "ft-fs.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "ft-fs.fullname" . }}:{{ .Values.service.port }}']
+  restartPolicy: Never

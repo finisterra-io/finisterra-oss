@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  GitRepositoryOwner:
+    Description: "Owner of the GitHub repository"
+    Type: String
+
+  CreateOIDCProvider:
+    Description: "Should the OIDC Provider be created? (Set to 'false' if it already exists)"
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Default: "true"
+
+Conditions:
+  ShouldCreateOIDCProvider: !Equals [!Ref CreateOIDCProvider, "true"]
+
+Resources:
+  GHACICDRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: ft-rw-gha-cicd-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+              StringLike:
+                "token.actions.githubusercontent.com:sub": !Sub "repo:${GitRepositoryOwner}/*:*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+
+  GitHubActionsOIDCProvider:
+    Type: "AWS::IAM::OIDCProvider"
+    Condition: ShouldCreateOIDCProvider
+    Properties:
+      Url: "https://token.actions.githubusercontent.com"
+      ClientIdList:
+        - "sts.amazonaws.com"
+      ThumbprintList:
+        - "1c58a3a8518e8759bf075b76b750d4f2df264fcd"
+
+Outputs:
+  GHACICDRoleArn:
+    Description: "ARN of the Github Actions role"
+    Value: !GetAtt GHACICDRole.Arn

@@ -1,0 +1,277 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  DECLINED
+}
+
+model User {
+  id                    Int           @id @default(autoincrement())
+  email                 String        @unique
+  name                  String
+  refreshToken          String?       @default("")
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  memberships           Membership[]
+  invitations           Invitation[]
+  organizationId Int?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdApiKeys        ApiKey[]      @relation("createdBy")
+
+  @@map("user")
+}
+
+model ApiKey {
+  id              Int          @id @default(autoincrement())
+  key             String       @unique
+  description     String
+  name            String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  userId Int          @map("created_by_user_id")
+  user   User         @relation("createdBy", fields: [userId], references: [id])
+  organizationId  Int
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("api_key")
+}
+
+model AwsAccount {
+  id                 Int                 @id @default(autoincrement())
+  organizationId     Int
+  awsAccountId       String
+  name               String
+  roleArn            String?
+  sessionDuration    Int                 @default(3600)
+  tags               AwsAccountTag[]
+  description        String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  awsAccountGitRepos AwsAccountGitRepo[]
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  Workspace          Workspace[]
+  enabled            Boolean             @default(true)
+  region             String?
+  roleArnEnabled     Boolean             @default(true)
+
+  @@map("aws_account")
+  @@unique([awsAccountId, region])
+}
+
+model Organization {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  stripeCustomerId   String? @unique
+  subscriptionActive Boolean @default(false)
+  billingEmail       String?
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  memberships   Membership[]
+  invitations   Invitation[]
+  User          User[]
+  AwsAccount    AwsAccount[]
+  Subscription  Subscription[]
+  Workspace     Workspace[]
+  GithubAccount GithubAccount[]
+  apiKeys       ApiKey[]
+  Discount      Discount[]
+
+  @@map("organization")
+}
+
+model Subscription {
+  id                   Int          @id @default(autoincrement())
+  organizationId       Int
+  stripeSubscriptionId String       @unique
+  status               String // New field to track subscription status
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  Organization         Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("subscription")
+}
+
+model Discount {
+  id             Int          @id @default(autoincrement())
+  organizationId Int
+  type           String // "percentage" or "fixed"
+  value          Float // Percentage off or fixed amount off
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("discount")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Membership {
+  id               Int              @id @default(autoincrement())
+  role             UserRole
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  userId           Int
+  organizationId   Int
+  user             User             @relation(fields: [userId], references: [id])
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  membershipStatus MembershipStatus @default(ACTIVE)
+
+  @@map("membership")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+
+  @@map("userrole")
+}
+
+model Invitation {
+  id             Int              @id @default(autoincrement())
+  email          String           @unique
+  organizationId Int
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  userId         Int?
+  user           User?            @relation(fields: [userId], references: [id])
+  status         InvitationStatus @default(PENDING)
+  role           UserRole         @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@map("invitation")
+}
+
+model GithubAccount {
+  id             Int          @id @default(autoincrement())
+  organizationId Int          @unique
+  installationId Int?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  gitRepos       GitRepo[]
+
+  @@index([organizationId], name: "organizationId")
+  @@map("github_account")
+}
+
+model GitRepo {
+  id                        Int                 @id @default(autoincrement())
+  gitrepoId                 Int
+  name                      String
+  githubAccountId           Int
+  organizationId            Int
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  githubAccount             GithubAccount       @relation(fields: [githubAccountId], references: [id])
+  awsAccountGitRepos        AwsAccountGitRepo[]
+  terraformModuleId         Int?
+  terraformModuleInstanceId Int?
+
+  @@unique([gitrepoId, organizationId], name: "gitrepoId_organizationId")
+  @@map("git_repo")
+}
+
+model AwsAccountGitRepo {
+  id             Int        @id @default(autoincrement())
+  awsAccountId   Int
+  gitRepoId      Int
+  organizationId Int
+  branch         String
+  path           String
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  awsAccount     AwsAccount @relation(fields: [awsAccountId], references: [id])
+  gitRepo        GitRepo    @relation(fields: [gitRepoId], references: [id])
+
+  @@unique([awsAccountId, gitRepoId, organizationId])
+  @@map("aws_account_git_repo")
+}
+
+model Tag {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  organizationId Int
+  integrations   AwsAccountTag[] // Add this line
+
+  @@map("tag")
+}
+
+model AwsAccountTag {
+  awsAccountId Int
+  awsAccount   AwsAccount @relation(fields: [awsAccountId], references: [id])
+  tagId        Int
+  tag          Tag        @relation(fields: [tagId], references: [id])
+
+  @@id([awsAccountId, tagId])
+  @@map("aws_account_tag")
+}
+
+model Provider {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  ProviderGroup ProviderGroup[]
+
+  @@map("provider")
+}
+
+model ProviderGroup {
+  id          Int         @id @default(autoincrement())
+  code        String      @unique
+  name        String
+  description String?
+  active      Boolean     @default(true)
+  providerId  Int
+  provider    Provider    @relation(fields: [providerId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  Workspace   Workspace[]
+
+  @@map("provider_group")
+}
+
+model Workspace {
+  id Int @id @default(autoincrement())
+
+  name                     String
+  organizationId           Int
+  scanInterval             Int      @default(3600)
+  awsAccountId             Int?
+  providerGroupId          Int?
+  awsRegion                String?
+  description              String?
+  moduleVersion            String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  enabled                  Boolean  @default(true)
+
+  awsAccount     AwsAccount?     @relation(fields: [awsAccountId], references: [id])
+  providerGroup  ProviderGroup?  @relation(fields: [providerGroupId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+
+  @@unique([awsAccountId, providerGroupId, awsRegion, organizationId])
+  @@map("workspace")
+}
+

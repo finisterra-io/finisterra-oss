@@ -1,0 +1,201 @@
+name: Generate TF <AWS_ACCOUNT_ID> <AWS_REGION>
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+  security-events: write
+  actions: write
+  pull-requests: write
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/generate_tf_code_<AWS_ACCOUNT_ID>_<AWS_REGION>.yaml
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+env:
+  FT_API_HOST: "<FT_API_HOST>"
+  AWS_ACCOUNT_ID: "<AWS_ACCOUNT_ID>"
+  AWS_REGION: "<AWS_REGION>"
+  FINISTERRA_VERSION: "1.0.32"
+  TERRAFORM_VERSION: "1.5.7"
+  TERRAGRUNT_VERSION: "0.53.2"
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  setup:
+    if: (github.event_name != 'pull_request') || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'finisterra-initial-setup-<AWS_ACCOUNT_ID>-<AWS_REGION>'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get services
+        id: get-services
+        run: |
+          result=$(curl -X GET \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.FT_API_KEY }}" \
+            --max-time 300 \
+            "${{ env.FT_API_HOST }}/api/workspace/workspace?awsAccountId=${{ env.AWS_ACCOUNT_ID }}&awsRegion=${{ env.AWS_REGION }}")
+          services=$(echo "$result" | jq -c '.workspaces')
+          echo "services=$services" >> $GITHUB_OUTPUT
+
+    outputs:
+      services: ${{ steps.get-services.outputs.services }}
+
+  generate_tf_code:
+    needs: [setup]
+    if: needs.setup.outputs.services != '[]'
+    name: ${{ matrix.service.service_name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{fromJson(needs.setup.outputs.services)}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Extract AWS Account ID, Region, and Module
+        id: extract-info
+        run: |
+          AWS_ACCOUNT_ID="${{ matrix.service.aws_account_id }}"
+          AWS_REGION="${{ matrix.service.aws_region }}"
+          AWS_MODULE="${{ matrix.service.service_name }}"
+          if [[ "$AWS_REGION" == "global" ]]; then
+            AWS_REGION="us-east-1"
+          fi
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> $GITHUB_ENV
+          echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
+          echo "AWS_ROLE=${{ matrix.service.aws_iam_role }}" >> $GITHUB_ENV
+          echo "AWS_MODULE=$AWS_MODULE" >> $GITHUB_ENV
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE }}
+          role-duration-seconds: 3600
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          mkdir -p /tmp/finisterra/tf_code
+          python -m pip install --upgrade pip
+          pip install finisterra==${{ env.FINISTERRA_VERSION }}
+
+      - name: Install terragrunt
+        uses: datadrivers/terragrunt-action@v0.10.2
+        with:
+          github-token: ${{ github.token }}
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          terragrunt-version: ${{ env.TERRAGRUNT_VERSION }}
+          use-aws-auth: false
+          enable-terraform-change-pr-commenter: false
+          terragrunt-command: |
+            echo "terragrunt installed"
+
+      - name: Generate TF files for ${{ matrix.service.service_name }}
+        run: |
+          export FT_LOG_LEVEL=DEBUG
+          finisterra -m ${{ env.AWS_MODULE }} -t ${{ secrets.FT_API_KEY }} -o /tmp/finisterra
+
+      - name: Set Git User who triggered the workflow
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Create PR for ${{ matrix.service.service_name }}
+        id: create_pr
+        run: |
+          FOLDERS=$(find /tmp/finisterra/tf_code/ -maxdepth 1 -mindepth 1 -type d -not -name ".*")
+          SERVICE_FOLDER="/tmp/finisterra/tf_code/${{ matrix.service.service_name }}"
+          if [[ -z "$FOLDERS" ]]; then
+              echo "No resources found for ${AWS_MODULE}"
+              exit 0
+          fi
+
+          # Check if SERVICE_FOLDER is not in FOLDERS and add if it's missing
+          if ! echo "$FOLDERS" | grep -w -q "^${SERVICE_FOLDER}$"; then
+              FOLDERS="$FOLDERS $SERVICE_FOLDER"
+          fi
+
+          for DIR in $FOLDERS; do
+              git checkout ${{ github.base_ref }}
+              FOLDER_NAME=$(basename "$DIR")
+
+              if [[ "$FOLDER_NAME" != "${AWS_MODULE}" ]]; then
+                BRANCH="${AWS_MODULE}.${FOLDER_NAME}.aws.${{ env.AWS_ACCOUNT_ID }}.${{ matrix.service.aws_region }}"
+              else
+                BRANCH="${FOLDER_NAME}.aws.${{ env.AWS_ACCOUNT_ID }}.${{ matrix.service.aws_region }}"
+              fi
+
+              # Fetch remote branches
+              git fetch origin > /dev/null 2>&1
+
+              # Check if the branch exists remotely
+              EXISTS=$(git ls-remote --heads origin "refs/heads/${BRANCH}" | wc -l)
+
+              if [ "$EXISTS" -eq "1" ]; then
+                # Get PRs associated with the branch
+                PR_STATE=$(curl -s \
+                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  --max-time 300 \
+                  "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${BRANCH}" \
+                  | jq -r '.[0].state')
+
+                if [ "$PR_STATE" == "open" ]; then
+                  git checkout ${BRANCH}
+                  git pull origin ${BRANCH}
+                else
+                  git push origin --delete ${BRANCH}
+                  git checkout -b ${BRANCH}
+                fi
+              else
+                git checkout -b ${BRANCH}
+              fi
+
+              mkdir -p ${{ matrix.service.root_folder }}
+              cp /tmp/finisterra/tf_code/terragrunt.hcl ${{ matrix.service.root_folder }}
+              TARGET_DIR="${{ matrix.service.root_folder }}/$(basename ${DIR})"
+              find "${TARGET_DIR}" -mindepth 1 -not -name 'terragrunt.hcl' -exec rm -rf {} + || true
+              cp -a ${DIR} ${{ matrix.service.root_folder }} || true
+              find "${TARGET_DIR}" -name ".*" -exec rm -rf {} \; || true
+
+              if [ -n "$(git status --porcelain)" ]; then
+                # Changes detected
+                git add --all
+                git commit -m "Automatic scan for ${BRANCH}"
+                git push origin ${BRANCH}
+
+                if [[ "$FOLDER_NAME" != "${AWS_MODULE}" ]]; then
+                  echo "Skipping PR for ${FOLDER_NAME}"
+                  continue
+                fi
+
+                # Create a PR
+                PR_BODY="Automated Code Generated\n\nFOLDER: ${FOLDER_NAME}\n\nAWS_ACCOUNT_ID: ${{ env.AWS_ACCOUNT_ID }}\n\nAWS_REGION: ${{ env.AWS_REGION }}\n\n[skip cicd]"
+                curl -X POST \
+                  -H "Content-Type: application/json" \
+                  -H "Authorization: Bearer ${{ secrets.FT_API_KEY }}" \
+                  -d '{"repositoryName": "${{ github.repository }}", "branchName": "'"${BRANCH}"'", "owner": "${{ github.repository_owner }}", "pr_body": "'"${PR_BODY}"'"}' \
+                  --max-time 300 \
+                  ${{ env.FT_API_HOST }}/api/github/pr
+              else
+                echo "No changes detected in ${FOLDER_NAME}. Skipping commit and push."
+              fi
+          done

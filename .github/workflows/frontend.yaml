@@ -1,0 +1,87 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        type: string
+        required: true
+
+env:
+  HELMFILE_VERSION: 0.154.0
+  ECR_REPOSITORY: ft-fs
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-20.04
+
+    concurrency:
+      group: helm_deploy_${{ inputs.environment }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Read YAML file
+        uses: jbutcher5/read-yaml@main
+        id: config
+        with:
+          file: .github/workflows/env-configs/${{ inputs.environment }}.yaml
+          key-path: "[]"
+
+      - name: Set AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ fromJson(steps.config.outputs.data).aws_region }}
+          role-to-assume: arn:aws:iam::${{ fromJson(steps.config.outputs.data).aws_account }}:role/${{ fromJson(steps.config.outputs.data).role_to_assume }}
+          role-duration-seconds: 3600
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set short sha
+        id: sha_short
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.sha_short.outputs.sha_short }}
+          build-args: |
+            NEXT_PUBLIC_GITHUB_APP_NAME=finisterra-io
+            NEXT_PUBLIC_BASE_URL=https://app.finisterra.io
+            NEXT_PUBLIC_STRIPE_PUBLIC_KEY=pk_live_51OK0pxEEFwkRGllYsCe21QH5m0t4W1UEo6mIy1d9DeSi6aPxa6c2tvKsjrHy591QEEtGXAab6C873bdtbZF214e200mini1xSQ
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set EKS context
+        id: context
+        run: |
+          aws eks update-kubeconfig --region ${{ fromJson(steps.config.outputs.data).aws_region }} --name ${{ fromJson(steps.config.outputs.data).cluster_name }}
+
+      - name: Install helmfile
+        id: install-helmfile
+        run: |
+          wget https://github.com/helmfile/helmfile/releases/download/v${{ env.HELMFILE_VERSION }}/helmfile_${{ env.HELMFILE_VERSION }}_linux_386.tar.gz
+          tar -xvf helmfile_${{ env.HELMFILE_VERSION }}_linux_386.tar.gz
+          sudo mv helmfile /usr/local/bin/
+          helm plugin install https://github.com/databus23/helm-diff
+
+      - name: Helm deploy ${{ inputs.environment }}
+        id: helm
+        env:
+          IMAGE_SHA: ${{ steps.sha_short.outputs.sha_short }}
+        run: |
+          helmfile -f ./frontend/helm/helmfile.yaml --environment ${{ inputs.environment }} sync

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "workspace" ALTER COLUMN "stateKey" DROP NOT NULL,
+ALTER COLUMN "gitPath" DROP NOT NULL;

@@ -1,0 +1,4 @@
+aws_account: 379070455575
+role_to_assume: github-terraform-role
+aws_region: us-east-1
+cluster_name: finisterra-prod

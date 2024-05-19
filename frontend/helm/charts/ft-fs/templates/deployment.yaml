@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ft-fs.fullname" . }}
+  labels:
+    {{- include "ft-fs.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ft-fs.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "ft-fs.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ft-fs.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.sha | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: NEXTAUTH_URL
+              value: "{{ .Values.env.NEXTAUTH_URL }}"
+            - name: GOOGLE_CLIENT_ID
+              value: "{{ .Values.env.GOOGLE_CLIENT_ID }}"
+            - name: GOOGLE_CLIENT_SECRET
+              value: "{{ .Values.env.GOOGLE_CLIENT_SECRET }}"
+            - name: JWT_TIMEOUT
+              value: "{{ .Values.env.JWT_TIMEOUT }}"
+            - name: GITHUB_ID
+              value: "{{ .Values.env.GITHUB_ID }}"
+            - name: APP_URL
+              value: "{{ .Values.env.APP_URL }}"
+            - name: GITHUB_WEBHOOK_URL
+              value: "{{ .Values.env.GITHUB_WEBHOOK_URL }}"
+            - name: GITHUB_APP_ID
+              value: "{{ .Values.env.GITHUB_APP_ID }}"
+            - name: SCAN_RESUBMISSION_DELAY_MINUTES
+              value: "{{ .Values.env.SCAN_RESUBMISSION_DELAY_MINUTES }}"
+            - name: FT_BASE_URL
+              value: "{{ .Values.env.FT_BASE_URL }}"
+            - name: FT_API_HOST
+              value: "{{ .Values.env.FT_API_HOST }}"
+            - name: STRIPE_PRICE_ID
+              value: "{{ .Values.env.STRIPE_PRICE_ID }}"              
+            - name: NEXTAUTH_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: NEXTAUTH_SECRET_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: JWT_SECRET
+            - name: GITHUB_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: GITHUB_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: DATABASE_URL
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: SENDGRID_API_KEY
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: GITHUB_WEBHOOK_SECRET
+            - name: GITHUB_PR_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: GITHUB_PR_SECRET
+            - name: GITHUB_APP_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: GITHUB_APP_PEM
+            - name: INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: INTERNAL_API_KEY
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: STRIPE_WEBHOOK_SECRET                                    
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

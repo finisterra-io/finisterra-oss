@@ -1,0 +1,20 @@
+environments:
+  # dev = default
+  default:
+    values:
+      - environments/dev.yaml
+  dev:
+    values:
+      - environments/dev.yaml
+  prod:
+    values:
+      - environments/prod.yaml
+---
+releases:
+  - name: ft-fs
+    namespace: finisterra
+    chart: ./charts/ft-fs/
+    version: 0.1.0
+    values:
+      - ./config/ft-fs/common.yaml.gotmpl
+      - ./config/ft-fs/values_{{ .Environment.Name }}.yaml.gotmpl

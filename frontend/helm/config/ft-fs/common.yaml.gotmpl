@@ -1,0 +1,9 @@
+image:
+  repository: 379070455575.dkr.ecr.us-east-1.amazonaws.com/ft-fs
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+{{- if (env "IMAGE_SHA") }}
+  sha: "{{ env "IMAGE_SHA" }}"
+{{- else }}
+  sha: "{{ (exec "helm" (list "get" "values" "-n" .Release.Namespace .Release.Name "-oyaml") | fromYaml) | dig "image" "sha" "" }}"
+{{- end }}
