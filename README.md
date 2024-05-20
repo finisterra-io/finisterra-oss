@@ -21,7 +21,6 @@ Finisterra does not receive or use any of your cloud credentials. Every request 
 - [Quickstart](#quickstart)
 - [Use Cases](#use-cases)
 - [Demo](#demo)
-- [Features](#features)
 - [Supported Modules](#supported-modules)
 - [Docs](#docs)
 - [Finisterra vs Terraformer and others](#finisterra-vs-others)
