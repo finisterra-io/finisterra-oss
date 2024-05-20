@@ -1,101 +1,88 @@
 # Finisterra
 
-Finisterra is a tool for helping engineers create Terraform code of existing resources in different clouds. This helps companies that do not have Terraform code for their infrastructure, or that have a lot of drifts in their infrastructure, to have a way to create Terraform code based on the existing resources.
+Finisterra is a tool for helping engineers create Terraform code for existing resources in different clouds. This helps teams that do not have Terraform code for their infrastructure, or that have a lot of drifts in their infrastructure and want to start from scratch, to have a way to create Terraform code based on the existing resources.
 
-- A CLI you can run from your workstation with a few parameters, using the cloud api it gets the infrastrurue configuration and based on that it creates the Terraform code, using a series of open source modules with the best practices.
-- A workflow (running on Github Actions) that integrates the CLI so it can be run automatically and the Terraform code is stored in a repository, bevause this workflow is scheduled it detects and drifts and creates a pull request with the changes.
-- A CICD pipeline (running on Github Actions) that does a Terraform plan when a pull request is opened modifying the Terraform code, and if the pull request is merged it applies the changes to the infrastructure.
-- A frontend to configure the cloud accounts, and to keep track of teh modules that are being used.
+The Terraform code generated follows the best practices:
 
-## Features
+- Use of [Terraform modules](https://github.com/orgs/finisterra-io/repositories).
+- Use of remote state.
+- Use of variables or references to other modules instead of hardcoding IDs.
+- Filesystem structure to support different providers, accounts, regions, services, etc., in the same repository.
+- Small state files following the structure as in the filesystem to avoid bloated states.
+- Code is formatted.
+- Code is validated.
+- Checkov is executed on the generated code.
 
-- **Multi-Service Support:** Executes operations across a wide range of AWS services.
-- **Parallel Execution:** Utilizes ThreadPoolExecutor for concurrent execution of AWS service operations.
-- **CLI Options:** Easy-to-use command-line interface for specifying the provider and modules.
-- **Environment Variable Support:** Configuration through environment variables for AWS credentials and settings.
-- **Dynamic Resource Naming:** Automatically generates names for S3 buckets and DynamoDB tables based on the AWS account ID and region.
-- **Rich Progress Display:** Utilizes the rich library for real-time progress visualization.
+Finisterra does not receive or use any of your cloud credentials. Every request to the cloud API is executed within your workstation or within your GitHub organization using an OIDC role.
 
-## Requirements
 
-To run this script, you need the following:
+## Table of Contents
 
-- Python 3.x
-- Boto3
-- Click
-- Rich
-- An AWS account with the necessary permissions to access the resources and services the script interacts with.
+- [Quickstart](#quickstart)
+- [Use Cases](#use-cases)
+- [Demo](#demo)
+- [Features](#features)
+- [Supported Modules](#supported-modules)
+- [Docs](#docs)
+- [Finisterra vs Terraformer and others](#finisterra-vs-others)
+- [Contributing](#contributing)
+- [Mission](#mission)
 
-## Installation
+## Quickstart
 
-Before running the script, ensure you have all the required packages installed. You can install them using pip:
+### Finisterra Cloud (Recommended)
 
-```
-pip install requirements.txt
-```
+Using Finisterra Cloud, you get unlimited free code generation in one cloud account in one region.
 
-## Configuration
-
-The script uses environment variables for configuration. Ensure these are set before running the script:
-
-- AWS_ACCESS_KEY_ID: Your AWS access key ID.
-- AWS_SECRET_ACCESS_KEY: Your AWS secret access key.
-- AWS_SESSION_TOKEN: Your AWS session token (optional).
-- AWS_PROFILE: Your AWS profile name (optional).
-- AWS_REGION: The AWS region for the operations.
-- MAX_PARALLEL: The maximum number of parallel operations (optional, defaults to 10).
-
-## Usage
-
-The script is executed from the command line with options to specify the provider (currently only aws is supported) and the module(s) to execute. The modules can be specified as a comma-separated list or "all" to execute operations for all supported modules.
-
-```
-python main.py --provider aws --module <module_name(s)>
+```bash
+pip install finisterra
 ```
 
-### CLI Options
+For example, to generate the code for all the S3 buckets and SNS topics, and store the code in /tmp/code, just run the following:
 
-- --provider, -p: The cloud provider name (default: aws).
-- --module, -m: The module name(s) to execute, separated by commas, or "all" for all modules. This is a required option.
+```
+finisterra -p aws -m "s3,sns" -o /tmp/code
+```
+
+### Open-source self-hosting (Advanced)
+
+TBD
+
+## Use Cases
+
+- **Reverse Terraform:** Create Terraform code for existing infrastructure.
+- **Stacks:** You can filter by tags and group different resources to create stacks. For instance, you can create stacks per environment like dev, staging, and prod. Or you can create stacks by applications, for example billing, marketing, etc.
+- **Drift Detection and Fix:** Finisterra is scheduled to run so every time there is a manual configuration, it is detected and a pull request is created to automatically update the Terraform code and state to keep it in sync.
+- **CICD:** Finisterra pushes a CICD workflow to your repository so you can keep managing your infrastructure from the generated code. If you open a pull request, the workflow is triggered and posts the Terraform plan to your pull request as a comment. Once the pull request is approved and merged, the workflow triggers a Terraform apply.
+- **Disaster Recovery:** Finisterra can be used to create a backup of your infrastructure in a different region or account. Or in case of a disaster, you can use the generated code to recreate your infrastructure.
+- **Infrastructure Documentation:** The code can serve as documentation of the infrastructure.
+- **Cost Savings:** By having all the code centralized, you can easily identify resources that are not being used and delete them.
+- **Audit of Infra Changes:** Because Finisterra runs as a scheduled job, it detects any manual changes in the infrastructure and creates a pull request to keep the code in sync with the infrastructure. This way, you can audit who made the changes and why.
+
+## Demo
+
+### Using the webapp
+
+[Video](https://www.youtube.com/watch?v=-sIYBNtSMug)
+
+### Using the CLI
+
+[Video](https://www.youtube.com/watch?v=HHsAL_5nfKY)
 
 ## Supported Modules
 
-The script can manage resources in the following AWS services:
+[Modules](https://finisterra.io/docs/providers/aws)
 
-- VPC
-- ACM
-- API Gateway
-- Auto Scaling
-- CloudMap
-- CloudFront
-- CloudWatch Logs
-- DocumentDB
-- DynamoDB
-- EC2
-- ECR
-- ECS
-- EKS
-- ELBv2
-- ElastiCache Redis
-- Elastic Beanstalk
-- IAM Role
-- KMS
-- Lambda
-- RDS
-- S3
-- SNS
-- SQS
-- WAFv2
-- Step Functions
-- MSK
-- Aurora
-- Security Group
-- VPC Endpoint
-- Target Group
-- Elasticsearch
-- CodeArtifact
-- Launch Template
+## Docs
+
+[Docs](https://finisterra.io/docs/quickstart/web)
+
+## Finisterra vs Others
 
 ## Contributing
 
-Contributions are welcome! If you have suggestions for improving the script or adding new features, please feel free to submit a pull request or create an issue.
+Contributions are welcome! If you have suggestions for improving Finisterra or adding new features, please feel free to submit a pull request or create an issue.
+
+## Mission
+
+Help engineers come up to speed with their infrastructure as code, keep it up to date with the best practices without drifts, and keep deploying their code quickly with confidence and security.
