@@ -1,6 +1,11 @@
 # Finisterra
 
-Finisterra is a Python script designed to automate the fetching and management of AWS resources across various services. It leverages the power of Boto3, the AWS SDK for Python, and concurrent executions to efficiently gather resources from specified AWS services.
+Finisterra is a tool for helping engineers create Terraform code of existing resources in different clouds. This helps companies that do not have Terraform code for their infrastructure, or that have a lot of drifts in their infrastructure, to have a way to create Terraform code based on the existing resources.
+
+- A CLI you can run from your workstation with a few parameters, using the cloud api it gets the infrastrurue configuration and based on that it creates the Terraform code, using a series of open source modules with the best practices.
+- A workflow (running on Github Actions) that integrates the CLI so it can be run automatically and the Terraform code is stored in a repository, bevause this workflow is scheduled it detects and drifts and creates a pull request with the changes.
+- A CICD pipeline (running on Github Actions) that does a Terraform plan when a pull request is opened modifying the Terraform code, and if the pull request is merged it applies the changes to the infrastructure.
+- A frontend to configure the cloud accounts, and to keep track of teh modules that are being used.
 
 ## Features
 
