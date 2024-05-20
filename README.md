@@ -43,7 +43,7 @@ For example, to generate the code for all the S3 buckets and SNS topics, and sto
 finisterra -p aws -m "s3,sns" -o /tmp/code
 ```
 
-### Open-source self-hosting (Advanced)
+### Open-source hobby deploy (Advanced)
 
 TBD
 
