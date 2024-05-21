@@ -45,7 +45,11 @@ finisterra -p aws -m "s3,sns" -o /tmp/code
 
 ### Open-source hobby deploy (Advanced)
 
-TBD
+You can deploy a hobby version of Finisterra in your workstation, with one command:
+
+```bash
+ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/finisterra-io/finisterra/HEAD/bin/hobby-deploy.sh)" 
+```
 
 ## Use Cases
 

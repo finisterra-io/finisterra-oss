@@ -6,8 +6,18 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_DB: finisterra
     ports:
       - "5432:5432"
     volumes:
       - ${HOME}/pgdata:/var/lib/postgresql/data
+
+  frontend:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finisterra?schema=public
+      - RUN_MIGRATIONS=true

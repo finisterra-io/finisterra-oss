@@ -71,8 +71,9 @@ class SECURITY_GROUP:
                 response = self.provider_instance.aws_clients.ec2_client.describe_security_groups(GroupIds=[
                                                                                 security_group_id])
                 for security_group in response["SecurityGroups"]:
-                    self.process_security_group(security_group, ftstack)
-                    return security_group["GroupName"]
+                    if self.security_group_matches_filters(security_group.get('Tags', [])):
+                        self.process_security_group(security_group, ftstack)
+                        return security_group["GroupName"]
             except Exception as e:
                 logger.error(
                     f"Error fetching Security Group {security_group_id}: {e}")
@@ -84,9 +85,22 @@ class SECURITY_GROUP:
             self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(response["SecurityGroups"]))
         for security_group in response["SecurityGroups"]:
-            self.process_security_group(security_group, ftstack)
-            self.provider_instance.progress.update(
-                self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{security_group['GroupName']}[/]")
+            if self.security_group_matches_filters(security_group.get('Tags', [])):
+                self.process_security_group(security_group, ftstack)
+                self.provider_instance.progress.update(
+                    self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{security_group['GroupName']}[/]")
+
+    def security_group_matches_filters(self, tags):
+        """
+        Check if the security group's tags match all filter conditions.
+        :param tags: List of security group tags
+        :return: True if security group matches all filter conditions, False otherwise.
+        """
+        tag_dict = {tag['Key']: tag['Value'] for tag in tags}
+        return all(
+            any(tag_dict.get(f['Name'].replace('tag:', ''), '') == value for value in f['Values'])
+            for f in self.provider_instance.filters
+        ) if self.provider_instance.filters else True
 
     def process_security_group(self, security_group, ftstack=None):
         resource_type = "aws_security_group"
@@ -97,7 +111,7 @@ class SECURITY_GROUP:
         is_elasticbeanstalk = any(tag['Key'].startswith(
             'elasticbeanstalk:') for tag in security_group.get('Tags', []))
         is_eks = any(tag['Key'].startswith('eks:')
-                     for tag in security_group.get('Tags', []))
+                    for tag in security_group.get('Tags', []))
         if is_elasticbeanstalk or is_eks:
             logger.debug(
                 f"  Skipping Elastic Beanstalk or EKS AutoScaling Group: {security_group['GroupName']}")

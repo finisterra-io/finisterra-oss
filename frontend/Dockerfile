@@ -7,11 +7,11 @@ WORKDIR /usr/src/app
 # Copy the package.json and package-lock.json (if available)
 COPY package*.json ./
 
+# Install Python and other dependencies
+RUN apk add --no-cache python3 make g++ git postgresql-client
+
 # Install the application dependencies
 RUN npm install
-
-# Install git
-RUN apk add --no-cache git
 
 # Set up a git user
 RUN git config --global user.email "code@finisterra.io"
@@ -26,6 +26,9 @@ RUN apk add --no-cache unzip curl \
 
 # Copy the rest of the application code
 COPY . .
+
+# Copy the entrypoint script
+COPY ./bin/entrypoint.sh .
 
 # Build the application
 ARG NEXT_PUBLIC_GITHUB_APP_NAME
@@ -42,6 +45,5 @@ RUN npm run build
 # Expose port 3000 to have it mapped by Docker daemon
 EXPOSE 3000
 
-# Command to start the service
-CMD [ "npm", "start" ]
-
+# Command to run the entrypoint script
+ENTRYPOINT ["sh", "./bin/entrypoint.sh"]
