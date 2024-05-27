@@ -44,7 +44,8 @@ export default async function handler(req, res) {
 
     const msg = {
       to: email,
-      from: process.env.SENDGRID_FROM_EMAIL,
+    //   from: process.env.SENDGRID_FROM_EMAIL,
+      from: "daniel@finisterra.io",
       subject: 'Password Reset Request',
       text: `You have requested a password reset. Please click the following link to reset your password: ${resetUrl}`,
       html: `<p>You have requested a password reset. Please click the following link to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
