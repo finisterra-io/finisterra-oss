@@ -23,7 +23,6 @@ Finisterra does not receive or use any of your cloud credentials. Every request 
 - [Demo](#demo)
 - [Supported Modules](#supported-modules)
 - [Docs](#docs)
-- [Finisterra vs Terraformer and others](#finisterra-vs-others)
 - [Contributing](#contributing)
 
 ## Quickstart
@@ -78,8 +77,6 @@ You can deploy a hobby version of Finisterra in your workstation, with one comma
 ## Docs
 
 [Docs](https://finisterra.io/docs/quickstart/web)
-
-## Finisterra vs Others
 
 ## Contributing
 
