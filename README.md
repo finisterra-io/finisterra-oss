@@ -25,7 +25,6 @@ Finisterra does not receive or use any of your cloud credentials. Every request 
 - [Docs](#docs)
 - [Finisterra vs Terraformer and others](#finisterra-vs-others)
 - [Contributing](#contributing)
-- [Mission](#mission)
 
 ## Quickstart
 
@@ -86,6 +85,3 @@ You can deploy a hobby version of Finisterra in your workstation, with one comma
 
 Contributions are welcome! If you have suggestions for improving Finisterra or adding new features, please feel free to submit a pull request or create an issue.
 
-## Mission
-
-Help engineers come up to speed with their infrastructure as code, keep it up to date with the best practices without drifts, and keep deploying their code quickly with confidence and security.
