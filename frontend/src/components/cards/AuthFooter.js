@@ -26,7 +26,7 @@ const AuthFooter = () => {
             variant="subtitle2"
             color="secondary"
             component={Link}
-            href="https://codedthemes.com"
+            href="https://finisterra.io/terms"
             target="_blank"
             underline="hover"
           >
@@ -36,21 +36,11 @@ const AuthFooter = () => {
             variant="subtitle2"
             color="secondary"
             component={Link}
-            href="https://codedthemes.com"
+            href="https://finisterra.io/privacy"
             target="_blank"
             underline="hover"
           >
             Privacy Policy
-          </Typography>
-          <Typography
-            variant="subtitle2"
-            color="secondary"
-            component={Link}
-            href="https://codedthemes.com"
-            target="_blank"
-            underline="hover"
-          >
-            CA Privacy Notice
           </Typography>
         </Stack>
       </Stack>
