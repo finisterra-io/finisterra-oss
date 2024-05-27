@@ -60,6 +60,8 @@ spec:
               value: "{{ .Values.env.FT_API_HOST }}"
             - name: STRIPE_PRICE_ID
               value: "{{ .Values.env.STRIPE_PRICE_ID }}"              
+            - name: SENDGRID_FROM_EMAIL
+              value: "{{ .Values.env.SENDGRID_FROM_EMAIL }}"
             - name: NEXTAUTH_SECRET_KEY
               valueFrom:
                 secretKeyRef:
