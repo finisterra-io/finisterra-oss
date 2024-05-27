@@ -1,72 +1,33 @@
-import PropTypes from "prop-types";
+import PropTypes from 'prop-types';
 
 // next
-import NextLink from "next/link";
-import { getProviders, getCsrfToken } from "next-auth/react";
+import NextLink from 'next/link';
+import { getProviders, getCsrfToken } from 'next-auth/react';
 
 // material-ui
-import { Grid, Link, Stack, Typography } from "@mui/material";
-import { useMediaQuery } from "@mui/material";
+import { Grid, Link, Stack, Typography } from '@mui/material';
 
 // project import
-import Layout from "layout";
-import Page from "components/Page";
-import AuthWrapper from "sections/auth/AuthWrapper";
-import AuthLogin from "sections/auth/auth-forms/AuthLogin";
-
-// export default function SignIn({ providers, csrfToken }) {
-//   const matchDownSM = useMediaQuery((theme) => theme.breakpoints.down("sm"));
-
-//   return (
-//     <Page title="Login">
-//       <AuthWrapper>
-//         <Grid
-//           container
-//           spacing={3}
-//           alignItems="center"
-//           justifyContent="center"
-//           style={{ minHeight: "100vh" }}
-//         >
-//           {/* Background Image Side */}
-//           <Grid
-//             item
-//             xs={false}
-//             md={7}
-//             sx={{
-//               backgroundImage: "url(/path-to-your-background-image.jpg)", // replace with your image path
-//               backgroundRepeat: "no-repeat",
-//               backgroundSize: "cover",
-//               backgroundPosition: "center",
-//             }}
-//           >
-//             {/* Image side content if any */}
-//           </Grid>
-
-//           {/* Login Button Side */}
-//           <Grid
-//             item
-//             xs={12}
-//             md={5}
-//             sx={{
-//               display: "flex",
-//               flexDirection: "column",
-//               alignItems: "center",
-//               justifyContent: "center",
-//             }}
-//           >
-//             <AuthLogin providers={providers} csrfToken={csrfToken} />
-//           </Grid>
-//         </Grid>
-//       </AuthWrapper>
-//     </Page>
-//   );
-// }
+import Layout from 'layout';
+import Page from 'components/Page';
+import AuthWrapper from 'sections/auth/AuthWrapper';
+import AuthLogin from 'sections/auth/auth-forms/AuthLogin';
 
 export default function SignIn({ providers, csrfToken }) {
   return (
     <Page title="Login">
       <AuthWrapper>
         <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: { xs: -0.5, sm: 0.5 } }}>
+              <Typography variant="h3">Login</Typography>
+              <NextLink href="/register" passHref>
+                <Link variant="body1" color="primary">
+                  Don&apos;t have an account?
+                </Link>
+              </NextLink>
+            </Stack>
+          </Grid>
           <Grid item xs={12}>
             <AuthLogin providers={providers} csrfToken={csrfToken} />
           </Grid>
@@ -78,7 +39,7 @@ export default function SignIn({ providers, csrfToken }) {
 
 SignIn.propTypes = {
   providers: PropTypes.object,
-  csrfToken: PropTypes.string,
+  csrfToken: PropTypes.string
 };
 
 SignIn.getLayout = function getLayout(page) {
@@ -90,6 +51,6 @@ export async function getServerSideProps(context) {
   const csrfToken = await getCsrfToken(context);
 
   return {
-    props: { providers, csrfToken },
+    props: { providers, csrfToken }
   };
 }

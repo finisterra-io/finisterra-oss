@@ -86,4 +86,4 @@ git pull origin main &> /dev/null || true
 
 # Start the application
 cd frontend
-sudo -E docker-compose -f docker-compose.yml up -d --build
+docker-compose -f docker-compose.yml up  --build

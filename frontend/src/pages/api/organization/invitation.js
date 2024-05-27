@@ -35,7 +35,7 @@ export default async function createInvitation(req, res) {
     // Send the invitation email
     const msg = {
       to: email,
-      from: "eng@finisterra.io",
+      from: process.env.SENDGRID_FROM_EMAIL,
       subject: "Invitation to join the organization",
       text: `You have been invited to join the organization. Click the link to accept the invitation: ${process.env.APP_URL}`,
       html: `<p>You have been invited to join the organization. <a href="${process.env.APP_URL}">Click here</a> to accept the invitation.</p>`,

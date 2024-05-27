@@ -4,18 +4,16 @@ import React from 'react';
 // next
 import Image from 'next/image';
 import NextLink from 'next/link';
-import { useSession, signIn } from 'next-auth/react';
+import { signIn } from 'next-auth/react';
 
 // material-ui
-
 import {
   Box,
   useMediaQuery,
   Button,
-  Checkbox,
   Divider,
-  FormControlLabel,
   FormHelperText,
+  FormControl,
   Grid,
   Link,
   InputAdornment,
@@ -34,6 +32,7 @@ import FirebaseSocial from './FirebaseSocial';
 import { DEFAULT_PATH } from 'config';
 import IconButton from 'components/@extended/IconButton';
 import AnimateButton from 'components/@extended/AnimateButton';
+import { strengthColor, strengthIndicator } from 'utils/password-strength';
 
 // assets
 import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
@@ -44,13 +43,10 @@ const Google = '/assets/images/icons/google.svg';
 
 // ============================|| AWS CONNITO - LOGIN ||============================ //
 
-const AuthLogin = ({ providers, csrfToken }) => {
+const AuthRegister = ({ providers, csrfToken }) => {
   const matchDownSM = useMediaQuery((theme) => theme.breakpoints.down('sm'));
-  const [checked, setChecked] = React.useState(false);
-  const [capsWarning, setCapsWarning] = React.useState(false);
 
-  const { data: session } = useSession();
-
+  const [level, setLevel] = React.useState();
   const [showPassword, setShowPassword] = React.useState(false);
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
@@ -60,37 +56,39 @@ const AuthLogin = ({ providers, csrfToken }) => {
     event.preventDefault();
   };
 
-  const onKeyDown = (keyEvent) => {
-    if (keyEvent.getModifierState('CapsLock')) {
-      setCapsWarning(true);
-    } else {
-      setCapsWarning(false);
-    }
+  const changePassword = (value) => {
+    const temp = strengthIndicator(value);
+    setLevel(strengthColor(temp));
   };
+
+  React.useEffect(() => {
+    changePassword('');
+  }, []);
 
   return (
     <>
       <Formik
         initialValues={{
+          name: '',
           email: '',
           password: '',
           submit: null
         }}
         validationSchema={Yup.object().shape({
+          name: Yup.string().max(255).required('Name is required'),
           email: Yup.string().email('Must be a valid email').max(255).required('Email is required'),
           password: Yup.string().max(255).required('Password is required')
         })}
         onSubmit={(values, { setErrors, setSubmitting }) => {
-          signIn('login', {
+          signIn('register', {
             redirect: false,
+            name: values.name,
             email: values.email,
             password: values.password,
             callbackUrl: DEFAULT_PATH
           }).then((res) => {
             if (res?.error) {
               setErrors({ submit: res.error });
-              setSubmitting(false);
-            } else {
               setSubmitting(false);
             }
           });
@@ -100,6 +98,27 @@ const AuthLogin = ({ providers, csrfToken }) => {
           <form noValidate onSubmit={handleSubmit}>
             <input name="csrfToken" type="hidden" defaultValue={csrfToken} />
             <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Stack spacing={1}>
+                  <InputLabel htmlFor="name-login">Name</InputLabel>
+                  <OutlinedInput
+                    id="name-login"
+                    type="text"
+                    value={values.name}
+                    name="name"
+                    onBlur={handleBlur}
+                    onChange={handleChange}
+                    placeholder="Enter your name"
+                    fullWidth
+                    error={Boolean(touched.name && errors.name)}
+                  />
+                  {touched.name && errors.name && (
+                    <FormHelperText error id="standard-weight-helper-text-name-login">
+                      {errors.name}
+                    </FormHelperText>
+                  )}
+                </Stack>
+              </Grid>
               <Grid item xs={12}>
                 <Stack spacing={1}>
                   <InputLabel htmlFor="email-login">Email Address</InputLabel>
@@ -126,18 +145,16 @@ const AuthLogin = ({ providers, csrfToken }) => {
                   <InputLabel htmlFor="password-login">Password</InputLabel>
                   <OutlinedInput
                     fullWidth
-                    color={capsWarning ? 'warning' : 'primary'}
                     error={Boolean(touched.password && errors.password)}
                     id="-password-login"
                     type={showPassword ? 'text' : 'password'}
                     value={values.password}
                     name="password"
-                    onBlur={(event) => {
-                      setCapsWarning(false);
-                      handleBlur(event);
+                    onBlur={handleBlur}
+                    onChange={(e) => {
+                      handleChange(e);
+                      changePassword(e.target.value);
                     }}
-                    onKeyDown={onKeyDown}
-                    onChange={handleChange}
                     endAdornment={
                       <InputAdornment position="end">
                         <IconButton
@@ -153,39 +170,37 @@ const AuthLogin = ({ providers, csrfToken }) => {
                     }
                     placeholder="Enter password"
                   />
-                  {capsWarning && (
-                    <Typography variant="caption" sx={{ color: 'warning.main' }} id="warning-helper-text-password-login">
-                      Caps lock on!
-                    </Typography>
-                  )}
                   {touched.password && errors.password && (
                     <FormHelperText error id="standard-weight-helper-text-password-login">
                       {errors.password}
                     </FormHelperText>
                   )}
                 </Stack>
+                <FormControl fullWidth sx={{ mt: 2 }}>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item>
+                      <Box sx={{ bgcolor: level?.color, width: 85, height: 8, borderRadius: '7px' }} />
+                    </Grid>
+                    <Grid item>
+                      <Typography variant="subtitle1" fontSize="0.75rem">
+                        {level?.label}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </FormControl>
               </Grid>
 
               <Grid item xs={12} sx={{ mt: -1 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={checked}
-                        onChange={(event) => setChecked(event.target.checked)}
-                        name="checked"
-                        color="primary"
-                        size="small"
-                      />
-                    }
-                    label={<Typography variant="h6">Keep me sign in</Typography>}
-                  />
-                  <NextLink href={session ? '/auth/forgot-password' : '/forgot-password'} passHref>
-                    <Link variant="h6" color="text.primary">
-                      Forgot Password?
-                    </Link>
+                <Typography variant="body2">
+                  By Signing up, you agree to our &nbsp;
+                  <NextLink href="/" passHref>
+                    <Link variant="subtitle2">Terms of Service</Link>
                   </NextLink>
-                </Stack>
+                  &nbsp; and &nbsp;
+                  <NextLink href="/" passHref>
+                    <Link variant="subtitle2">Privacy Policy</Link>
+                  </NextLink>
+                </Typography>
               </Grid>
               {errors.submit && (
                 <Grid item xs={12}>
@@ -195,7 +210,7 @@ const AuthLogin = ({ providers, csrfToken }) => {
               <Grid item xs={12}>
                 <AnimateButton>
                   <Button disableElevation disabled={isSubmitting} fullWidth size="large" type="submit" variant="contained" color="primary">
-                    Login
+                    Create Account
                   </Button>
                 </AnimateButton>
               </Grid>
@@ -204,7 +219,7 @@ const AuthLogin = ({ providers, csrfToken }) => {
         )}
       </Formik>
       <Divider sx={{ mt: 2 }}>
-        <Typography variant="caption"> Login with</Typography>
+        <Typography variant="caption"> Sign up with</Typography>
       </Divider>
       {providers && (
         <Stack
@@ -266,9 +281,9 @@ const AuthLogin = ({ providers, csrfToken }) => {
   );
 };
 
-AuthLogin.propTypes = {
+AuthRegister.propTypes = {
   providers: PropTypes.object,
   csrfToken: PropTypes.string
 };
 
-export default AuthLogin;
+export default AuthRegister;

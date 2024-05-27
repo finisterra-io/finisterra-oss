@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "user" ADD COLUMN     "password" TEXT DEFAULT '',
+ADD COLUMN     "salt" TEXT DEFAULT '',
+ALTER COLUMN "name" DROP NOT NULL,
+ALTER COLUMN "name" SET DEFAULT '';

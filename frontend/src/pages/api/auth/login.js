@@ -1,20 +1,32 @@
-import { users } from "./[...nextauth]";
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
-// ==============================|| ACCOUNT - LOGIN  ||============================== //
+const prisma = new PrismaClient();
 
 export default async function handler(req, res) {
   try {
     const { email, password } = req.body;
 
-    const user = users.find((_user) => _user.email === email);
+    if (!email || !password) {
+      return res.status(400).json({ message: "Enter Your Email & Password" });
+    }
+
+    // Find the user in the database
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
 
     if (!user) {
       return res.status(400).json({ message: "Verify Your Email & Password" });
     }
 
-    if (user.password !== password) {
+    // Compare the provided password with the stored hashed password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
       return res.status(400).json({ message: "Invalid Password" });
     }
+
 
     return res.status(200).json({
       id: user.id,
@@ -22,6 +34,7 @@ export default async function handler(req, res) {
       email: user.email,
     });
   } catch (err) {
+    console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 }

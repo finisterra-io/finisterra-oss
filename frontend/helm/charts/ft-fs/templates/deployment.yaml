@@ -54,8 +54,6 @@ spec:
               value: "{{ .Values.env.GITHUB_WEBHOOK_URL }}"
             - name: GITHUB_APP_ID
               value: "{{ .Values.env.GITHUB_APP_ID }}"
-            - name: SCAN_RESUBMISSION_DELAY_MINUTES
-              value: "{{ .Values.env.SCAN_RESUBMISSION_DELAY_MINUTES }}"
             - name: FT_BASE_URL
               value: "{{ .Values.env.FT_BASE_URL }}"
             - name: FT_API_HOST
