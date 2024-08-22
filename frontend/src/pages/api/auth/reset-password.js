@@ -1,11 +1,18 @@
 // pages/api/auth/reset-password.js
 
 import { PrismaClient } from '@prisma/client';
-import sgMail from '@sendgrid/mail';
+import AWS from 'aws-sdk';
 
 const prisma = new PrismaClient();
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Configure AWS SDK
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+
+const ses = new AWS.SES({ apiVersion: '2010-12-01' });
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -42,17 +49,30 @@ export default async function handler(req, res) {
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}&email=${email}`;
 
-    const msg = {
-      to: email,
-    //   from: process.env.SENDGRID_FROM_EMAIL,
-      from: "daniel@finisterra.io",
-      subject: 'Password Reset Request',
-      text: `You have requested a password reset. Please click the following link to reset your password: ${resetUrl}`,
-      html: `<p>You have requested a password reset. Please click the following link to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
+    const params = {
+      Destination: {
+        ToAddresses: [email],
+      },
+      Message: {
+        Body: {
+          Html: {
+            Charset: "UTF-8",
+            Data: `<p>You have requested a password reset. Please click the following link to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
+          },
+          Text: {
+            Charset: "UTF-8",
+            Data: `You have requested a password reset. Please click the following link to reset your password: ${resetUrl}`,
+          },
+        },
+        Subject: {
+          Charset: 'UTF-8',
+          Data: 'Password Reset Request',
+        },
+      },
+      Source: process.env.FROM_EMAIL,
     };
-    
 
-    await sgMail.send(msg);
+    await ses.sendEmail(params).promise();
 
     res.status(200).json({ message: 'Password reset email sent' });
   } catch (error) {

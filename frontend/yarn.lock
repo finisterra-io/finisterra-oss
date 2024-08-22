@@ -1715,10 +1715,10 @@
   "resolved" "https://registry.npmjs.org/available-typed-arrays/-/available-typed-arrays-1.0.5.tgz"
   "version" "1.0.5"
 
-"aws-sdk@^2.1365.0":
-  "integrity" "sha512-GRwHfzYufi7BhBtgyzeHvqS5yCMRC5ZCqmDU/TBMnr8IaH6sabSG2iAhVn1Kkpjv3tDnWHwDr5s8wNMTzJLPmg=="
-  "resolved" "https://registry.npmjs.org/aws-sdk/-/aws-sdk-2.1365.0.tgz"
-  "version" "2.1365.0"
+"aws-sdk@^2.1628.0":
+  "integrity" "sha512-mUjvITHmV46JbCTQR8TovWzJEHZtbC9cTRySXyuIuuYQNjA2RrbfqLXXKR/xru+vPFKnfTLw+QQ/BC2l1/Ln5g=="
+  "resolved" "https://registry.npmjs.org/aws-sdk/-/aws-sdk-2.1628.0.tgz"
+  "version" "2.1628.0"
   dependencies:
     "buffer" "4.9.2"
     "events" "1.1.1"
@@ -1729,7 +1729,7 @@
     "url" "0.10.3"
     "util" "^0.12.4"
     "uuid" "8.0.0"
-    "xml2js" "0.5.0"
+    "xml2js" "0.6.2"
 
 "axe-core@^4.4.3":
   "integrity" "sha512-32+ub6kkdhhWick/UjvEwRchgoetXqTK14INLqbGm5U2TzBkBNF3nQtLYm8ovxSkQWArjEQvftCKryjZaATu3w=="
@@ -5227,10 +5227,10 @@
   "resolved" "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz"
   "version" "1.0.2"
 
-"xml2js@0.5.0":
-  "integrity" "sha512-drPFnkQJik/O+uPKpqSgr22mpuFHqKdbS835iAQrUC73L2F5WkboIRd63ai/2Yg6I1jzifPFKH2NTK+cfglkIA=="
-  "resolved" "https://registry.npmjs.org/xml2js/-/xml2js-0.5.0.tgz"
-  "version" "0.5.0"
+"xml2js@0.6.2":
+  "integrity" "sha512-T4rieHaC1EXcES0Kxxj4JWgaUQHDk+qwHcYOCFHfiwKz7tOVPLq7Hjq9dM1WCMhylqMEfP7hMcOIChvotiZegA=="
+  "resolved" "https://registry.npmjs.org/xml2js/-/xml2js-0.6.2.tgz"
+  "version" "0.6.2"
   dependencies:
     "sax" ">=0.6.0"
     "xmlbuilder" "~11.0.0"
