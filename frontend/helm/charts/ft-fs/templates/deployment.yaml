@@ -62,6 +62,15 @@ spec:
               value: "{{ .Values.env.STRIPE_PRICE_ID }}"              
             - name: SENDGRID_FROM_EMAIL
               value: "{{ .Values.env.SENDGRID_FROM_EMAIL }}"
+            - name: AZURE_AD_CLIENT_ID
+              value: "{{ .Values.env.AZURE_AD_CLIENT_ID }}"
+            - name: AZURE_AD_TENANT_ID
+              value: "{{ .Values.env.AZURE_AD_TENANT_ID }}"
+            - name: AZURE_AD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ft-fs
+                  key: AZURE_AD_CLIENT_SECRET
             - name: NEXTAUTH_SECRET_KEY
               valueFrom:
                 secretKeyRef:
