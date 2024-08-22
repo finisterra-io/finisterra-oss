@@ -41,6 +41,7 @@ import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 const Auth0 = '/assets/images/icons/auth0.svg';
 const Cognito = '/assets/images/icons/aws-cognito.svg';
 const Google = '/assets/images/icons/google.svg';
+const Azure = '/assets/images/icons/microsoft.svg';
 
 // ============================|| AWS CONNITO - LOGIN ||============================ //
 
@@ -67,6 +68,8 @@ const AuthLogin = ({ providers, csrfToken }) => {
       setCapsWarning(false);
     }
   };
+
+  console.log(providers)
 
   return (
     <>
@@ -219,6 +222,17 @@ const AuthLogin = ({ providers, csrfToken }) => {
             }
             return (
               <Box key={provider.name} sx={{ width: '100%' }}>
+                {provider.id === 'azure-ad' && (
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    fullWidth={!matchDownSM}
+                    startIcon={<Image src={Azure} alt="Twitter" width={16} height={16} />}
+                    onClick={() => signIn(provider.id, { callbackUrl: DEFAULT_PATH })}
+                  >
+                    {!matchDownSM && 'Azure'}
+                  </Button>
+                )}
                 {provider.id === 'google' && (
                   <Button
                     variant="outlined"

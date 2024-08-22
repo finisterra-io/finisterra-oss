@@ -12,12 +12,12 @@ services:
     volumes:
       - ${HOME}/pgdata:/var/lib/postgresql/data
 
-  frontend:
-    build: .
-    ports:
-      - "3000:3000"
-    depends_on:
-      - postgres
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finisterra?schema=public
-      - RUN_MIGRATIONS=true
+  # frontend:
+  #   build: .
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - postgres
+  #   environment:
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finisterra?schema=public
+  #     - RUN_MIGRATIONS=true
