@@ -2704,7 +2704,8 @@ def asg_build_autoscaling_policies(attributes, arg=None, additional_data=None):
 
     policy_details = {}
     attribute_keys = ["policy_type", "scaling_adjustment",
-                      "adjustment_type", "cooldown", "enabled"]
+                      "adjustment_type", "cooldown", "enabled", 
+                      "target_tracking_configuration"]
 
     for key in attribute_keys:
         value = attributes.get(key)

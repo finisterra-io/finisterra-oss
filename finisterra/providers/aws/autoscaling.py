@@ -294,9 +294,8 @@ class AutoScaling:
             attributes = {
                 "id": policy_name,
                 "autoscaling_group_name": as_group_name,
-                "adjustment_type": policy["AdjustmentType"],
-                "scaling_adjustment": policy["ScalingAdjustment"],
-                # ... other attributes you plan to process
+                "adjustment_type": policy.get("AdjustmentType", ""),
+                "scaling_adjustment": policy.get("ScalingAdjustment", 0),
             }
 
             # Optional attributes that may or may not be present in the policy

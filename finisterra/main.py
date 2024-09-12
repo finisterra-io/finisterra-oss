@@ -201,39 +201,39 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
 
         # Define all provider methods for execution
         all_provider_methods = [
-            'vpc',
-            'acm',
-            'apigateway',
-            'autoscaling',
-            'cloudmap',
-            'cloudfront',
-            'logs',
-            'docdb',
-            'dynamodb',
+            'vpc', #YES
+            'acm', #YES
+            'apigateway', #YES
+            'autoscaling', #YES
+            'cloudmap', #YES
+            'cloudfront', #YES
+            'logs', #YES
+            'docdb', #YES
+            'dynamodb', #YES
             'ec2',
-            'ecr',
-            'ecs',
-            'eks',
-            'elbv2',
-            'elasticache_redis',
-            'elasticbeanstalk',
-            'iam',
-            'kms',
-            'aws_lambda',
-            'rds',
-            's3',
-            'sns',
-            'sqs',
-            'wafv2',
+            'ecr', #YES
+            'ecs', #YES
+            'eks', #YES
+            # 'elbv2',
+            'elasticache_redis', #YES
+            'elasticbeanstalk', #YES
+            'iam', #YES
+            'kms', #YES
+            #'aws_lambda',
+            'rds', #YES
+            # 's3',
+            'sns', #YES
+            'sqs', #YES
+            #'wafv2',
             'stepfunction',
             'msk',
             'aurora',
-            'security_group',
+            'security_group',  #YES
             'vpc_endpoint',
             'target_group',
             'elasticsearch',
             'codeartifact',
-            'launchtemplate',
+            'launchtemplate', #YES
             'client_vpn',
         ]
 
