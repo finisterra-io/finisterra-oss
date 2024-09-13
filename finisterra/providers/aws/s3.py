@@ -70,6 +70,9 @@ class S3:
         filtered_buckets = []
         for bucket in all_buckets:
             bucket_name = bucket["Name"]
+            # if bucket_name != "dtp-webcapture-aws-lambda":
+            #     # and bucket_name != "dtp-webcapture-aws-lambda-qa":
+            #     continue
             try:
                 # Attempt to fetch tags for each bucket
                 tag_set = self.provider_instance.aws_clients.s3_client.get_bucket_tagging(
@@ -97,7 +100,8 @@ class S3:
         if len(filtered_buckets) > 0:
             self.task = self.provider_instance.progress.add_task(
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(filtered_buckets))
-
+            
+        # for bucket in filtered_buckets[:19]:
         for bucket in filtered_buckets:
             bucket_name = bucket["Name"]
             self.provider_instance.progress.update(
@@ -177,7 +181,7 @@ class S3:
         self.aws_s3_bucket_inventory(bucket_name)
         self.aws_s3_bucket_lifecycle_configuration(bucket_name)
         self.aws_s3_bucket_logging(bucket_name)
-        self.aws_s3_bucket_metric(bucket_name)
+        # self.aws_s3_bucket_metric(bucket_name)
         # self.aws_s3_bucket_notification(bucket_name) #will be called from other modules
         self.aws_s3_bucket_object_lock_configuration(bucket_name)
         self.aws_s3_bucket_ownership_controls(bucket_name)
@@ -400,24 +404,24 @@ class S3:
             self.hcl.process_resource(
                 "aws_s3_bucket_logging", bucket_name, attributes)
 
-    def aws_s3_bucket_metric(self, bucket_name):
-        logger.debug(f"Processing S3 Bucket Metrics...")
-        metrics = self.provider_instance.aws_clients.s3_client.list_bucket_metrics_configurations(
-            Bucket=bucket_name)
-        if "MetricsConfigurationList" not in metrics:
-            return
-        for metric in metrics["MetricsConfigurationList"]:
-            metric_id = metric["Id"]
-            logger.debug(
-                f"Processing S3 Bucket Metric: {metric_id} for bucket {bucket_name}")
-            attributes = {
-                "id": metric_id,
-                "bucket": bucket_name,
-                "name": metric_id,
-                "filter": metric["Filter"] if "Filter" in metric else None,
-            }
-            self.hcl.process_resource(
-                "aws_s3_bucket_metric", f"{bucket_name}-{metric_id}".replace("-", "_"), attributes)
+    # def aws_s3_bucket_metric(self, bucket_name):
+    #     logger.debug(f"Processing S3 Bucket Metrics...")
+    #     metrics = self.provider_instance.aws_clients.s3_client.list_bucket_metrics_configurations(
+    #         Bucket=bucket_name)
+    #     if "MetricsConfigurationList" not in metrics:
+    #         return
+    #     for metric in metrics["MetricsConfigurationList"]:
+    #         metric_id = metric["Id"]
+    #         logger.debug(
+    #             f"Processing S3 Bucket Metric: {metric_id} for bucket {bucket_name}")
+    #         attributes = {
+    #             "id": bucket_name+":"+metric_id,
+    #             "bucket": bucket_name,
+    #             "name": metric_id,
+    #             # "filter": metric["Filter"] if "Filter" in metric else None,
+    #         }
+    #         self.hcl.process_resource(
+    #             "aws_s3_bucket_metric", f"{bucket_name}-{metric_id}".replace("-", "_"), attributes)
 
     def aws_s3_bucket_notification(self, bucket_name):
         logger.debug(f"Processing S3 Bucket Notifications...")

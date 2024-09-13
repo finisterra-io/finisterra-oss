@@ -172,6 +172,9 @@ class HCL:
                 return
 
         logger.debug("Refreshing state...")
+        
+        # print(self.script_dir)
+        # exit()
         try:
             subprocess.run(["terraform", "refresh", "-no-color"], cwd=self.script_dir,
                            check=True, stdout=subprocess.DEVNULL)

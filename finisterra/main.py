@@ -210,18 +210,18 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'logs', #YES
             'docdb', #YES
             'dynamodb', #YES
-            'ec2',
+            'ec2', #YES
             'ecr', #YES
             'ecs', #YES
             'eks', #YES
-            # 'elbv2',
+            'elbv2',
             'elasticache_redis', #YES
             'elasticbeanstalk', #YES
             'iam', #YES
             'kms', #YES
             #'aws_lambda',
             'rds', #YES
-            # 's3',
+            's3',
             'sns', #YES
             'sqs', #YES
             #'wafv2',

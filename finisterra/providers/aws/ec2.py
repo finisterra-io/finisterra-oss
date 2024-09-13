@@ -327,6 +327,11 @@ class EC2:
         instance_name = ""
         for reservation in instances["Reservations"]:
             for instance in reservation["Instances"]:
+                state = instance["State"]["Name"]
+                if state == "terminated":
+                    logger.info(
+                        f"  Skipping EC2 Instance (terminated): {instance['InstanceId']}")
+                    continue
                 instance_id = instance["InstanceId"]
                 self.provider_instance.progress.update(
                     self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{instance_id}[/]")

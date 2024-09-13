@@ -221,14 +221,14 @@ aws_s3_bucket:
           arg: id
           type: map
 
-    aws_s3_bucket_metric: #no tested
-      join:
-        bucket:
-          field: bucket
-      target_resource_name: this
-      fields:
-        metric_configuration:
-          field: metric_configuration
+    # aws_s3_bucket_metric: #no tested
+    #   join:
+    #     bucket:
+    #       field: bucket
+    #   target_resource_name: this
+    #   fields:
+    #     metric_configuration:
+    #       field: metric_configuration
 
     aws_s3_bucket_inventory:
       join:
