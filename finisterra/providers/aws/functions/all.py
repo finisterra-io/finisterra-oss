@@ -2787,6 +2787,18 @@ def asg_get_policy_import_id(attributes, arg=None, additional_data=None):
 
 ### LAUNCHTEMPLATE ###
 
+def get_metadata_options(attributes, arg=None, additional_data=None):
+    id = attributes.get("id")
+    metadata_options = attributes.get("metadata_options", [])
+    result = []
+
+    for item in metadata_options:
+        if item.get('http_put_response_hop_limit',0) == 0:
+           continue
+        result.append(item)
+    result = clean_json_values(value=result)
+    return result
+
 
 def lt_get_network_interfaces(attributes, arg=None, additional_data=None):
     id = attributes.get("id")

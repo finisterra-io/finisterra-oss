@@ -80,7 +80,7 @@ aws_launch_template:
       field: license_specification
       type: map
     metadata_options:
-      function: clean_empty_values_list
+      function: get_metadata_options
       arg: metadata_options
       type: list
     enable_monitoring:
