@@ -219,12 +219,12 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'elasticbeanstalk', #YES
             'iam', #YES
             'kms', #YES
-            #'aws_lambda',
+            'aws_lambda',
             'rds', #YES
             's3',
             'sns', #YES
             'sqs', #YES
-            #'wafv2',
+            'wafv2',
             'stepfunction',
             'msk',
             'aurora',

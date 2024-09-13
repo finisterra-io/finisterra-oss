@@ -12,6 +12,8 @@ from ...providers.aws.security_group import SECURITY_GROUP
 from ...providers.aws.utils import get_subnet_names
 import logging
 import inspect
+import ssl
+
 
 logger = logging.getLogger('finisterra')
 
@@ -149,9 +151,17 @@ class AwsLambda:
         code_url = function_details['Code']['Location']
         url_parts = urlparse(code_url)
 
-        conn = http.client.HTTPSConnection(url_parts.netloc)
-        conn.request("GET", url_parts.path)
-        response = conn.getresponse()
+        try:
+            ssl_context = ssl._create_unverified_context()
+            conn = http.client.HTTPSConnection(url_parts.netloc, context=ssl_context)
+            conn.request("GET", url_parts.path)
+            response = conn.getresponse()
+        except ssl.SSLCertVerificationError as ssl_error:
+            logger.error(f"SSL certificate verification failed: {ssl_error}")
+            return
+        except Exception as e:
+            logger.error(f"Error while fetching Lambda code: {e}")
+            return
 
         temp_folder = tempfile.mkdtemp()
         folder = os.path.join(temp_folder, "tf_code", ftstack)
