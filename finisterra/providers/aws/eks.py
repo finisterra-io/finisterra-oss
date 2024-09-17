@@ -138,12 +138,12 @@ class EKS:
                             resource_type, id, "vpc_name", vpc_name)
 
                 subnet_ids = cluster["resourcesVpcConfig"]["subnetIds"]
-                if subnet_ids:
-                    subnet_names = get_subnet_names(
-                        self.provider_instance.aws_clients, subnet_ids)
-                    if subnet_names:
-                        self.hcl.add_additional_data(
-                            "aws_eks_cluster", id, "subnet_names", subnet_names)
+                # if subnet_ids:
+                #     subnet_names = get_subnet_names(
+                #         self.provider_instance.aws_clients, subnet_ids)
+                #     if subnet_names:
+                #         self.hcl.add_additional_data(
+                #             "aws_eks_cluster", id, "subnet_names", subnet_names)
 
                 # Call aws_iam_role for the cluster's associated IAM role
                 role_name = cluster["roleArn"].split('/')[-1]
@@ -381,12 +381,12 @@ class EKS:
                 "aws_eks_node_group", f"{cluster_name}-{node_group_name}".replace("-", "_"), attributes)
 
             subnet_ids = node_group["subnets"]
-            if subnet_ids:
-                subnet_names = get_subnet_names(
-                    self.provider_instance.aws_clients, subnet_ids)
-                if subnet_names:
-                    self.hcl.add_additional_data(
-                        "aws_eks_node_group", id, "subnet_names", subnet_names)
+            # if subnet_ids:
+            #     subnet_names = get_subnet_names(
+            #         self.provider_instance.aws_clients, subnet_ids)
+            #     if subnet_names:
+            #         self.hcl.add_additional_data(
+            #             "aws_eks_node_group", id, "subnet_names", subnet_names)
 
             # If the node group has a launch template, process it
             if 'launchTemplate' in node_group and 'id' in node_group['launchTemplate']:

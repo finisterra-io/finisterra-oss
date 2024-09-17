@@ -179,3 +179,6 @@ aws_key_pair:
     public_key:
       field: public_key
       type: string
+    tags:
+      field: tags
+      type: map

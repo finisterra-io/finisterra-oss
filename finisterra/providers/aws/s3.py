@@ -70,8 +70,7 @@ class S3:
         filtered_buckets = []
         for bucket in all_buckets:
             bucket_name = bucket["Name"]
-            # if bucket_name != "dtp-webcapture-aws-lambda":
-            #     # and bucket_name != "dtp-webcapture-aws-lambda-qa":
+            # if bucket_name != "cf-templates-10vok8yqhxq5f-us-east-1":
             #     continue
             try:
                 # Attempt to fetch tags for each bucket

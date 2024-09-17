@@ -296,6 +296,7 @@ def get_listeners_elbv2(attributes, arg=None, additional_data=None):
         'certificate_arn': attributes.get('certificate_arn'),
         'default_action': default_actions,
         'tags': attributes.get('tags'),
+        'alpn_policy': attributes.get('alpn_policy'),
     }
 
     listener = clean_json_values(value=listener)

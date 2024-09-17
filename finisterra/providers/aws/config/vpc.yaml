@@ -26,12 +26,12 @@ aws_vpc:
     ipv4_netmask_length:
       field: ipv4_netmask_length
       type: number
-    ipv6_cidr:
-      field: ipv6_cidr_block
-      type: string
-    ipv6_ipam_pool_id:
-      field: ipv6_ipam_pool_id
-      type: string
+    # ipv6_cidr:
+    #   field: ipv6_cidr_block
+    #   type: string
+    # ipv6_ipam_pool_id:
+    #   field: ipv6_ipam_pool_id
+    #   type: string
     # ipv6_netmask_length:
     #   function: bigger_than_zero
     #   arg: ipv6_netmask_length
