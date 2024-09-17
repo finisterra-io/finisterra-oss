@@ -167,15 +167,15 @@ class ELBV2:
             self.hcl.add_stack(resource_type, id, ftstack)
 
             AvailabilityZones = lb.get("AvailabilityZones", [])
-            if AvailabilityZones:
-                subnets = get_subnet_names(self.provider_instance.aws_clients,
-                                           [az["SubnetId"] for az in AvailabilityZones])
-                if subnets:
-                    if resource_type not in self.hcl.additional_data:
-                        self.hcl.additional_data[resource_type] = {}
-                    if id not in self.hcl.additional_data[resource_type]:
-                        self.hcl.additional_data[resource_type][id] = {}
-                    self.hcl.additional_data[resource_type][id]["subnet_names"] = subnets
+            # if AvailabilityZones:
+            #     subnets = get_subnet_names(self.provider_instance.aws_clients,
+            #                                [az["SubnetId"] for az in AvailabilityZones])
+            #     if subnets:
+            #         if resource_type not in self.hcl.additional_data:
+            #             self.hcl.additional_data[resource_type] = {}
+            #         if id not in self.hcl.additional_data[resource_type]:
+            #             self.hcl.additional_data[resource_type][id] = {}
+            #         self.hcl.additional_data[resource_type][id]["subnet_names"] = subnets
 
             VpcId = lb.get("VpcId", "")
             if VpcId:

@@ -309,11 +309,11 @@ class RDS:
                 id = db_subnet_group_name
                 subnet_ids = [subnet["SubnetIdentifier"]
                               for subnet in db_subnet_group["Subnets"]]
-                subnet_names = get_subnet_names(
-                    self.provider_instance.aws_clients, subnet_ids)
-                if subnet_names:
-                    self.hcl.add_additional_data(
-                        resource_type, id, "subnet_names",  subnet_names)
+                # subnet_names = get_subnet_names(
+                #     self.provider_instance.aws_clients, subnet_ids)
+                # if subnet_names:
+                #     self.hcl.add_additional_data(
+                #         resource_type, id, "subnet_names",  subnet_names)
 
                 vpc_id, vpc_name = self.get_vpc_name_by_subnet(subnet_ids)
                 if vpc_id:

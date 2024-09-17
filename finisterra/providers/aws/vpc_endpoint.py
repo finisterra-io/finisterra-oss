@@ -123,12 +123,12 @@ class VPCEndPoint:
                             resource_type, endpoint_id, "vpc_name", vpc_name)
 
                 subnet_ids = endpoint.get("SubnetIds", [])
-                if subnet_ids:
-                    subnet_names = get_subnet_names(
-                        self.provider_instance.aws_clients, subnet_ids)
-                    if subnet_names:
-                        self.hcl.add_additional_data(
-                            resource_type, endpoint_id, "subnet_names", subnet_names)
+                # if subnet_ids:
+                #     subnet_names = get_subnet_names(
+                #         self.provider_instance.aws_clients, subnet_ids)
+                #     if subnet_names:
+                #         self.hcl.add_additional_data(
+                #             resource_type, endpoint_id, "subnet_names", subnet_names)
 
                 if not vpce_id:
                     self.provider_instance.progress.update(

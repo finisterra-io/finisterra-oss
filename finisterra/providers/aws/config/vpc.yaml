@@ -32,13 +32,13 @@ aws_vpc:
     ipv6_ipam_pool_id:
       field: ipv6_ipam_pool_id
       type: string
-    ipv6_netmask_length:
-      function: bigger_than_zero
-      arg: ipv6_netmask_length
-      type: number
-    ipv6_cidr_block_network_border_group:
-      field: ipv6_cidr_block_network_border_group
-      type: string
+    # ipv6_netmask_length:
+    #   function: bigger_than_zero
+    #   arg: ipv6_netmask_length
+    #   type: number
+    # ipv6_cidr_block_network_border_group:
+    #   field: ipv6_cidr_block_network_border_group
+    #   type: string
     instance_tenancy:
       field: instance_tenancy
       type: string

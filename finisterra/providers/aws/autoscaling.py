@@ -289,6 +289,11 @@ class AutoScaling:
 
         for policy in policies:
             policy_name = policy["PolicyName"]
+            enabled = policy.get("Enabled", False)
+            if not enabled:
+                logger.debug(
+                    f"Skipping disabled AutoScaling Policy: {policy_name}")
+                continue
             logger.debug(f"Processing AutoScaling Policy: {policy_name}")
 
             attributes = {

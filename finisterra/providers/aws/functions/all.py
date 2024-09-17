@@ -2701,6 +2701,10 @@ def asg_build_autoscaling_policies(attributes, arg=None, additional_data=None):
     name = attributes.get("name")
     if not name:
         return result
+    
+    enabled = attributes.get("enabled")
+    if not enabled:
+        return result
 
     policy_details = {}
     attribute_keys = ["policy_type", "scaling_adjustment",
@@ -2711,6 +2715,7 @@ def asg_build_autoscaling_policies(attributes, arg=None, additional_data=None):
         value = attributes.get(key)
         if value or value == 0:
             policy_details[key] = value
+    
 
     if not policy_details:
         return result

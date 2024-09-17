@@ -213,7 +213,7 @@ def main(provider, module, output_dir, process_dependencies, run_plan, token, ca
             'ec2', #YES
             'ecr', #YES
             'ecs', #YES
-            'eks', #YES
+            # 'eks', #YES
             'elbv2',
             'elasticache_redis', #YES
             'elasticbeanstalk', #YES
