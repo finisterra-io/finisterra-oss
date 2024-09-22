@@ -1,6 +1,6 @@
 aws_instance:
   terraform_module: "github.com/finisterra-io/terraform-aws-ec2"
-  terraform_module_version: "1.0.10"
+  terraform_module_version: "1.0.11"
   target_resource_name: default
   local_terraform_name: "terraform-aws-ec2"
   add_id_hash_to_name: true
@@ -168,7 +168,7 @@ aws_instance:
 
 aws_key_pair:
   terraform_module: "github.com/finisterra-io/terraform-aws-ec2//modules/key_pair"
-  terraform_module_version: "1.0.10"
+  terraform_module_version: "1.0.11"
   target_resource_name: this
   local_terraform_name: "terraform-aws-ec2/modules/key_pair"
   add_id_hash_to_name: true

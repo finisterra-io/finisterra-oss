@@ -1,6 +1,6 @@
 aws_eks_cluster:
   terraform_module: "github.com/finisterra-io/terraform-aws-eks"
-  terraform_module_version: "1.0.2"
+  terraform_module_version: "1.0.8"
   local_terraform_name: "terraform-aws-eks"
   target_resource_name: this
   name_field: cluster_name

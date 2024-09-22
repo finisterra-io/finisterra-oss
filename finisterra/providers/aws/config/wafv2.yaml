@@ -1,6 +1,6 @@
 aws_wafv2_web_acl:
   terraform_module: "github.com/finisterra-io/terraform-aws-wafv2"
-  terraform_module_version: "1.0.5"
+  terraform_module_version: "1.0.6"
   target_resource_name: default
   local_terraform_name: "terraform-aws-wafv2"
   import_id:
@@ -58,7 +58,7 @@ aws_wafv2_web_acl:
 
 aws_wafv2_ip_set:
   terraform_module: "github.com/finisterra-io/terraform-aws-wafv2//modules/ip-set"
-  terraform_module_version: "1.0.5"
+  terraform_module_version: "1.0.6"
   target_resource_name: default
   local_terraform_name: "terraform-aws-wafv2/modules/ip-set"
   fields:

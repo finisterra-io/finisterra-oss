@@ -1,6 +1,6 @@
 aws_vpc:
   terraform_module: "github.com/finisterra-io/terraform-aws-vpc"
-  terraform_module_version: "1.0.1"
+  terraform_module_version: "1.0.5"
   local_terraform_name: "terraform-aws-vpc"
   target_resource_name: this
   defaults:

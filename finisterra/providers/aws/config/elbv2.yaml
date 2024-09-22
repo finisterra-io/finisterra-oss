@@ -1,6 +1,6 @@
 aws_lb:
   terraform_module: "github.com/finisterra-io/terraform-aws-elbv2"
-  terraform_module_version: "1.0.4"
+  terraform_module_version: "1.0.9"
   target_resource_name: default
   local_terraform_name: "terraform-aws-elbv2"
   name_field: load_balancer_name

@@ -1,6 +1,6 @@
 aws_s3_bucket:
   terraform_module: "github.com/finisterra-io/terraform-aws-s3"
-  terraform_module_version: "1.0.3"
+  terraform_module_version: "1.0.13"
   local_terraform_name: "terraform-aws-s3"
   name_field: bucket
   add_id_hash_to_name: true
