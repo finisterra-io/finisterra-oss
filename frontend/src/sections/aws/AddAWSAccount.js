@@ -185,8 +185,13 @@ const AddAWSAccount = ({ awsAccount, handleBack }) => {
               console.error("Error fetching workflow status:", error);
             }
           }, 5000);
+          const gitUrl = responseGit.data.html_url;
+          if (!gitUrlList.includes(gitUrl)) {
+            setGitUrlList((prevList) => [gitUrl, ...prevList]);
+          }
         }
-        
+        setWorkflowStatus("completed");
+
         dispatch(
           openSnackbar({
             open: true,
@@ -198,10 +203,6 @@ const AddAWSAccount = ({ awsAccount, handleBack }) => {
             close: true,
           })
         );
-        const gitUrl = responseGit.data.html_url;
-        if (!gitUrlList.includes(gitUrl)) {
-          setGitUrlList((prevList) => [gitUrl, ...prevList]);
-        }
         setIsSubmitted(true);
         setSubmitting(false);
       } catch (error) {
@@ -454,7 +455,7 @@ const AddAWSAccount = ({ awsAccount, handleBack }) => {
               style={{ flex: 1, marginRight: 8 }} // give it a flex of 1 to take up available space
               />
               <NextLink
-              href={`https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://s3.amazonaws.com/finisterra-aws-connect/ft-ro-gha-cicd-role.yaml&stackName=ft-ro-gha-cicd-role&param_GitRepositoryOwner=${awsAccount.githubData.login}`}
+              href={`https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://s3.amazonaws.com/finisterra-aws-connect/ft-ro-gha-cicd-role.yaml&stackName=ft-ro-gha-cicd-role&param_GitRepositoryOwner=${awsAccount?.githubData.login}`}
               >
               <a target="_blank" rel="noopener noreferrer">
               <Tooltip title="Click to Create Role on AWS">
@@ -484,13 +485,13 @@ const AddAWSAccount = ({ awsAccount, handleBack }) => {
               <Grid item></Grid>
               <Grid item>
               <Stack direction="row" spacing={2} alignItems="center">
-              <Button
+              {/* <Button
               onClick={handleBack}
               sx={{ my: 3, ml: 1 }}
               disabled={isSubmitting}
               >
               Back
-              </Button>
+              </Button> */}
               
               <AnimateButton>
               <Button

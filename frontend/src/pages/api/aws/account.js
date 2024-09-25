@@ -163,6 +163,7 @@ export default async function handler(req, res) {
           include: { tags: true },
         });
       } else {
+        console.log(accountData);
         account = await prisma.awsAccount.create({
           data: {
             ...accountData,

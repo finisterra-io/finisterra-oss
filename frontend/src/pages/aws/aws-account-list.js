@@ -320,27 +320,29 @@ const AWSAccountListPage = () => {
       setRememo(!rememo);
     };
 
-    const getUsageAndSubscriptionStatus = async () => {
-      try {
-        const subscriptionResponse = await fetch(
-          "/api/billing/subscription-status"
-        );
-        const subscriptionData = await subscriptionResponse.json();
-        if (subscriptionData.usage < 1) {
-          setPermissionToAdd(true);
-        } else {
-          if (subscriptionData.hasActiveSubscription) {
-            setPermissionToAdd(true);
-          } else {
-            setPermissionToAdd(false);
-          }
-        }
-      } catch (error) {
-        dispatch(usage.actions.hasError(error));
-      }
-    };
+    // const getUsageAndSubscriptionStatus = async () => {
+    //   try {
+    //     const subscriptionResponse = await fetch(
+    //       "/api/billing/subscription-status"
+    //     );
+    //     const subscriptionData = await subscriptionResponse.json();
+    //     if (subscriptionData.usage < 1) {
+    //       setPermissionToAdd(true);
+    //     } else {
+    //       if (subscriptionData.hasActiveSubscription) {
+    //         setPermissionToAdd(true);
+    //       } else {
+    //         setPermissionToAdd(false);
+    //       }
+    //     }
+    //   } catch (error) {
+    //     dispatch(usage.actions.hasError(error));
+    //   }
+    // };
 
-    getUsageAndSubscriptionStatus();
+    // getUsageAndSubscriptionStatus();
+
+    setPermissionToAdd(true);
 
     fetchData();
   }, [dispatch, reload]);
