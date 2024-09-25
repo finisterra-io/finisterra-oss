@@ -29,7 +29,7 @@ concurrency:
 jobs:
   setup:
     if: (github.event_name != 'pull_request') || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'finisterra-initial-setup-<AWS_ACCOUNT_ID>-<AWS_REGION>'))
-    runs-on: ubuntu-latest
+    runs-on: organization/default
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -54,7 +54,7 @@ jobs:
     needs: [setup]
     if: needs.setup.outputs.services != '[]'
     name: ${{ matrix.service.service_name }}
-    runs-on: ubuntu-latest
+    runs-on: organization/default
     strategy:
       fail-fast: false
       matrix:
