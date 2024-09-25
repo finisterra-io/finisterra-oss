@@ -109,81 +109,83 @@ const AddAWSAccount = ({ awsAccount, handleBack }) => {
           awsAccountId: awsAccountId,
         };
         const response = await axios.post("/api/aws/account", newAWSAccount);
-        const newApiKey = {
-          name: "Github",
-          description: "Github API Key",
-        };
-        const responseAPI = await axios.post("/api/api-key/api-key", newApiKey);
-        const maxRetries = 3;
-        let attempts = 0;
-        let success = false;
-        let responseGit;
-        
-        while (attempts < maxRetries && !success) {
-          try {
-            responseGit = await axios.post("/api/github/push-onboarding", {
-              gitRepo: { name: newAWSAccount?.githubData?.name.name },
-              ftAPIKey: responseAPI.data.createdApiKey,
-              awsAccountId: awsAccountId,
-              awsRegion: values.awsRegion.code,
-            });
-            
-            success = true; 
-          } catch (error) {
-            attempts += 1; 
-            if (attempts === maxRetries) {
-              throw error; 
+        if (awsAccount?.githubData) {
+          const newApiKey = {
+            name: "Github",
+            description: "Github API Key",
+          };
+          const responseAPI = await axios.post("/api/api-key/api-key", newApiKey);
+          const maxRetries = 3;
+          let attempts = 0;
+          let success = false;
+          let responseGit;
+          
+          while (attempts < maxRetries && !success) {
+            try {
+              responseGit = await axios.post("/api/github/push-onboarding", {
+                gitRepo: { name: newAWSAccount?.githubData?.name.name },
+                ftAPIKey: responseAPI.data.createdApiKey,
+                awsAccountId: awsAccountId,
+                awsRegion: values.awsRegion.code,
+              });
+              
+              success = true; 
+            } catch (error) {
+              attempts += 1; 
+              if (attempts === maxRetries) {
+                throw error; 
+              }
             }
           }
-        }
-        
-        const generateWorkflow = `generate_tf_code_${awsAccountId}_${values.awsRegion.code}.yaml`;
-        
-        checkIntervalRef.current = setInterval(async () => {
-          try {
-            const response = await axios.get(`/api/github/workflow-status`, {
-              params: {
-                gitRepoName: newAWSAccount?.githubData?.name.name,
-                workflow: generateWorkflow,
-                head_branch: `finisterra-initial-setup-${awsAccountId}-${values.awsRegion.code}`,
-              },
-            });
-            if (response.data && response.data.status) {
-              setWorkflowStatus(response.data.status);
-              
-              if (response.data.workflowUrl) {
-                setWorkflowUrl(response.data.workflowUrl);
-              }
-              
-              if (response.data.status == "completed") {
-                clearInterval(checkIntervalRef.current);
-              }
-            }
-            
-            // Fetch list of PRs
-            const prResponse = await axios.get(
-              `/api/github/list-pull-requests`,
-              {
+          
+          const generateWorkflow = `generate_tf_code_${awsAccountId}_${values.awsRegion.code}.yaml`;
+          
+          checkIntervalRef.current = setInterval(async () => {
+            try {
+              const response = await axios.get(`/api/github/workflow-status`, {
                 params: {
                   gitRepoName: newAWSAccount?.githubData?.name.name,
+                  workflow: generateWorkflow,
+                  head_branch: `finisterra-initial-setup-${awsAccountId}-${values.awsRegion.code}`,
                 },
+              });
+              if (response.data && response.data.status) {
+                setWorkflowStatus(response.data.status);
+                
+                if (response.data.workflowUrl) {
+                  setWorkflowUrl(response.data.workflowUrl);
+                }
+                
+                if (response.data.status == "completed") {
+                  clearInterval(checkIntervalRef.current);
+                }
               }
-            );
-            
-            if (prResponse.data && prResponse.data.pullRequests) {
-              const newPRs = prResponse.data.pullRequests.filter(
-                (pr) =>
-                pr.title.includes(awsAccountId) &&
-                (pr.title.includes(values.awsRegion.code) ||
-                pr.title.includes("global"))
+              
+              // Fetch list of PRs
+              const prResponse = await axios.get(
+                `/api/github/list-pull-requests`,
+                {
+                  params: {
+                    gitRepoName: newAWSAccount?.githubData?.name.name,
+                  },
+                }
               );
               
-              setGitUrlList([...newPRs]);
+              if (prResponse.data && prResponse.data.pullRequests) {
+                const newPRs = prResponse.data.pullRequests.filter(
+                  (pr) =>
+                    pr.title.includes(awsAccountId) &&
+                  (pr.title.includes(values.awsRegion.code) ||
+                  pr.title.includes("global"))
+                );
+                
+                setGitUrlList([...newPRs]);
+              }
+            } catch (error) {
+              console.error("Error fetching workflow status:", error);
             }
-          } catch (error) {
-            console.error("Error fetching workflow status:", error);
-          }
-        }, 5000);
+          }, 5000);
+        }
         
         dispatch(
           openSnackbar({
@@ -348,180 +350,180 @@ const AddAWSAccount = ({ awsAccount, handleBack }) => {
             }}
             >
             {workflowStatus !== "completed"
-            ? "Generating Code..."
-            : `Code generation ${workflowStatus}`}
-            </a>
-            </Typography>
-          ) : (
-            <Typography>
-            {workflowStatus !== "completed"
-            ? "Generating Code..."
-            : `Code generation ${workflowStatus}`}
-            </Typography>
-          )}
-          </Box>
-          
-          <Box mt={4}>
-          <Button variant="contained" onClick={handleClose}>
-          Close
-          </Button>
-          </Box>
-          </Box>
-        ) : (
-          <FormikProvider value={formik}>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <Form autoComplete="off" noValidate onSubmit={handleSubmit}>
-          <DialogTitle>Connect AWS with Github</DialogTitle>
-          <Divider />
-          <DialogContent sx={{ p: 2.5 }}>
-          <Grid item xs={12}>
-          <Grid container spacing={3}>
-          <Grid item xs={12}>
-          <Stack spacing={1.25}>
-          <InputLabel htmlFor="awsAccount-name">
-          Account Name
-          </InputLabel>
-          <TextField
-          fullWidth
-          id="awsAccount-name"
-          placeholder="Name"
-          {...getFieldProps("name")}
-          error={Boolean(touched.name && errors.name)}
-          helperText={touched.name && errors.name}
-          />
-          </Stack>
-          </Grid>
-          
-          <Grid item xs={12}>
-          <Stack spacing={1.25}>
-          <InputLabel htmlFor="awsAccount-region">
-          Region
-          </InputLabel>
-          
-          <Autocomplete
-          id="awsAccount-awsRegion"
-          options={regions}
-          required
-          getOptionLabel={(option) =>
-            option ? option.name : null
-          }
-          value={formik.values.awsRegion || null}
-          onChange={(event, newValue) => {
-            formik.setFieldValue(
-              "awsRegion",
-              newValue ? newValue : null
-            );
-          }}
-          renderInput={(params) => (
-            <TextField
-            placeholder="Region"
-            {...params}
-            error={Boolean(
-              touched.awsRegion && errors.awsRegion
+              ? "Generating Code..."
+              : `Code generation ${workflowStatus}`}
+              </a>
+              </Typography>
+            ) : (
+              <Typography>
+              {workflowStatus !== "completed"
+                ? "Generating Code..."
+                : `Code generation ${workflowStatus}`}
+                </Typography>
+              )}
+              </Box>
+              
+              <Box mt={4}>
+              <Button variant="contained" onClick={handleClose}>
+              Close
+              </Button>
+              </Box>
+              </Box>
+            ) : (
+              <FormikProvider value={formik}>
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <Form autoComplete="off" noValidate onSubmit={handleSubmit}>
+              <DialogTitle>Connect AWS with Github</DialogTitle>
+              <Divider />
+              <DialogContent sx={{ p: 2.5 }}>
+              <Grid item xs={12}>
+              <Grid container spacing={3}>
+              <Grid item xs={12}>
+              <Stack spacing={1.25}>
+              <InputLabel htmlFor="awsAccount-name">
+              Account Name
+              </InputLabel>
+              <TextField
+              fullWidth
+              id="awsAccount-name"
+              placeholder="Name"
+              {...getFieldProps("name")}
+              error={Boolean(touched.name && errors.name)}
+              helperText={touched.name && errors.name}
+              />
+              </Stack>
+              </Grid>
+              
+              <Grid item xs={12}>
+              <Stack spacing={1.25}>
+              <InputLabel htmlFor="awsAccount-region">
+              Region
+              </InputLabel>
+              
+              <Autocomplete
+              id="awsAccount-awsRegion"
+              options={regions}
+              required
+              getOptionLabel={(option) =>
+                option ? option.name : null
+              }
+              value={formik.values.awsRegion || null}
+              onChange={(event, newValue) => {
+                formik.setFieldValue(
+                  "awsRegion",
+                  newValue ? newValue : null
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                placeholder="Region"
+                {...params}
+                error={Boolean(
+                  touched.awsRegion && errors.awsRegion
+                )}
+                helperText={
+                  formik.touched.awsRegion
+                  ? formik.errors.awsRegion
+                  : ""
+                }
+                required
+                />
+              )}
+              />
+              </Stack>
+              </Grid>
+              
+              <Grid item xs={12}>
+              <Stack spacing={1.25}>
+              <InputLabel htmlFor="awsAccount-roleArn">
+              Role ARN
+              </InputLabel>
+              <Box
+              display="flex"
+              alignItems="center"
+              justifyContent="space-between"
+              >
+              <TextField
+              fullWidth
+              id="awsAccount-roleArn"
+              placeholder="Role ARN"
+              {...getFieldProps("roleArn")}
+              onBlur={handleRoleArnBlur}
+              error={Boolean(touched.roleArn && errors.roleArn)}
+              helperText={touched.roleArn && errors.roleArn}
+              style={{ flex: 1, marginRight: 8 }} // give it a flex of 1 to take up available space
+              />
+              <NextLink
+              href={`https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://s3.amazonaws.com/finisterra-aws-connect/ft-ro-gha-cicd-role.yaml&stackName=ft-ro-gha-cicd-role&param_GitRepositoryOwner=${awsAccount.githubData.login}`}
+              >
+              <a target="_blank" rel="noopener noreferrer">
+              <Tooltip title="Click to Create Role on AWS">
+              <Button
+              aria-label="create role"
+              color="secondary"
+              variant="contained"
+              >
+              Create Role
+              </Button>
+              </Tooltip>
+              </a>
+              </NextLink>
+              </Box>
+              </Stack>
+              </Grid>
+              </Grid>
+              </Grid>
+              </DialogContent>
+              <Divider />
+              <DialogActions sx={{ p: 2.5 }}>
+              <Grid
+              container
+              justifyContent="space-between"
+              alignItems="center"
+              >
+              <Grid item></Grid>
+              <Grid item>
+              <Stack direction="row" spacing={2} alignItems="center">
+              <Button
+              onClick={handleBack}
+              sx={{ my: 3, ml: 1 }}
+              disabled={isSubmitting}
+              >
+              Back
+              </Button>
+              
+              <AnimateButton>
+              <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting}
+              >
+              {isSubmitting ? (
+                <CircularProgress size={24} />
+              ) : awsAccount?.id ? (
+                "Update"
+              ) : (
+                "Create"
+              )}
+              </Button>
+              </AnimateButton>
+              </Stack>
+              </Grid>
+              </Grid>
+              </DialogActions>
+              </Form>
+              </LocalizationProvider>
+              </FormikProvider>
             )}
-            helperText={
-              formik.touched.awsRegion
-              ? formik.errors.awsRegion
-              : ""
-            }
-            required
-            />
-          )}
-          />
-          </Stack>
-          </Grid>
-          
-          <Grid item xs={12}>
-          <Stack spacing={1.25}>
-          <InputLabel htmlFor="awsAccount-roleArn">
-          Role ARN
-          </InputLabel>
-          <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          >
-          <TextField
-          fullWidth
-          id="awsAccount-roleArn"
-          placeholder="Role ARN"
-          {...getFieldProps("roleArn")}
-          onBlur={handleRoleArnBlur}
-          error={Boolean(touched.roleArn && errors.roleArn)}
-          helperText={touched.roleArn && errors.roleArn}
-          style={{ flex: 1, marginRight: 8 }} // give it a flex of 1 to take up available space
-          />
-          <NextLink
-          href={`https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://s3.amazonaws.com/finisterra-aws-connect/ft-ro-gha-cicd-role.yaml&stackName=ft-ro-gha-cicd-role&param_GitRepositoryOwner=${awsAccount.githubData.login}`}
-          >
-          <a target="_blank" rel="noopener noreferrer">
-          <Tooltip title="Click to Create Role on AWS">
-          <Button
-          aria-label="create role"
-          color="secondary"
-          variant="contained"
-          >
-          Create Role
-          </Button>
-          </Tooltip>
-          </a>
-          </NextLink>
-          </Box>
-          </Stack>
-          </Grid>
-          </Grid>
-          </Grid>
-          </DialogContent>
-          <Divider />
-          <DialogActions sx={{ p: 2.5 }}>
-          <Grid
-          container
-          justifyContent="space-between"
-          alignItems="center"
-          >
-          <Grid item></Grid>
-          <Grid item>
-          <Stack direction="row" spacing={2} alignItems="center">
-          <Button
-          onClick={handleBack}
-          sx={{ my: 3, ml: 1 }}
-          disabled={isSubmitting}
-          >
-          Back
-          </Button>
-          
-          <AnimateButton>
-          <Button
-          type="submit"
-          variant="contained"
-          disabled={isSubmitting}
-          >
-          {isSubmitting ? (
-            <CircularProgress size={24} />
-          ) : awsAccount?.id ? (
-            "Update"
-          ) : (
-            "Create"
-          )}
-          </Button>
-          </AnimateButton>
-          </Stack>
-          </Grid>
-          </Grid>
-          </DialogActions>
-          </Form>
-          </LocalizationProvider>
-          </FormikProvider>
-        )}
-        </>
-      );
-    };
-    
-    AddAWSAccount.propTypes = {
-      awsAccount: PropTypes.object,
-      setAWSAccount: PropTypes.func,
-      handleNext: PropTypes.func,
-    };
-    
-    export default AddAWSAccount;
-    
+            </>
+          );
+        };
+        
+        AddAWSAccount.propTypes = {
+          awsAccount: PropTypes.object,
+          setAWSAccount: PropTypes.func,
+          handleNext: PropTypes.func,
+        };
+        
+        export default AddAWSAccount;
+        

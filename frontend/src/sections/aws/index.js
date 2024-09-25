@@ -27,17 +27,17 @@ const getStepContent = (
   setAWSAccount,
 ) => {
   switch (step) {
+    // case 0:
+    //   return (
+    //     <AddGithubAccount
+    //       handleNext={handleNext}
+    //       awsAccount={awsAccount}
+    //       setAWSAccount={setAWSAccount}
+    //       handleBack={handleBack}
+    //       state={state}
+    //     />
+    //   );
     case 0:
-      return (
-        <AddGithubAccount
-          handleNext={handleNext}
-          awsAccount={awsAccount}
-          setAWSAccount={setAWSAccount}
-          handleBack={handleBack}
-          state={state}
-        />
-      );
-    case 1:
       return (
         <AddAWSAccount
           handleNext={handleNext}
