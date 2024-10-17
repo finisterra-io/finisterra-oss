@@ -162,9 +162,9 @@ export default async function handle(req, res) {
           include: {
             awsAccount: true,
             providerGroup: true,
-            awsStateConfig: true,
           },
         });
+            // awsStateConfig: true,
 
         return res.status(200).json({ workspace });
       } catch (error) {
