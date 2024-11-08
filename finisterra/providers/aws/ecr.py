@@ -92,6 +92,8 @@ class ECR:
                 f"[cyan]Processing {self.__class__.__name__}...", total=len(repositories))
         for repo in repositories:
             repository_name = repo["repositoryName"]
+            if repository_name == 'dtp-menv-ecr-takedows/dtp-takedown_service':
+                continue
             repository_arn = repo["repositoryArn"]
             self.provider_instance.progress.update(
                 self.task, advance=1, description=f"[cyan]{self.__class__.__name__} [bold]{repository_name}[/]")
