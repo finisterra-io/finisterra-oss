@@ -8,6 +8,7 @@ This guide provides step-by-step instructions for deploying the ft-fs applicatio
 - Helm 3.x installed
 - kubectl configured to access your cluster
 - Access to the ECR repository: `379070455575.dkr.ecr.us-east-1.amazonaws.com/ft-fs`
+- PostgreSQL database (accessible from your Kubernetes cluster)
 
 ## Chart Overview
 
@@ -17,6 +18,41 @@ The ft-fs chart deploys a Next.js application with the following components:
 - Ingress (AWS ALB with SSL termination)
 - ServiceAccount
 - Horizontal Pod Autoscaler (optional)
+
+## Database Setup
+
+The application uses PostgreSQL with Prisma as the ORM. You need to set up the database before deploying.
+
+### Prerequisites
+- PostgreSQL database (version 12+)
+- Database accessible from your Kubernetes cluster
+
+### Setup Commands
+
+```bash
+# Navigate to the frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Generate Prisma client
+npx prisma generate
+
+# Run database migrations
+npx prisma migrate deploy
+
+# Seed the database with initial data (optional)
+npx prisma db seed
+```
+
+### Production Deployment
+Before deploying to Kubernetes, ensure you run the migration commands with your production database URL:
+
+```bash
+export DATABASE_URL="postgresql://username:password@host:port/database?schema=public"
+npx prisma migrate deploy
+```
 
 ## Required Secrets
 
@@ -28,7 +64,7 @@ kubectl create secret generic ft-fs \
   --from-literal=NEXTAUTH_SECRET_KEY="your-nextauth-secret-key" \
   --from-literal=JWT_SECRET="your-jwt-secret" \
   --from-literal=GITHUB_SECRET="your-github-secret" \
-  --from-literal=DATABASE_URL="your-database-url" \
+  --from-literal=DATABASE_URL="postgresql://username:password@host:port/database?schema=public" \
   --from-literal=SENDGRID_API_KEY="your-sendgrid-api-key" \
   --from-literal=GITHUB_WEBHOOK_SECRET="your-github-webhook-secret" \
   --from-literal=GITHUB_PR_SECRET="your-github-pr-secret" \
@@ -37,6 +73,8 @@ kubectl create secret generic ft-fs \
   --from-literal=STRIPE_SECRET_KEY="your-stripe-secret-key" \
   --from-literal=STRIPE_WEBHOOK_SECRET="your-stripe-webhook-secret"
 ```
+
+**Important**: Make sure your `DATABASE_URL` is accessible from your Kubernetes cluster. If using a managed database service (like AWS RDS), ensure proper security groups and networking are configured.
 
 ## Environment Variables Configuration
 
@@ -106,7 +144,7 @@ autoscaling:
 
 ## Deployment Commands
 
-### 1. Deploy the Chart
+### Deploy the Chart
 
 ```bash
 # Navigate to the chart directory
@@ -119,21 +157,7 @@ helm install ft-fs . -f values.yaml
 helm upgrade ft-fs . -f values.yaml
 ```
 
-### 2. Alternative: Deploy with inline values
-
-```bash
-helm install ft-fs . \
-  --set image.sha="your-image-sha" \
-  --set ingress.enabled=true \
-  --set ingress.hosts[0].host="your-domain.com" \
-  --set env.NEXTAUTH_URL="https://your-domain.com" \
-  --set env.APP_URL="https://your-domain.com" \
-  --set env.GOOGLE_CLIENT_ID="your-google-client-id" \
-  --set env.GOOGLE_CLIENT_SECRET="your-google-client-secret" \
-  # ... add other environment variables as needed
-```
-
-### 3. Deploy to a specific namespace
+### Deploy to a specific namespace
 
 ```bash
 # Create namespace if it doesn't exist
