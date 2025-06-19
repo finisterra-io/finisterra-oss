@@ -2,10 +2,7 @@ environments:
   # dev = default
   default:
     values:
-      - environments/dev.yaml
-  dev:
-    values:
-      - environments/dev.yaml
+      - environments/prod.yaml
   prod:
     values:
       - environments/prod.yaml
